@@ -7,7 +7,9 @@ for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 for (const args of [
   ['run', 'pack:backend'],
-  ['run', `package:${target}`, ...(target === 'mac' ? ['--', '--config.mac.notarize=false'] : [])],
+  target === 'mac'
+    ? ['run', 'package:mac:electron', '--', '--config.mac.notarize=false']
+    : ['run', 'package:win'],
 ]) {
   const result = spawnSync(npm, args, {
     stdio: 'inherit',

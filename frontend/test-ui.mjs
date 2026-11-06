@@ -814,6 +814,60 @@ const phoneContext = {
   },
 };
 runInNewContext(text(backendClient), phoneContext);
+// WebKit 输入经过宿主，预览或缺少模型时都须释放硬件并撤销电平监听。
+{
+  const calls = [];
+  const handlers = new Map();
+  let meeting = { model_required: ['asr'] };
+  const native = {
+    devices: async () => [{ deviceId: 'device1', label: 'Mic' }],
+    prepare: async (config) => {
+      calls.push(['prepare', config]);
+      return { micFellBack: false };
+    },
+    start: async ({ meeting_id }) => calls.push(['start', meeting_id]),
+    pause: async ({ paused }) => calls.push(['pause', paused]),
+    stop: async () => calls.push(['stop']),
+  };
+  const fake = {
+    nativeAudio: native,
+    on(type, fn) {
+      handlers.set(type, fn);
+      return () => handlers.delete(type);
+    },
+    permissions: { status: () => ({ systemAudioSupported: true }) },
+    meeting: {
+      start: async () => meeting,
+      pause: async () => {},
+      stop: async () => meeting,
+    },
+  };
+  const context = { window: { brevia: fake }, console };
+  runInNewContext(text(backendClient), context);
+  const client = context.window.breviaClient;
+  assert.equal((await client.listMicrophones())[0].deviceId, 'device1');
+  client.setMicDevice('device1');
+  await client.previewMic();
+  await client.previewMic();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].deviceId, 'device1');
+  assert.equal(calls[0][1].preview, true);
+  assert.equal(await client.start({}, { mic: true }), meeting);
+  assert.equal(handlers.size, 0);
+  assert.equal(calls.filter(([name]) => name === 'stop').length, 2);
+  meeting = { id: 'native' };
+  await client.start({}, { mic: true, system: true });
+  await client.pause(true);
+  await client.pause(false);
+  await client.stop(5000);
+  assert.deepEqual(calls.slice(-4), [
+    ['start', 'native'],
+    ['pause', true],
+    ['pause', false],
+    ['stop'],
+  ]);
+  assert.equal(handlers.size, 0);
+}
 const phoneClient = phoneContext.window.breviaClient;
 await phoneClient.start(
   { title: 'Desktop' },
@@ -4748,7 +4802,7 @@ assert.match(text(js), /segment\.is-active/);
 assert.match(text(js), /body\.scrollTo/);
 assert.match(text(i18nData), /Aún no se ha generado el resumen/);
 assert.match(text(i18nData), /Speaker diarization/);
-// 更新日志的版本簿记是手动维护的（RELEASING.md §1）：只允许一条 current，且它必须是
+// 更新日志的版本簿记是手动维护的（DEVELOPMENT.md 正式发布第 1 节）：只允许一条 current，且它必须是
 // 列表第一条（版本从新到旧），否则应用内「更新日志」会把上一版标成当前版本。
 runInNewContext(text(await readFile('changelog.js')), localeContext);
 assert.equal(localeContext.window.BreviaLocaleData.whatsNewLog, undefined);

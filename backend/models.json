@@ -35,7 +35,8 @@
     "memory_floor_bytes": 52428800,
     "platforms": [
       "windows",
-      "linux"
+      "linux",
+      "macos-webkit"
     ]
   },
   {
@@ -138,7 +139,8 @@
     "memory_floor_bytes": 2321547264,
     "platforms": [
       "windows",
-      "linux"
+      "linux",
+      "macos-webkit"
     ]
   },
   {
@@ -208,7 +210,8 @@
     "memory_floor_bytes": 1991245824,
     "platforms": [
       "windows",
-      "linux"
+      "linux",
+      "macos-webkit"
     ]
   },
   {
@@ -316,7 +319,8 @@
     "memory_floor_bytes": 2301624320,
     "platforms": [
       "windows",
-      "linux"
+      "linux",
+      "macos-webkit"
     ]
   },
   {

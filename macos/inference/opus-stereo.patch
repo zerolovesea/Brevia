@@ -1,0 +1,24 @@
+--- a/miniaudio_libopus.c
++++ b/miniaudio_libopus.c
+@@ -269,9 +269,9 @@
+             }
+ 
+             if (format == ma_format_f32) {
+-                libopusResult = op_read_float((OggOpusFile*)pOpus->of, (float*     )ma_offset_pcm_frames_ptr(pFramesOut, totalFramesRead, format, channels), (int)(framesToRead * channels), NULL);
++                libopusResult = op_read_float_stereo((OggOpusFile*)pOpus->of, (float*)ma_offset_pcm_frames_ptr(pFramesOut, totalFramesRead, format, channels), (int)(framesToRead * channels));
+             } else {
+-                libopusResult = op_read      ((OggOpusFile*)pOpus->of, (opus_int16*)ma_offset_pcm_frames_ptr(pFramesOut, totalFramesRead, format, channels), (int)(framesToRead * channels), NULL);
++                libopusResult = op_read_stereo((OggOpusFile*)pOpus->of, (opus_int16*)ma_offset_pcm_frames_ptr(pFramesOut, totalFramesRead, format, channels), (int)(framesToRead * channels));
+             }
+ 
+             if (libopusResult < 0) {
+@@ -370,7 +370,8 @@
+ 
+     #if !defined(MA_NO_LIBOPUS)
+     {
+-        ma_uint32 channels = op_channel_count((OggOpusFile*)pOpus->of, -1);
++        /* 固定中间声道数，串联 Ogg 切换声道时不越过调用方的缓冲边界。 */
++        ma_uint32 channels = 2;
+ 
+         if (pChannels != NULL) {
+             *pChannels = channels;

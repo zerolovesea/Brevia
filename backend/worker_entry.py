@@ -9,6 +9,11 @@ import certifi
 
 
 def main():
+    if sys.platform == "darwin" and sys.argv[1:] == ["--mlx-asr"]:
+        from backend.mlx_sidecar import serve
+
+        serve()
+        return
     if sys.argv[1:] == ["--diarization"]:
         import_module("backend.diarization_process").main()
         return

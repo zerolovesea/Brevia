@@ -1,0 +1,23 @@
+{
+  "productName": "Brevia",
+  "version": "../../package.json",
+  "identifier": "com.brevia.app",
+  "build": { "frontendDist": "../../frontend" },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "security": {
+      "assetProtocol": { "enable": true, "scope": [] },
+      "capabilities": [
+        {
+          "identifier": "brevia-desktop",
+          "windows": ["main", "floating-caption", "recording-capsule"],
+          "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-start-dragging"]
+        }
+      ]
+    }
+  },
+  "plugins": { "updater": { "pubkey": "", "requireSignedVersion": true } },
+  "bundle": { "icon": ["../../electron/assets/trayTemplate.png", "../../electron/assets/icon.icns"], "macOS": { "minimumSystemVersion": "14.0" } }
+}

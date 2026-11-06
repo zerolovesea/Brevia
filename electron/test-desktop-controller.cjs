@@ -305,6 +305,7 @@ class Tray extends EventEmitter {
     const conflictWindow = new Window();
     conflict.attach(conflictWindow);
     conflict.update(state);
+    await Promise.resolve();
     assert.equal(conflictWindow.isVisible(), true, '启动冲突显示窗口提示');
     assert.match(errors.pop().message, /快捷键不可用/);
     assert.equal(conflict.preferences.recordingShortcut, 'Alt+X', '启动冲突不覆盖保存配置');

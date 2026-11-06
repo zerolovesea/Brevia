@@ -1,10 +1,10 @@
 # Brevia Worker
 
-桌面主进程通过 stdin/stdout JSONL 驱动此常驻 Python Worker。数据默认写入
+Windows 和旧 Electron 主进程通过 stdin/stdout JSONL 驱动此 Python Worker。macOS WebKit 默认使用 `macos/backend/worker.cjs` 与 Swift/C++ 引擎，构建步骤见[开发者手册](../DEVELOPMENT.md#macos-开发与打包)。数据默认写入
 `~/brevia`，开发和测试可用 `BREVIA_DATA_DIR` 覆盖。
 
 ```bash
-/opt/anaconda3/bin/python3.12 -m pip install -r backend/requirements.txt
+python3.12 -m pip install -r backend/requirements.txt
 python3 -m unittest backend.test_worker backend.test_sentence
 python3 -m backend.worker
 npm run test:model

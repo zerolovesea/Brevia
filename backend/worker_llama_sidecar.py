@@ -43,6 +43,23 @@ def strip_reasoning(text: str) -> str:
     return cleaned.strip()
 
 
+def native_macos():
+    return sys.platform == "darwin" and os.environ.get("BREVIA_MACOS_NATIVE") == "1"
+
+
+def inference_worker(path=None):
+    """签名和哈希由宿主在调用私有命令前检查；Worker 只接受独立的完整运行包入口。"""
+    worker = Path(os.environ.get("BREVIA_INFERENCE_WORKER", "") if path is None else path)
+    if not (
+        worker.is_absolute()
+        and worker.name == "brevia-worker"
+        and worker.is_file()
+        and os.access(worker, os.X_OK)
+    ):
+        raise RuntimeError("The optional inference runtime is not installed")
+    return worker
+
+
 class _Sidecar:
     """绑定到一个用途的单个 llama sidecar 子进程。"""
 
@@ -92,6 +109,9 @@ class _Sidecar:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
+                env={**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
+                if native_macos()
+                else None,
             )
             self.process = process
             return process
@@ -99,7 +119,7 @@ class _Sidecar:
             self.on_error(f"Failed to start llama sidecar: {error}")
             return None
 
-    def request(self, request: dict, timeout_seconds=None, cancellation=None) -> dict:
+    def request(self, request: dict, timeout_seconds=None, cancellation=None, partial=None) -> dict:
         """发送请求并返回 sidecar 响应；``timeout_seconds`` 为空时用默认超时。"""
         with self.lock:
             with self.lifecycle_lock:
@@ -125,14 +145,19 @@ class _Sidecar:
             try:
                 process.stdin.write(json.dumps(request) + "\n")
                 process.stdin.flush()
-                line = process.stdout.readline()
-                if timed_out.is_set():
-                    return {"type": "error", "message": "Sidecar request timed out"}
-                if not line:
-                    return {"type": "error", "message": "Sidecar closed unexpectedly"}
-                response = json.loads(line)
-                if not isinstance(response, dict):
-                    raise ValueError("Expected a response object")
+                while True:
+                    line = process.stdout.readline()
+                    if timed_out.is_set():
+                        return {"type": "error", "message": "Sidecar request timed out"}
+                    if not line:
+                        return {"type": "error", "message": "Sidecar closed unexpectedly"}
+                    response = json.loads(line)
+                    if not isinstance(response, dict):
+                        raise ValueError("Expected a response object")
+                    if response.get("type") != "partial":
+                        break
+                    if partial:
+                        partial(response["text"])
                 # 原生加载/推理失败可能残留内存，错误响应也必须回收进程。
                 failed = response.get("type") == "error"
                 return response
@@ -185,6 +210,13 @@ class LlamaSidecarMixin:
         # （打包后的二进制不会带上 llama_sidecar.py 的最新改动）。
         if os.environ.get("BREVIA_LLAMA_HELPER", "").lower() in {"module", "dev", "python"}:
             return [sys.executable, "-m", "backend.llama_sidecar"]
+        if native_macos():
+            binary = (
+                inference_worker().parent.parent / "brevia-llama-helper" / "brevia-llama-helper"
+            )
+            if not binary.is_file() or not os.access(binary, os.X_OK):
+                raise RuntimeError("The optional llama runtime is incomplete")
+            return [str(binary)]
         if getattr(sys, "frozen", False):
             if sys.platform == "win32":
                 return [sys.executable, "--llama-sidecar"]

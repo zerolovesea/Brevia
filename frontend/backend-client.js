@@ -467,6 +467,77 @@ class AudioCapture {
   }
 }
 
+// 系统采集由宿主持有；界面只接收电平和故障，PCM 不穿过 WebKit。
+class NativeAudioCapture {
+  constructor(onLevel, onError) {
+    this.onLevel = onLevel;
+    this.onError = onError;
+    this.unsubscribe = [];
+  }
+
+  async prepare({ mic, system }, preview = false) {
+    this.unsubscribe.push(
+      window.brevia.on('native-audio.level', ({ track, level }) => this.onLevel?.(track, level)),
+      window.brevia.on('native-audio.error', ({ message }) =>
+        this.onError?.(new Error(micMessage(message))),
+      ),
+    );
+    this.preparing = window.brevia.nativeAudio.prepare({
+      mic: Boolean(mic),
+      system: Boolean(system),
+      deviceId: this.micDeviceId || '',
+      preview,
+    });
+    const { micFellBack } = await this.preparing;
+    return micFellBack;
+  }
+
+  async previewMic() {
+    if (this.preparing) return false;
+    try {
+      return await this.prepare({ mic: true }, true);
+    } catch (error) {
+      await this.stop().catch(() => {});
+      this.preparing = null;
+      this.stopPromise = null;
+      throw error;
+    }
+  }
+
+  start(meetingId) {
+    this.meetingId = meetingId;
+    return window.brevia.nativeAudio.start({ meeting_id: meetingId });
+  }
+
+  setPaused(paused) {
+    return window.brevia.nativeAudio.pause({ paused });
+  }
+
+  stopPreview() {
+    return this.stop();
+  }
+
+  stop() {
+    // 预览权限弹窗可能仍打开；只有本实例的设备获取完成后才释放它。
+    return (this.stopPromise ??= (async () => {
+      try {
+        if (this.preparing) {
+          await this.preparing;
+          await window.brevia.nativeAudio.stop();
+        }
+      } finally {
+        for (const off of this.unsubscribe.splice(0)) off();
+      }
+    })());
+  }
+}
+
+function createAudioCapture(send, onLevel, onError) {
+  return window.brevia.nativeAudio
+    ? new NativeAudioCapture(onLevel, onError)
+    : new AudioCapture(send, onLevel, onError);
+}
+
 window.breviaClient = window.brevia
   ? {
       state: { meeting: null, selectedMeetingId: null, initialized: null, inputs: null },
@@ -485,6 +556,7 @@ window.breviaClient = window.brevia
       },
       // 枚举系统可用的麦克风输入设备,供录制前页的下拉选择。
       async listMicrophones() {
+        if (window.brevia.nativeAudio) return window.brevia.nativeAudio.devices();
         if (!navigator.mediaDevices?.enumerateDevices) return [];
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -523,7 +595,7 @@ window.breviaClient = window.brevia
             this.state.inputs = { ...inputs };
             return meeting;
           }
-          capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel, (error) =>
+          capture = createAudioCapture(window.brevia.meeting.audio, this.onLevel, (error) =>
             this.onCaptureError?.(error),
           );
           capture.micDeviceId = micDeviceId ?? this.micDeviceId;
@@ -569,7 +641,7 @@ window.breviaClient = window.brevia
       },
       async previewMic() {
         if (!this.preview) {
-          this.preview = new AudioCapture(null, this.onLevel);
+          this.preview = createAudioCapture(null, this.onLevel);
           this.preview.micDeviceId = this.micDeviceId;
         }
         return this.preview.previewMic();

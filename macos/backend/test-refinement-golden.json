@@ -1,0 +1,1799 @@
+{
+  "settings": {
+    "audio": {
+      "sample_rate": 16000,
+      "chunk_seconds": 30
+    },
+    "asr": {
+      "refined_window_seconds": 15
+    },
+    "live_asr": {
+      "mix_max_delay_ms": 1500,
+      "max_speech_seconds": 22.0,
+      "microphone_target_rms": 0.08,
+      "microphone_minimum_rms": 0.003,
+      "microphone_max_gain": 4,
+      "microphone_peak": 0.92,
+      "quiet_speech_recovery": 1,
+      "quiet_speech_min_seconds": 1.0,
+      "quiet_speech_max_seconds": 20.0,
+      "quiet_speech_level_ratio": 0.08
+    },
+    "diarization": {
+      "segmentation_model_id": "pyannote-segmentation-3.0",
+      "cluster_threshold": 0.35,
+      "online_similarity_threshold": 0.68,
+      "voiceprint_similarity_threshold": 0.6,
+      "minimum_embedding_seconds": 0.25,
+      "boundary_tail_seconds": 3.0,
+      "speaker_change_detection": "segmentation",
+      "num_speakers": -1,
+      "min_duration_on": 0.5,
+      "min_duration_off": 0.4
+    },
+    "refinement": {
+      "diarization_timeout_seconds": 120,
+      "max_refine_seconds": 14400,
+      "diarization_chunk_ms": 15000,
+      "diarization_overlap_ms": 1000,
+      "embedding_window_ms": 15000,
+      "max_auto_speakers": 20,
+      "min_auto_speaker_windows": 2,
+      "min_auto_speaker_duration_ms": 4000,
+      "auto_cluster_score_tolerance": 0.05
+    },
+    "vad": {
+      "default": {
+        "threshold": 0.5,
+        "min_silence_duration": 0.8,
+        "min_speech_duration": 0.25,
+        "max_speech_duration": 20.0
+      },
+      "zh": {
+        "threshold": 0.4,
+        "min_silence_duration": 0.7,
+        "min_speech_duration": 0.3,
+        "max_speech_duration": 30.0
+      }
+    },
+    "voice_profiles": {
+      "max_samples": 50,
+      "max_total_seconds": 300
+    },
+    "meetings": {
+      "deleted_retention_days": 30
+    },
+    "llm": {
+      "timeout_seconds": 300
+    }
+  },
+  "cases": [
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "mic",
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "mic-spk-1",
+            "text": "你好",
+            "word_timestamps": []
+          },
+          {
+            "track": "system",
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "system-spk-1",
+            "text": "hi",
+            "word_timestamps": []
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "mic-spk-1",
+          "text": "你好",
+          "word_timestamps": []
+        },
+        {
+          "track": "system",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "system-spk-1",
+          "text": "hi",
+          "word_timestamps": []
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "我们来看一下",
+        "这个数据的情况"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "我们来看一下这个数据的情况"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "mic",
+            "start_ms": 0,
+            "end_ms": 15000,
+            "speaker": "mic-spk-1",
+            "text": "我们来看一下",
+            "word_timestamps": [
+              {
+                "text": "我",
+                "start_ms": 0,
+                "end_ms": 100
+              }
+            ]
+          },
+          {
+            "track": "mic",
+            "start_ms": 15000,
+            "end_ms": 30000,
+            "speaker": "mic-spk-1",
+            "text": "这个数据的情况",
+            "word_timestamps": [
+              {
+                "text": "这",
+                "start_ms": 15000,
+                "end_ms": 15100
+              }
+            ]
+          },
+          {
+            "track": "mic",
+            "start_ms": 30000,
+            "end_ms": 45000,
+            "speaker": "mic-spk-2",
+            "text": "对，是这样的",
+            "word_timestamps": []
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 30000,
+          "speaker": "mic-spk-1",
+          "text": "我们来看一下这个数据的情况",
+          "word_timestamps": [
+            {
+              "text": "我",
+              "start_ms": 0,
+              "end_ms": 100
+            },
+            {
+              "text": "这",
+              "start_ms": 15000,
+              "end_ms": 15100
+            }
+          ]
+        },
+        {
+          "track": "mic",
+          "start_ms": 30000,
+          "end_ms": 45000,
+          "speaker": "mic-spk-2",
+          "text": "对，是这样的",
+          "word_timestamps": []
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "第一句话。",
+        "第二句话还没"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "第一句话。 第二句话还没"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "第二句话还没",
+        "讲完。第三句话。"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "第二句话还没讲完。第三句话。"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "start_ms": 0,
+            "end_ms": 15000,
+            "speaker": "system-spk-1",
+            "text": "第一句话。",
+            "word_timestamps": [
+              {
+                "text": "a",
+                "start_ms": 0,
+                "end_ms": 1000
+              }
+            ]
+          },
+          {
+            "track": "system",
+            "start_ms": 15000,
+            "end_ms": 30000,
+            "speaker": "system-spk-1",
+            "text": "第二句话还没",
+            "word_timestamps": [
+              {
+                "text": "b",
+                "start_ms": 15000,
+                "end_ms": 16000
+              }
+            ]
+          },
+          {
+            "track": "system",
+            "start_ms": 30000,
+            "end_ms": 45000,
+            "speaker": "system-spk-1",
+            "text": "讲完。第三句话。",
+            "word_timestamps": [
+              {
+                "text": "c",
+                "start_ms": 30000,
+                "end_ms": 31000
+              }
+            ]
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "start_ms": 0,
+          "end_ms": 12500,
+          "speaker": "system-spk-1",
+          "text": "第一句话。",
+          "word_timestamps": [
+            {
+              "text": "a",
+              "start_ms": 0,
+              "end_ms": 1000
+            }
+          ]
+        },
+        {
+          "track": "system",
+          "start_ms": 12500,
+          "end_ms": 45000,
+          "speaker": "system-spk-1",
+          "text": "第二句话还没讲完。第三句话。",
+          "word_timestamps": [
+            {
+              "text": "b",
+              "start_ms": 15000,
+              "end_ms": 16000
+            },
+            {
+              "text": "c",
+              "start_ms": 30000,
+              "end_ms": 31000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "method": "autoCluster",
+      "args": [
+        [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        [
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "method": "autoCluster",
+      "args": [
+        [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            0.6234898018587336,
+            0.7818314824680298
+          ],
+          [
+            0.6234898018587336,
+            0.7818314824680298
+          ],
+          [
+            0.6234898018587336,
+            0.7818314824680298
+          ],
+          [
+            0.6234898018587336,
+            0.7818314824680298
+          ],
+          [
+            -0.22252093395631434,
+            0.9749279121818236
+          ],
+          [
+            -0.22252093395631434,
+            0.9749279121818236
+          ],
+          [
+            -0.22252093395631434,
+            0.9749279121818236
+          ],
+          [
+            -0.22252093395631434,
+            0.9749279121818236
+          ],
+          [
+            -0.900968867902419,
+            0.43388373911755823
+          ],
+          [
+            -0.900968867902419,
+            0.43388373911755823
+          ],
+          [
+            -0.900968867902419,
+            0.43388373911755823
+          ],
+          [
+            -0.900968867902419,
+            0.43388373911755823
+          ],
+          [
+            -0.9009688679024191,
+            -0.433883739117558
+          ],
+          [
+            -0.9009688679024191,
+            -0.433883739117558
+          ],
+          [
+            -0.9009688679024191,
+            -0.433883739117558
+          ],
+          [
+            -0.9009688679024191,
+            -0.433883739117558
+          ],
+          [
+            -0.2225209339563146,
+            -0.9749279121818236
+          ],
+          [
+            -0.2225209339563146,
+            -0.9749279121818236
+          ],
+          [
+            -0.2225209339563146,
+            -0.9749279121818236
+          ],
+          [
+            -0.2225209339563146,
+            -0.9749279121818236
+          ],
+          [
+            0.6234898018587334,
+            -0.7818314824680299
+          ],
+          [
+            0.6234898018587334,
+            -0.7818314824680299
+          ],
+          [
+            0.6234898018587334,
+            -0.7818314824680299
+          ],
+          [
+            0.6234898018587334,
+            -0.7818314824680299
+          ]
+        ],
+        [
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000,
+          2000
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        0,
+        0,
+        0,
+        0,
+        3,
+        3,
+        3,
+        3,
+        4,
+        4,
+        4,
+        4,
+        1,
+        1,
+        1,
+        1,
+        5,
+        5,
+        5,
+        5,
+        2,
+        2,
+        2,
+        2,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    {
+      "method": "deoverlap",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 5,
+            "end_ms": 10,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 20,
+            "end_ms": 30,
+            "speaker": "spk-2"
+          },
+          {
+            "start_ms": 900,
+            "end_ms": 2000,
+            "speaker": "spk-2"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 950,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 5,
+          "end_ms": 10,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 950,
+          "end_ms": 2000,
+          "speaker": "spk-2"
+        }
+      ]
+    },
+    {
+      "method": "deoverlap",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 900,
+            "end_ms": 2000,
+            "speaker": "spk-1"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 900,
+          "end_ms": 2000,
+          "speaker": "spk-1"
+        }
+      ]
+    },
+    {
+      "method": "deoverlap",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 900,
+            "end_ms": 2000,
+            "speaker": "spk-2"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 950,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 950,
+          "end_ms": 2000,
+          "speaker": "spk-2"
+        }
+      ]
+    },
+    {
+      "method": "deoverlap",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 990,
+            "end_ms": 1020,
+            "speaker": "spk-2"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 995,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 995,
+          "end_ms": 1020,
+          "speaker": "spk-2"
+        }
+      ]
+    },
+    {
+      "method": "stabilize",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 995,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 995,
+            "end_ms": 1020,
+            "speaker": "spk-2"
+          }
+        ]
+      ],
+      "kwargs": {
+        "minimum_ms": 1000,
+        "absorb_gap_ms": 200
+      },
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 1020,
+          "speaker": "spk-1"
+        }
+      ]
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "你只有百分之五的把握，下降了百分之十"
+      ],
+      "kwargs": {},
+      "result": "你只有5%的把握，下降了10%"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "占比百分之二十，达到百分之五点三六"
+      ],
+      "kwargs": {},
+      "result": "占比20%，达到5.36%"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "百分之百是对的"
+      ],
+      "kwargs": {},
+      "result": "100%是对的"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "利润仅5.36%"
+      ],
+      "kwargs": {},
+      "result": "利润仅5.36%"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？"
+      ],
+      "kwargs": {},
+      "result": "一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "三亿元的项目"
+      ],
+      "kwargs": {},
+      "result": "3亿元的项目"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "估值超过五百二十万元"
+      ],
+      "kwargs": {},
+      "result": "估值超过520万元"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "十六点九九亿元"
+      ],
+      "kwargs": {},
+      "result": "16.99亿元"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "三百岁的树，五元一个"
+      ],
+      "kwargs": {},
+      "result": "300岁的树，5元一个"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "一个苹果三个人"
+      ],
+      "kwargs": {},
+      "result": "一个苹果三个人"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "THIS IS A TEST. AND ANOTHER ONE."
+      ],
+      "kwargs": {},
+      "result": "This is a test. And another one."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "NASA AND FBI USE HTML."
+      ],
+      "kwargs": {},
+      "result": "NASA and FBI use HTML."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "WORLD WAR II."
+      ],
+      "kwargs": {},
+      "result": "World war II."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "AH WE TRAIN A GIANT AI MODEL."
+      ],
+      "kwargs": {},
+      "result": "Ah we train a giant AI model."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "AH WE TRAIN A GIANT MODEL and then continue."
+      ],
+      "kwargs": {},
+      "result": "Ah we train a giant model and then continue."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "language English<asr_text>Thought we would reinvent it."
+      ],
+      "kwargs": {},
+      "result": "Thought we would reinvent it."
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "<|endoftext|>Human / Computer Interaction"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "介绍一下 all, over, all, over, all, over, all, over"
+      ],
+      "kwargs": {},
+      "result": "介绍一下 all, over"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "吞噬天地，那那那那那那那那那那"
+      ],
+      "kwargs": {},
+      "result": "吞噬天地，那"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "隔了好久，就就就就就就就就就就就就就就就就就就就就就就就就就就就就就就。对，但是平常的吧"
+      ],
+      "kwargs": {},
+      "result": "隔了好久，就。对，但是平常的吧"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "开场。像你们存量的，比如说那家豪普营销的，像你们存量的，比如说那家豪普营销的，像你们存量的，比如说那家豪普营销的，像你们存量的，比如说那家豪普营销的，继续讨论。"
+      ],
+      "kwargs": {},
+      "result": "开场。像你们存量的，比如说那家豪普营销的，继续讨论。"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "```python language Chinese"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "```java"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "```language=Germantic"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "```python language None ```"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "`(1)"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "**language Chinese**"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "language Chinese。"
+      ],
+      "kwargs": {},
+      "result": ""
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "language Chinese一条是这个域名，它有域名的。"
+      ],
+      "kwargs": {},
+      "result": "一条是这个域名，它有域名的。"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "他们聊，也就是说，language Chinese。"
+      ],
+      "kwargs": {},
+      "result": "他们聊，也就是说，。"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "这是正常的中文文本。"
+      ],
+      "kwargs": {},
+      "result": "这是正常的中文文本。"
+    },
+    {
+      "method": "cleanText",
+      "args": [
+        "language Chinese。都被都被都被都被都被都被都被都被都被都被都被都被请项目组在周五前提交方案。"
+      ],
+      "kwargs": {},
+      "result": "都被请项目组在周五前提交方案。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "都被请项目组在周五前提交方案。"
+      ],
+      "kwargs": {},
+      "result": "都被请项目组在周五前提交方案。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "这个量级即便在科创板。",
+        "也可以算是非常非常小盘了。"
+      ],
+      "kwargs": {
+        "continuation": true
+      },
+      "result": "这个量级即便在科创板也可以算是非常非常小盘了。"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 0,
+            "end_ms": 5000,
+            "text": "这个量级即便在科创板。",
+            "word_timestamps": []
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 5000,
+            "end_ms": 12000,
+            "text": "也可以算是非常非常小盘了。",
+            "word_timestamps": [],
+            "continues_previous": true
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 0,
+          "end_ms": 12000,
+          "text": "这个量级即便在科创板也可以算是非常非常小盘了。",
+          "word_timestamps": []
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "这个量级即便在科创板。",
+        "我们接下来看市值。"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "这个量级即便在科创板。 我们接下来看市值。"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 0,
+            "end_ms": 5000,
+            "text": "这个量级即便在科创板。",
+            "word_timestamps": []
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 5000,
+            "end_ms": 12000,
+            "text": "我们接下来看市值。",
+            "word_timestamps": [],
+            "continues_previous": false
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 0,
+          "end_ms": 12000,
+          "text": "这个量级即便在科创板。 我们接下来看市值。",
+          "word_timestamps": []
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "今天我们就打开语。",
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        "下一步又准备往哪里走？"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 下一步又准备往哪里走？"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 0,
+            "end_ms": 4000,
+            "text": "今天我们就打开语。",
+            "word_timestamps": [
+              {
+                "start_ms": 100,
+                "end_ms": 300,
+                "word": "今天"
+              }
+            ]
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 4000,
+            "end_ms": 15000,
+            "text": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+            "word_timestamps": [
+              {
+                "start_ms": 4100,
+                "end_ms": 4300,
+                "word": "今天"
+              },
+              {
+                "start_ms": 14700,
+                "end_ms": 14900,
+                "word": "程度"
+              }
+            ],
+            "continues_previous": false
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 15000,
+            "end_ms": 20000,
+            "text": "下一步又准备往哪里走？",
+            "word_timestamps": [
+              {
+                "start_ms": 15100,
+                "end_ms": 15300,
+                "word": "下一步"
+              }
+            ]
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 0,
+          "end_ms": 20000,
+          "text": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 下一步又准备往哪里走？",
+          "word_timestamps": [
+            {
+              "start_ms": 100,
+              "end_ms": 300,
+              "word": "今天"
+            },
+            {
+              "start_ms": 4100,
+              "end_ms": 4300,
+              "word": "今天"
+            },
+            {
+              "start_ms": 14700,
+              "end_ms": 14900,
+              "word": "程度"
+            },
+            {
+              "start_ms": 15100,
+              "end_ms": 15300,
+              "word": "下一步"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+        "盈347100可如果有人在1100元开盘价买入500股呢？"
+      ],
+      "kwargs": {
+        "continuation": true
+      },
+      "result": "到了收盘，股价回落到八百三十五元，一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 16185,
+            "end_ms": 41185,
+            "text": "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+            "word_timestamps": [],
+            "continues_previous": false
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 41185,
+            "end_ms": 56185,
+            "text": "盈347100可如果有人在1100元开盘价买入500股呢？",
+            "word_timestamps": [],
+            "continues_previous": true
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 16185,
+          "end_ms": 32058,
+          "text": "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。",
+          "word_timestamps": [],
+          "continues_previous": false
+        },
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 32058,
+          "end_ms": 56185,
+          "text": "到了收盘，股价回落到八百三十五元，一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？",
+          "word_timestamps": [],
+          "continues_previous": true
+        }
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "还得分开来研究。今天我们就打开语。",
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+      ],
+      "kwargs": {
+        "continuation": false
+      },
+      "result": "还得分开来研究。 今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+    },
+    {
+      "method": "assembleUtterances",
+      "args": [
+        [
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 101185,
+            "end_ms": 116185,
+            "text": "还得分开来研究。今天我们就打开语。",
+            "word_timestamps": [],
+            "continues_previous": true
+          },
+          {
+            "track": "system",
+            "speaker": "system-spk-1",
+            "start_ms": 116185,
+            "end_ms": 131185,
+            "text": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+            "word_timestamps": [],
+            "continues_previous": false
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "track": "system",
+          "speaker": "system-spk-1",
+          "start_ms": 101185,
+          "end_ms": 131185,
+          "text": "还得分开来研究。 今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+          "word_timestamps": [],
+          "continues_previous": true
+        }
+      ]
+    },
+    {
+      "method": "decodeRange",
+      "args": [
+        {
+          "start_ms": 1000,
+          "end_ms": 1200,
+          "speaker": "spk-1"
+        },
+        null,
+        null,
+        5000
+      ],
+      "kwargs": {},
+      "result": [
+        200,
+        2000
+      ]
+    },
+    {
+      "method": "decodeRange",
+      "args": [
+        {
+          "start_ms": 1000,
+          "end_ms": 1200,
+          "speaker": "spk-1"
+        },
+        {
+          "start_ms": 0,
+          "end_ms": 950,
+          "speaker": "spk-2"
+        },
+        {
+          "start_ms": 1250,
+          "end_ms": 2000,
+          "speaker": "spk-2"
+        },
+        5000
+      ],
+      "kwargs": {},
+      "result": [
+        950,
+        1250
+      ]
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "还得分开来研究。今天我们就打开语。",
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+      ],
+      "kwargs": {},
+      "result": "还得分开来研究。 今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "今天我们就打开语。",
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+      ],
+      "kwargs": {},
+      "result": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        "今天我们就打开语。下一步又准备往哪里走？"
+      ],
+      "kwargs": {},
+      "result": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 下一步又准备往哪里走？"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "互联网金融。",
+        "互联网金融有很多服务。"
+      ],
+      "kwargs": {},
+      "result": "互联网金融。 互联网金融有很多服务。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+        "盈347100可如果有人在1100元开盘价买入500股呢？"
+      ],
+      "kwargs": {
+        "continuation": true
+      },
+      "result": "到了收盘，股价回落到八百三十五元，一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "这个量级即便在科创板。",
+        "也可以算是非常非常小盘了。"
+      ],
+      "kwargs": {
+        "continuation": true
+      },
+      "result": "这个量级即便在科创板也可以算是非常非常小盘了。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "今天天气很好。",
+        "我们出发吧。"
+      ],
+      "kwargs": {},
+      "result": "今天天气很好。 我们出发吧。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "哎，对，这八千七百三。 对，这8734股呢，全部来自网上投资者。"
+      ],
+      "kwargs": {},
+      "result": "哎，对，这8734股呢，全部来自网上投资者。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "制造基地计划投入6000亿元。 制造基地计划投入6.24亿元。过去语速积累最深的是身体和小脑。"
+      ],
+      "kwargs": {},
+      "result": "制造基地计划投入6.24亿元。过去语速积累最深的是身体和小脑。"
+    },
+    {
+      "method": "joinPair",
+      "args": [
+        "扣除发行费用以后，净募集资金约五十九点。",
+        "募集资金约59.17亿元，刨除一些限售的份额。"
+      ],
+      "kwargs": {},
+      "result": "扣除发行费用以后，净募集资金约59.17亿元，刨除一些限售的份额。"
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "我们确认下周的发布计划",
+        "发布计划和负责人"
+      ],
+      "kwargs": {},
+      "result": [
+        "和负责人",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "这是一次完整的会议结论和行动项",
+        "这是一次完整的会议结论和行动项"
+      ],
+      "kwargs": {},
+      "result": [
+        "",
+        false
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "……好，我们先聊一聊。",
+        "好，我们先聊一聊IPO，语数这次发行了。"
+      ],
+      "kwargs": {},
+      "result": [
+        "IPO，语数这次发行了。",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "这个故事得先从人形。",
+        "是得先从人形机器人说起。"
+      ],
+      "kwargs": {},
+      "result": [
+        "机器人说起。",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "好，我们先聊。",
+        "一好，我们先聊一聊IPO里的几个热门话题。"
+      ],
+      "kwargs": {},
+      "result": [
+        "一聊IPO里的几个热门话题。",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "……我们讨论完了。",
+        "接下来我们看看下一个问题。"
+      ],
+      "kwargs": {},
+      "result": [
+        "接下来我们看看下一个问题。",
+        false
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+        "美元一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？"
+      ],
+      "kwargs": {},
+      "result": [
+        "盈347100可如果有人在1100元开盘价买入500股呢？",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "资产负债表也能看出来啊，2025年末。",
+        "出来啊，2025年末固定资产只有3500多万。"
+      ],
+      "kwargs": {},
+      "result": [
+        "固定资产只有3500多万。",
+        true
+      ]
+    },
+    {
+      "method": "trimOverlap",
+      "args": [
+        "……我们讨论完了。",
+        "接下来我们看看下一个问题。"
+      ],
+      "kwargs": {},
+      "result": [
+        "接下来我们看看下一个问题。",
+        false
+      ]
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 今天我们就打开语。"
+      ],
+      "kwargs": {},
+      "result": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "今天我们讨论季度目标。 今天我们讨论。"
+      ],
+      "kwargs": {},
+      "result": "今天我们讨论季度目标。 今天我们讨论。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "这个故事得先从人形。 是得先从人形机器人说起。"
+      ],
+      "kwargs": {},
+      "result": "这个故事得先从人形机器人说起。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "今天我们就打开语。 今天我们就打开宇树的招股说明书。"
+      ],
+      "kwargs": {},
+      "result": "今天我们就打开宇树的招股说明书。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "好，我们先聊。 一好，我们先聊一聊IPO里的几个热门话题。"
+      ],
+      "kwargs": {},
+      "result": "好，我们先聊一聊IPO里的几个热门话题。"
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "Good morning. Today we start."
+      ],
+      "kwargs": {},
+      "result": "Good morning. Today we start."
+    },
+    {
+      "method": "trimRepeats",
+      "args": [
+        "互联网金融。互联网金融有很多服务。"
+      ],
+      "kwargs": {},
+      "result": "互联网金融。互联网金融有很多服务。"
+    },
+    {
+      "method": "stabilize",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 6000,
+            "speaker": "a"
+          },
+          {
+            "start_ms": 6300,
+            "end_ms": 7500,
+            "speaker": "b"
+          },
+          {
+            "start_ms": 7800,
+            "end_ms": 15000,
+            "speaker": "a"
+          },
+          {
+            "start_ms": 15300,
+            "end_ms": 22000,
+            "speaker": "b"
+          }
+        ]
+      ],
+      "kwargs": {
+        "minimum_ms": 2500,
+        "absorb_gap_ms": 1000
+      },
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 15000,
+          "speaker": "a"
+        },
+        {
+          "start_ms": 15300,
+          "end_ms": 22000,
+          "speaker": "b"
+        }
+      ]
+    },
+    {
+      "method": "refinementTurns",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 18000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 18000,
+            "end_ms": 21000,
+            "speaker": "spk-2"
+          }
+        ],
+        21000,
+        15000
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 9000,
+          "speaker": "spk-1",
+          "_quiet": false
+        },
+        {
+          "start_ms": 9000,
+          "end_ms": 18000,
+          "speaker": "spk-1",
+          "_quiet": false
+        },
+        {
+          "start_ms": 18000,
+          "end_ms": 21000,
+          "speaker": "spk-2",
+          "_quiet": false
+        }
+      ]
+    },
+    {
+      "method": "refinementTurns",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 7000,
+            "speaker": "a"
+          },
+          {
+            "start_ms": 8000,
+            "end_ms": 16000,
+            "speaker": "a"
+          },
+          {
+            "start_ms": 16000,
+            "end_ms": 19000,
+            "speaker": "b"
+          }
+        ],
+        19000,
+        15000
+      ],
+      "kwargs": {
+        "merge_gap_ms": 2000
+      },
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 8000,
+          "speaker": "a",
+          "_quiet": false
+        },
+        {
+          "start_ms": 8000,
+          "end_ms": 16000,
+          "speaker": "a",
+          "_quiet": false
+        },
+        {
+          "start_ms": 16000,
+          "end_ms": 19000,
+          "speaker": "b",
+          "_quiet": false
+        }
+      ]
+    },
+    {
+      "method": "refinementTurns",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 7000,
+            "speaker": "a"
+          },
+          {
+            "start_ms": 7500,
+            "end_ms": 11000,
+            "speaker": "a",
+            "_quiet": true
+          },
+          {
+            "start_ms": 11500,
+            "end_ms": 19000,
+            "speaker": "a"
+          }
+        ],
+        19000,
+        15000
+      ],
+      "kwargs": {
+        "merge_gap_ms": 2000
+      },
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 7000,
+          "speaker": "a",
+          "_quiet": false
+        },
+        {
+          "start_ms": 7500,
+          "end_ms": 11000,
+          "speaker": "a",
+          "_quiet": true
+        },
+        {
+          "start_ms": 11500,
+          "end_ms": 19000,
+          "speaker": "a",
+          "_quiet": false
+        }
+      ]
+    },
+    {
+      "method": "stabilize",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 900,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 900,
+            "end_ms": 1100,
+            "speaker": "spk-2"
+          },
+          {
+            "start_ms": 1100,
+            "end_ms": 2000,
+            "speaker": "spk-1"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 2000,
+          "speaker": "spk-1"
+        }
+      ]
+    },
+    {
+      "method": "stabilize",
+      "args": [
+        [
+          {
+            "start_ms": 0,
+            "end_ms": 3000,
+            "speaker": "spk-1"
+          },
+          {
+            "start_ms": 2500,
+            "end_ms": 2900,
+            "speaker": "spk-2"
+          }
+        ]
+      ],
+      "kwargs": {},
+      "result": [
+        {
+          "start_ms": 0,
+          "end_ms": 3000,
+          "speaker": "spk-1"
+        }
+      ]
+    }
+  ]
+}

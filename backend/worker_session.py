@@ -1132,6 +1132,8 @@ class RecordingSessionMixin:
         `_release_active_session` 与 `_prepare_active` 的失败回滚共用这一份重置，
         避免两处字段清单各自漂移（漏掉一个就会留下半初始化的会话）。
         """
+        if callable(getattr(type(self.asr), "close_remote", None)):
+            self.asr.close_remote()
         self.active = self.asr = self.vad = None
         self.stream_state = {}
         self.pending_subtitles, self.pending_join = {}, {}

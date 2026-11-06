@@ -1,0 +1,33 @@
+[package]
+name = "brevia-host"
+version = "1.4.5"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+cc = "1"
+tauri-build = "2"
+
+[dependencies]
+base64 = "0.22"
+percent-encoding = "2"
+rusty-leveldb = { version = "4", default-features = false }
+serde_json = "1"
+sha2 = "0.10"
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = { version = "2.14", default-features = false, features = ["native-tls", "zip", "system-proxy"] }
+tokio = { version = "1", features = ["sync", "time"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+strip = "debuginfo"

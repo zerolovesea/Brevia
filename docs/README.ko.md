@@ -151,7 +151,7 @@ Pyannote 분할 + 화자 임베딩 모델을 사용하며 모두 기기에서 �
 
 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — 문제를 보고할 때 앱 버전, 기기, 재현 방법을 적어 주세요. 화면과 로그에서 개인 정보 및 인증 정보를 제거하세요.
 
-[모바일 개발 (중국어)](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
+[모바일 개발 (중국어)](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
 
 ## 라이선스
 

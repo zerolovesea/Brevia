@@ -151,7 +151,7 @@ Brevia транскрибирует речь на 30+ языках — англ�
 
 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — Сообщая о проблеме, укажите версию приложения, устройство и шаги воспроизведения. Удалите личные данные и учётные сведения из снимков экрана и журналов.
 
-[Мобильная разработка (китайский)](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
+[Мобильная разработка (китайский)](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
 
 ## Лицензия
 

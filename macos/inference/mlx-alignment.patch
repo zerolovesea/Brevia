@@ -1,0 +1,12 @@
+--- a/Sources/MLXAudioSTT/Models/Nemo/NemoAlignment.swift
++++ b/Sources/MLXAudioSTT/Models/Nemo/NemoAlignment.swift
+@@ -56,6 +56,9 @@
+                 "text": $0.text,
+                 "start": $0.start,
+                 "end": $0.end,
++                "tokens": $0.tokens.map {
++                    ["text": $0.text, "start": $0.start, "end": $0.end] as [String: Any]
++                },
+             ]
+         }
+     }

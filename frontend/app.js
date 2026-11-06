@@ -2448,6 +2448,10 @@ async function selectImportAudio(file) {
   }
 }
 const audioDropzone = prepareForm.querySelector('.audio-dropzone');
+window.brevia?.on('native.drop', ({ path }) => {
+  if (activeView === 'prepare' && prepareView.dataset.mode === 'import')
+    void selectImportAudio(path);
+});
 audioDropzone.addEventListener('click', (event) => {
   if (!event.target.closest('button')) void selectImportAudio();
 });
@@ -4000,7 +4004,7 @@ function openOnboardingLanguage(
     .join('');
   const page = document.createElement('main');
   page.className = 'onboarding-page onboarding-active onboarding-language-overlay';
-  page.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail('language', defaultLocale)}<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><div class="onboarding-page-copy"><h1></h1><p></p></div><div class="language-picker" role="radiogroup" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><div class="onboarding-actions"><button class="modal-action" type="submit"></button></div></form>`;
+  page.innerHTML = `<header class="onboarding-window-bar" data-tauri-drag-region><strong data-tauri-drag-region translate="no">Brevia</strong></header>${renderOnboardingRail('language', defaultLocale)}<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><div class="onboarding-page-copy"><h1></h1><p></p></div><div class="language-picker" role="radiogroup" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><div class="onboarding-actions"><button class="modal-action" type="submit"></button></div></form>`;
   revealOnboardingPage(page, 'language');
   updateOnboardingLanguageCopy(defaultLocale);
   onboardingPage.addEventListener('change', (event) => {
@@ -4171,7 +4175,7 @@ function showOnboardingPage(kind, content) {
   onboardingMotion = undefined;
   const page = document.createElement('main');
   page.className = `onboarding-page onboarding-active onboarding-${kind}-overlay`;
-  page.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail(kind)}<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
+  page.innerHTML = `<header class="onboarding-window-bar" data-tauri-drag-region><strong data-tauri-drag-region translate="no">Brevia</strong></header>${renderOnboardingRail(kind)}<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
   revealOnboardingPage(page, kind);
   if (['language', 'permissions', 'setup', 'ai', 'phone'].includes(kind))
     onboardingMotion = window.BreviaOnboardingMotion.mount(
@@ -4312,9 +4316,12 @@ async function openOnboardingSetup() {
 
   const bundled = modelCatalog.filter((model) => model.bundled);
   const bundledSize = bundled.reduce((total, model) => total + (model.size_bytes || 0), 0);
+  const bundledDetail = window.brevia?.nativeAudio
+    ? bundled.map((model) => model.name).join(' · ')
+    : copy.bundledDetail;
   const bundledRow =
     `<div class="onboarding-bundled"><span><b>${escapeHtml(copy.bundledTitle || '')}</b>` +
-    `<small>${escapeHtml(copy.bundledDetail || '')}</small></span>` +
+    `<small>${escapeHtml(bundledDetail || '')}</small></span>` +
     `<i>${escapeHtml(formatBytes(bundledSize))}</i></div>`;
 
   const storageRow = (key, label, managed) =>
@@ -4822,8 +4829,10 @@ function openOnboardingPermissions(fixtureStatus) {
       if (button.dataset.requestOnboardingPermission === 'microphone') {
         if (!(await window.brevia.permissions.requestMicrophone()))
           throw new Error(t('请在系统设置中允许'));
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stopMediaStream(stream);
+        if (!window.brevia.nativeAudio) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stopMediaStream(stream);
+        }
         grantedPermissions.add('microphone');
       }
     } catch (error) {
@@ -5084,7 +5093,8 @@ settingsModal.addEventListener('click', async (event) => {
     try {
       if (!(await window.brevia.permissions.requestMicrophone()))
         throw new Error(t('请在系统设置中允许'));
-      stopMediaStream(await navigator.mediaDevices.getUserMedia({ audio: true }));
+      if (!window.brevia.nativeAudio)
+        stopMediaStream(await navigator.mediaDevices.getUserMedia({ audio: true }));
     } catch (error) {
       showToast(error.message, undefined, 'error');
     }
@@ -11123,7 +11133,10 @@ async function startQuickRecording({ background = false } = {}) {
       payload.vad_model_id,
       ...(payload.target_language ? [translationModel?.id] : []),
     ];
-    if (!required.every((id) => id && modelPaths.has(id))) {
+    if (
+      (!window.brevia?.nativeAudio || captureMode === 'phone') &&
+      !required.every((id) => id && modelPaths.has(id))
+    ) {
       setPrepareMode('record');
       document.querySelector('#meeting-title').value = payload.title;
       for (const [key, value] of Object.entries({

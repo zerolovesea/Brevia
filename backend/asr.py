@@ -17,13 +17,17 @@ import wave
 from pathlib import Path
 
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, CUT_OVERLAP_MS, live_speech_cap
-from .worker_common import ModelNotInstalled
+from .worker_common import CAPABILITY_STAGES, ModelNotInstalled, model_capabilities
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 30
 DOWNLOAD_RETRIES = 5
 DOWNLOAD_FREE_SPACE_MULTIPLIER = 2
-DEFAULT_REFINED_MODEL_ID = "funasr-nano-mlx" if sys.platform == "darwin" else "funasr-nano-int8"
+DEFAULT_REFINED_MODEL_ID = (
+    "funasr-nano-mlx"
+    if sys.platform == "darwin" and os.environ.get("BREVIA_MACOS_NATIVE") != "1"
+    else "funasr-nano-int8"
+)
 # 参照 Meetily 的 pre_speech_pad：每个语音段在检测到的起点前再补一段刚喂入的
 # 原始音频，抵消端点检测/采集的句首抖动，避免独白首字/首词被切掉。
 DEFAULT_SPEECH_PAD_MS = 300
@@ -118,11 +122,33 @@ def load_model_catalog(path=None):
     """
     path = Path(path) if path else Path(__file__).with_name("models.json")
     system = platform.system().lower()
-    return {
+    items = json.loads(path.read_text(encoding="utf-8"))
+    catalog = {
         item["id"]: item
-        for item in json.loads(path.read_text(encoding="utf-8"))
+        for item in items
         if not item.get("platforms") or system in item["platforms"]
     }
+    if system == "darwin" and os.environ.get("BREVIA_MACOS_NATIVE") == "1":
+        # 优先清单中标为原生版的运行引擎；旧会议仍可显式选用 MLX 权重。
+        native = {item["id"]: item for item in items if "macos-webkit" in item.get("platforms", [])}
+        catalog = {**native, **{key: value for key, value in catalog.items() if key not in native}}
+        for model in catalog.values():
+            model.setdefault(
+                "runtime_tier",
+                "core" if model["runtime"].split("==")[0] == "sherpa-onnx" else "optional",
+            )
+    for model in catalog.values():
+        if "capabilities" in model and not (
+            isinstance(model.get("runtime"), str)
+            and model["runtime"]
+            and isinstance(model.get("backend"), list)
+            and model["backend"]
+            and all(isinstance(value, str) and value for value in model["backend"])
+        ):
+            raise ValueError("Model capabilities require a runtime and execution backends")
+        model["capabilities"] = model_capabilities(model)
+        model.setdefault("stages", [CAPABILITY_STAGES[name] for name in model["capabilities"]])
+    return catalog
 
 
 def model_directory_name(model_id, revision):
@@ -1190,6 +1216,18 @@ class OfflineVAD:
         return segments
 
 
+def legacy_voiceprint_model(manager):
+    # 历史声纹没有来源字段；同维度的新权重不能沿用旧人员库或分块声纹缓存。
+    model = manager.get(SPEAKER_EMBEDDING_MODEL_ID)
+    if (model["id"], model["revision"], model.get("archive_sha256")) != (
+        "eres2net-base-3dspeaker-zh",
+        "speaker-recongition-models",
+        "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
+    ):
+        raise ValueError("Speaker embedding model is incompatible with the saved voiceprints")
+    return model
+
+
 class SpeakerTracker:
     """按声纹相似度为连续语音分配稳定的会议内说话人 ID。"""
 
@@ -1203,7 +1241,7 @@ class SpeakerTracker:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
-        model = manager.path(model_id) / manager.get(model_id)["files"][0]
+        model = manager.path(model_id) / legacy_voiceprint_model(manager)["files"][0]
         extractor_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(model),
             num_threads=threads or manager.thread_budget(),
@@ -1303,6 +1341,10 @@ class RefinedASR:
 
     def __new__(cls, manager=None, model_id=None, *args, **kwargs):
         if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
+            if manager.get(model_id).get("runtime_tier") == "optional":
+                from .mlx_sidecar import RemoteMLXASR
+
+                return RemoteMLXASR(manager, model_id, *args, **kwargs)
             from .mlx_asr import MLXASR
 
             return MLXASR(manager, model_id, *args, **kwargs)

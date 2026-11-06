@@ -93,7 +93,7 @@ git pull --ff-only origin main
 git switch -c feature/mobile-transcript-layout
 ```
 
-手机界面与同步逻辑在 `mobile/lib/`；原生后台能力在 `mobile/ios/`、`mobile/android/`。涉及配对协议或桌面联动时，同时检查 `electron/mobile-server.js`、`backend/worker_mobile.py` 和 `frontend/` 对应实现。修改前遵循[贡献规范](../CONTRIBUTING.md)。
+手机界面与同步逻辑在 `mobile/lib/`；原生后台能力在 `mobile/ios/`、`mobile/android/`。涉及配对协议或桌面联动时，同时检查 `electron/mobile-server.js`、`backend/worker_mobile.py` 和 `frontend/` 对应实现。修改前遵循[贡献规范](../DEVELOPMENT.md#协作与检查)。
 
 需要新的展示版本时修改 `mobile/pubspec.yaml`，例如 `version: 0.1.5+5`。CI 保留 `0.1.5`，自动生成并覆盖 `+` 后的构建号；同一展示版本可以有多个测试构建，无需每个 PR 都升级版本。iOS 实时活动扩展从 Flutter 配置继承相同版本，不能另设版本号。
 
@@ -120,7 +120,7 @@ git push -u origin feature/mobile-transcript-layout
 
 改动依赖时，运行 `flutter pub get` 更新并提交 `pubspec.lock`；其他时候使用 `--enforce-lockfile` 与 CI 保持一致。上面的 `git add` 应替换为实际修改的文件，包含必要的原生工程配置、测试和文档；提交前用 `git diff --cached` 检查**整个暂存区**。不要提交构建产物、录音、证书、私钥、密码或本机 SDK 路径。
 
-按 [贡献规范](../CONTRIBUTING.md) 运行对应范围的检查，涉及桌面或后端时在仓库根目录运行 `npm test`；修改桌面样式源 `frontend/tailwind.css` 时，先运行 `npm run build` 并一起提交生成的 `frontend/styles.css`。涉及 ASR 或说话人分离时另跑对应模型检查。后台录音变更还需真机验证上文验收场景，单元测试和编译通过不能替代真机验证。
+按 [贡献规范](../DEVELOPMENT.md#协作与检查) 运行对应范围的检查，涉及桌面或后端时在仓库根目录运行 `npm test`；修改桌面样式源 `frontend/tailwind.css` 时，先运行 `npm run build` 并一起提交生成的 `frontend/styles.css`。涉及 ASR 或说话人分离时另跑对应模型检查。后台录音变更还需真机验证上文验收场景，单元测试和编译通过不能替代真机验证。
 
 ### 3. 创建 PR 并合并
 
@@ -173,7 +173,7 @@ git push -u origin feature/mobile-transcript-layout
 
 ### 正式发布
 
-**每次 iOS 送审前，执行者必须重新阅读本节和根目录 `AGENTS.md`，不能只沿用上一轮检查结论。优先通过 App Store Connect API 提交，默认入口为现有 GitHub Actions 的 `appstore` 通道；浏览器用于补齐 API 未覆盖的资料或诊断实际失败。**
+**每次 iOS 送审前，执行者必须重新阅读本节和[开发者手册的正式发布章节](../DEVELOPMENT.md#正式发布)，不能只沿用上一轮检查结论。优先通过 App Store Connect API 提交，默认入口为现有 GitHub Actions 的 `appstore` 通道；浏览器用于补齐 API 未覆盖的资料或诊断实际失败。**
 
 送审前逐项核对：
 

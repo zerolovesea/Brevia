@@ -158,14 +158,14 @@ Make sure both devices share a reachable LAN, the computer is awake with Brevia 
 
 Found a problem or have a suggestion? [Open an issue](https://github.com/zerolovesea/Brevia/issues) with your device, app version, meeting language and steps to reproduce. Remove private content and credentials from screenshots and logs. Report security issues privately to the maintainer.
 
-| What you want to do                                     | Start here                                                                                     |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Find user and project documentation                     | [Documentation index](README.md)                                                               |
-| Change code and understand checks                       | [Contribution guidelines](../CONTRIBUTING.md)                                                  |
-| Develop mobile, understand sync or release a build      | [Mobile guide](../mobile/README.md)                                                            |
-| Explore local speech processing and the worker protocol | [Backend guide](../backend/README.md)                                                          |
-| Build and release the desktop app                       | [Desktop release process](RELEASING.md)                                                        |
-| See recent changes                                      | [Release notes](releases/) · [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) |
+| What you want to do                                     | Start here                                                                                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Find user and project documentation                     | [Documentation index](README.md)                                                                                                    |
+| Change code and understand checks                       | [Contribution guidelines](../DEVELOPMENT.md#协作与检查)                                                                             |
+| Develop mobile, understand sync or release a build      | [Mobile guide](../mobile/README.md)                                                                                                 |
+| Explore local speech processing and the worker protocol | [Backend guide](../backend/README.md)                                                                                               |
+| Build and release the desktop app                       | [Desktop release process](../DEVELOPMENT.md#正式发布)                                                                               |
+| See recent changes                                      | [Release notes](https://github.com/zerolovesea/Brevia/releases) · [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) |
 
 Development and design materials are maintained on the `dev` branch.
 

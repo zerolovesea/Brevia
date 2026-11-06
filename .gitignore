@@ -65,3 +65,10 @@ design.md
 secrets/
 credentials.json
 .npmrc
+
+# Agent 协作和统一 UI 设计规范仅在本地维护，不公开分发。
+/AGENTS.md
+/docs/desktop-design-system.md
+/docs/brand-motion/
+/docs/desktop-ui-*.md
+/docs/global-recording-shortcuts.md

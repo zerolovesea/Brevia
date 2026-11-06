@@ -4,7 +4,12 @@ import base64
 import json
 import os
 
-from .worker_common import synchronized_recording, model_supports_language, missing_models
+from .worker_common import (
+    synchronized_recording,
+    model_supports_language,
+    model_capabilities,
+    missing_models,
+)
 
 
 class MobileWorkerMixin:
@@ -110,7 +115,7 @@ class MobileWorkerMixin:
                 "default_for_languages": m.get('default_for_languages', []),
             }
             for m in self.models.list()
-            if 'refined' in m.get('stages', []) and not m.get('retired')
+            if 'transcription' in model_capabilities(m) and not m.get('retired')
         ]
         return {
             "models": models,

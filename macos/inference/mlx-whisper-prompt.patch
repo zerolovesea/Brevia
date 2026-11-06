@@ -1,0 +1,83 @@
+diff --git a/Sources/MLXAudioSTT/Generation.swift b/Sources/MLXAudioSTT/Generation.swift
+index 7ce84e9..5715b0d 100644
+--- a/Sources/MLXAudioSTT/Generation.swift
++++ b/Sources/MLXAudioSTT/Generation.swift
+@@ -43,6 +43,7 @@ public struct STTGenerateParameters: Sendable {
+     /// "transcribe" or "translate". Whisper translates into English; Nemotron
+     /// Transcribe uses `language` as the target language for translation.
+     public let task: String
++    public let initialPrompt: String?
+ 
+     public init(
+         maxTokens: Int = 8192,
+@@ -58,7 +59,8 @@ public struct STTGenerateParameters: Sendable {
+         kvBits: Int? = nil,
+         kvGroupSize: Int = 64,
+         quantizedKVStart: Int = 0,
+-        task: String = "transcribe"
++        task: String = "transcribe",
++        initialPrompt: String? = nil
+     ) {
+         self.maxTokens = maxTokens
+         self.temperature = temperature
+@@ -74,6 +76,7 @@ public struct STTGenerateParameters: Sendable {
+         self.kvGroupSize = kvGroupSize
+         self.quantizedKVStart = quantizedKVStart
+         self.task = task
++        self.initialPrompt = initialPrompt
+     }
+ }
+ 
+diff --git a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+index d6ab87e..ddb2744 100644
+--- a/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
++++ b/Sources/MLXAudioSTT/Models/Whisper/WhisperModel.swift
+@@ -258,7 +258,8 @@ public final class WhisperModel: Module, STTGenerationModel {
+         let promptIds = tokenizer.buildPromptTokens(
+             language: generationParameters.language,
+             task: generationParameters.task,
+-            withTimestamps: withTimestamps
++            withTimestamps: withTimestamps,
++            initialPrompt: generationParameters.initialPrompt
+         )
+ 
+         let promptArray = MLXArray(promptIds.map(Int32.init)).expandedDimensions(axis: 0)
+@@ -358,8 +359,10 @@ public final class WhisperModel: Module, STTGenerationModel {
+         }
+         // The language token sits at prompt index 1 for multilingual models.
+         var language: String? = nil
+-        if tokenizer.isMultilingual, promptIds.count > 1 {
+-            let langTokenId = promptIds[1]
++        if tokenizer.isMultilingual,
++           let start = promptIds.firstIndex(of: tokenizer.startOfTranscriptId),
++           start + 1 < promptIds.count {
++            let langTokenId = promptIds[start + 1]
+             for (code, id) in tokenizer.languageToId where id == langTokenId {
+                 language = code
+                 break
+diff --git a/Sources/MLXAudioSTT/Models/Whisper/WhisperTokenizer.swift b/Sources/MLXAudioSTT/Models/Whisper/WhisperTokenizer.swift
+index 2d708c0..56514df 100644
+--- a/Sources/MLXAudioSTT/Models/Whisper/WhisperTokenizer.swift
++++ b/Sources/MLXAudioSTT/Models/Whisper/WhisperTokenizer.swift
+@@ -96,7 +96,8 @@ public final class WhisperTokenizer {
+     /// an ISO code ("en") or a full name ("English"); pass `nil` to let
+     /// multilingual variants auto-detect.
+     public func buildPromptTokens(
+-        language: String?, task: String = "transcribe", withTimestamps: Bool = false
++        language: String?, task: String = "transcribe", withTimestamps: Bool = false,
++        initialPrompt: String? = nil
+     ) -> [Int] {
+         var tokens: [Int] = [startOfTranscriptId]
+         if isMultilingual {
+@@ -111,6 +112,11 @@ public final class WhisperTokenizer {
+             }
+         }
+         if !withTimestamps { tokens.append(noTimestampsId) }
++        if let prompt = initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
++           !prompt.isEmpty, let prevSotId {
++            let context = inner.encode(text: " " + prompt, addSpecialTokens: false)
++            tokens = [prevSotId] + Array(context.suffix(223)) + tokens
++        }
+         return tokens
+     }
+ 

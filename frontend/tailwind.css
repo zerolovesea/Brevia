@@ -4112,7 +4112,7 @@ html[data-theme="dark"] .model-library-headline,
 html[data-theme="dark"] .model-library-rating b {
   color: #fff;
 }
-/* 模型库 / 首启选型卡片：新增的手写组件类必须有暗色规则（RELEASING.md §3）。
+/* 模型库 / 首启选型卡片：新增的手写组件类必须有暗色规则（DEVELOPMENT.md 正式发布第 3 节）。
    这些类在浅色下用 text-black / #444444，而暗色页面底色是 #191919——不补规则就是
    1.0:1 与 1.7:1，模型名、定位短句和刻度值直接看不见。*/
 html[data-theme="dark"] .asr-card-head b,

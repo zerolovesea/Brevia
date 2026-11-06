@@ -22,6 +22,7 @@ from .llm_client import complete
 from .storage import Store
 from .voice_profiles import VoiceProfileService
 from .worker_common import SCHEMA_VERSION, TaskRegistry, WorkerState
+from .worker_llama_sidecar import inference_worker, native_macos
 
 
 _LONE_SURROGATE = re.compile(r"[\ud800-\udfff]")
@@ -275,7 +276,14 @@ class WorkerCore:
                     value["meeting_id"], value["workspace_id"]
                 ),
             }
+            if native_macos():
+                self._handlers["runtime.activate"] = self.activate_runtime
         return self._handlers
+
+    def activate_runtime(self, payload):
+        worker = inference_worker(payload["worker"])
+        os.environ["BREVIA_INFERENCE_WORKER"] = str(worker)
+        return {"activated": True}
 
     def initialize(self, _):
         """返回首屏状态，并把可延后的启动维护放入后台。"""

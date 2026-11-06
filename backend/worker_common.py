@@ -22,6 +22,56 @@ REFINED_PRIORITY_FIELD = "refined_priority"
 DEFAULT_REFINED_PRIORITY = 99
 
 
+# 模型目录的输入输出是跨运行引擎的数据语义，runtime 和 backend 仍决定实际执行位置。
+# 分割模型仅提供说话人活动；会后流程组合声纹、聚类后才得到具名时间段。
+CAPABILITY_IO = {
+    "llm": ("text", ("text",)),
+    "transcription": ("audio", ("transcript",)),
+    "translation": ("text", ("translation",)),
+    "vad": ("audio", ("speech_intervals",)),
+    "separation": ("audio", ("audio_tracks",)),
+    "diarization": ("audio", ("speaker_turns", "speaker_activity")),
+    "embedding": ("audio", ("speaker_embedding",)),
+}
+CAPABILITY_STAGES = {
+    "llm": "summary",
+    "transcription": "refined",
+    "translation": "translation",
+    "vad": "vad",
+    "separation": "separation",
+    "diarization": "diarization",
+    "embedding": "speaker-embedding",
+}
+
+
+def model_capabilities(model):
+    explicit = model.get("capabilities")
+    if explicit is not None:
+        if not isinstance(explicit, dict):
+            raise ValueError("Expected a model capability map")
+        for name, contract in explicit.items():
+            if name not in CAPABILITY_IO or not isinstance(contract, dict):
+                raise ValueError(f"Unknown model capability: {name}")
+            input_type, outputs = CAPABILITY_IO[name]
+            if contract.get("input") != input_type or contract.get("output") not in outputs:
+                raise ValueError(f"Invalid input or output for model capability: {name}")
+        return explicit
+    result = {}
+    for name, stage in CAPABILITY_STAGES.items():
+        if stage not in model.get("stages", ()):
+            continue
+        if name == "diarization" and model.get("kind") == "speaker-embedding":
+            continue
+        input_type, outputs = CAPABILITY_IO[name]
+        output = (
+            "speaker_activity"
+            if name == "diarization" and model.get("kind") == "speaker-segmentation"
+            else outputs[0]
+        )
+        result[name] = {"input": input_type, "output": output}
+    return result
+
+
 def refined_models_in_priority_order(catalog):
     """清单里可选用的整句识别模型，按 ``refined_priority`` 排序。
 
@@ -31,7 +81,7 @@ def refined_models_in_priority_order(catalog):
     refined = [
         model
         for model in catalog
-        if "refined" in model.get("stages", []) and not model.get("retired")
+        if "transcription" in model_capabilities(model) and not model.get("retired")
     ]
     return sorted(
         refined,

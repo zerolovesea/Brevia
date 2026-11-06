@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -973,6 +974,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_audio_import_does_not_read_worker_stdin(self):
         with (
+            patch("backend.audio_io.sys.platform", "win32"),
             patch("backend.audio_io.ffmpeg_path", return_value="ffmpeg"),
             patch("backend.audio_io.subprocess.run") as run,
         ):
@@ -980,6 +982,27 @@ class WorkerTest(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("-nostdin", command)
         self.assertIs(run.call_args.kwargs["stdin"], __import__("subprocess").DEVNULL)
+
+    def test_macos_audio_import_uses_system_decoder_then_compatible_fallback(self):
+        with (
+            patch("backend.audio_io.sys.platform", "darwin"),
+            patch.dict(os.environ, {"BREVIA_FFMPEG": "/runtime/ffmpeg"}),
+            patch("backend.audio_io.subprocess.run") as run,
+        ):
+            convert_to_pcm_wav("sample.m4a", "output.wav")
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][0], "/usr/bin/afconvert")
+            run.reset_mock()
+            run.side_effect = [subprocess.CalledProcessError(1, "afconvert"), None]
+            convert_to_pcm_wav("sample.m4a", "output.wav")
+            self.assertEqual(run.call_args.args[0][0], "/runtime/ffmpeg")
+            self.assertIs(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+            with patch.dict(os.environ, {"BREVIA_MACOS_NATIVE": "1"}):
+                run.reset_mock()
+                run.side_effect = subprocess.CalledProcessError(1, "afconvert")
+                with self.assertRaisesRegex(ValueError, "system could not decode"):
+                    convert_to_pcm_wav("sample.m4a", "output.wav")
+                self.assertEqual(run.call_count, 1)
 
     def _wait_ai_suggestions(self, count=1, timeout=5.0):
         """等待出现至少 count 条 ai-note.suggestion 事件。"""
@@ -1984,6 +2007,132 @@ class WorkerTest(unittest.TestCase):
 
         run(lambda: self.worker.delete_meeting({"meeting_id": meeting["id"]}))
         run(lambda: self.worker.purge_meeting({"meeting_id": meeting["id"]}))
+
+    def test_voiceprint_verification_refuses_another_model_even_with_the_same_dimension(self):
+        from .config import SPEAKER_EMBEDDING_MODEL_ID
+
+        unknown = dict(self.worker.models.get(SPEAKER_EMBEDDING_MODEL_ID), revision="unrelated")
+        profile = self.worker.store.save_speaker_profile_sample("甲", [1.0, 0.0], "known")
+        source = Path(self.temp.name) / "voice.wav"
+        source.touch()
+        with (
+            patch.dict(self.worker.models.catalog, {SPEAKER_EMBEDDING_MODEL_ID: unknown}),
+            patch.object(self.worker.models, "is_ready", return_value=True),
+            patch.object(self.worker.voice_profiles, "_samples", return_value=([], 16000)),
+            patch("sherpa_onnx.SpeakerEmbeddingExtractor") as extractor,
+        ):
+            extractor.return_value.dim = 2
+            with self.assertRaisesRegex(ValueError, "incompatible with the saved voiceprints"):
+                self.worker.voice_profiles.verify(
+                    {"path": str(source), "profile_id": profile["id"]}
+                )
+            extractor.assert_not_called()
+
+    def test_capabilities_work_with_a_new_kind_and_retain_legacy_model_roles(self):
+        from .asr import load_model_catalog
+        from .worker_common import refined_models_in_priority_order
+
+        catalog = load_model_catalog()
+        self.assertEqual(
+            catalog["pyannote-segmentation-3.0"]["capabilities"],
+            {"diarization": {"input": "audio", "output": "speaker_activity"}},
+        )
+        self.assertEqual(set(catalog["eres2net-base-3dspeaker-zh"]["capabilities"]), {"embedding"})
+        self.assertFalse(any("separation" in row["capabilities"] for row in catalog.values()))
+        new = {
+            "id": "sample",
+            "kind": "new-family",
+            "runtime": "test-runtime",
+            "backend": ["cpu"],
+            "capabilities": {
+                "transcription": {"input": "audio", "output": "transcript"},
+                "separation": {"input": "audio", "output": "audio_tracks"},
+            },
+        }
+        path = Path(self.temp.name) / "test-catalog.json"
+        path.write_text(json.dumps([new]))
+        candidate = load_model_catalog(path)["sample"]
+        self.assertEqual(candidate["stages"], ["refined", "separation"])
+        self.assertEqual(refined_models_in_priority_order([candidate]), [candidate])
+        new["capabilities"]["separation"]["output"] = "speaker_turns"
+        path.write_text(json.dumps([new]))
+        with self.assertRaisesRegex(ValueError, "Invalid input or output"):
+            load_model_catalog(path)
+
+    def test_native_runtime_activation_preserves_recording_and_uses_same_model_ids(self):
+        from .asr import load_model_catalog
+        from .worker_llama_sidecar import inference_worker
+
+        with (
+            patch.dict(os.environ, {"BREVIA_MACOS_NATIVE": "1", "BREVIA_INFERENCE_WORKER": ""}),
+            patch("sys.platform", "darwin"),
+            patch("platform.system", return_value="Darwin"),
+        ):
+            self.worker._handlers = None
+            self.worker.active = "ongoing"
+            executable = Path(self.temp.name) / "brevia-worker"
+            executable.touch(mode=0o700)
+            self.worker.handle(
+                {
+                    "id": "activate",
+                    "type": "runtime.activate",
+                    "payload": {"worker": str(executable)},
+                }
+            )
+            self.assertEqual(self.worker.active, "ongoing")
+            self.assertEqual(inference_worker(), executable)
+            self.assertRaises(
+                RuntimeError, self.worker.activate_runtime, {"worker": "brevia-worker"}
+            )
+            catalog = load_model_catalog()
+            self.assertEqual(catalog["silero-vad"]["runtime_tier"], "core")
+            self.assertEqual(catalog["funasr-nano-int8"]["runtime_tier"], "core")
+            self.assertEqual(catalog["funasr-nano-mlx"]["runtime_tier"], "optional")
+            self.assertEqual(catalog["hy-mt2-1.8b-q4km"]["runtime_tier"], "optional")
+            self.worker.active = None
+        with patch.dict(os.environ, {"BREVIA_MACOS_NATIVE": ""}):
+            self.worker._handlers = None
+            self.assertNotIn("runtime.activate", self.worker._command_handlers())
+
+    @unittest.skipIf(sys.platform == "win32", "macOS 推理 helper 通过可执行文件启动")
+    def test_remote_asr_preserves_word_timing_drafts_and_interrupts_inference(self):
+        import numpy as np
+
+        from .mlx_sidecar import RemoteMLXASR
+        from .worker_common import TaskCancelled
+
+        worker = Path(self.temp.name) / "brevia-worker"
+        worker.write_text(
+            f"#!{sys.executable}\n"
+            "import json,sys,time,os\n"
+            "assert sys.argv[1:] == ['--mlx-asr'] and os.environ['PYINSTALLER_RESET_ENVIRONMENT'] == '1'\n"
+            "for line in sys.stdin:\n"
+            " r=json.loads(line); op=r['type']\n"
+            " if op == 'shutdown': break\n"
+            " assert r['config']['hotwords'] == ['术语']\n"
+            " if op=='stream': print(json.dumps({'type':'partial','text':'草'}),flush=True)\n"
+            " if op=='stream' and r['audio']: time.sleep(60)\n"
+            " print(json.dumps({'type':'result','max_speech_seconds':20,'text':'final','words':[{'start_ms':120}]}),flush=True)\n"
+        )
+        worker.chmod(0o700)
+        models = Mock(root=self.temp.name, bundled_root=None)
+        cancelled = threading.Event()
+        partials = []
+        with (
+            patch.dict(
+                os.environ, {"BREVIA_MACOS_NATIVE": "1", "BREVIA_INFERENCE_WORKER": str(worker)}
+            ),
+            patch("sys.platform", "darwin"),
+        ):
+            asr = RemoteMLXASR(models, "model", hotwords=["术语"], cancellation=cancelled)
+            self.addCleanup(asr.close_remote)
+            child = asr.sidecar.process
+            self.assertEqual(asr.decode_words([]), ("final", [{"start_ms": 120}]))
+            self.assertEqual(asr.decode_stream([], partial=partials.append), "final")
+            self.assertEqual(partials, ["草"])
+            with self.assertRaises(TaskCancelled):
+                asr.decode_stream(np.ones(16), partial=lambda _: cancelled.set())
+            self.assertIsNotNone(child.poll())
 
     def test_sidecar_timeout_kills_the_stalled_process(self):
         child = Mock()

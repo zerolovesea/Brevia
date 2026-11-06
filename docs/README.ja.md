@@ -151,7 +151,7 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 
 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — 不具合はアプリのバージョン、デバイス、再現手順を添えて報告してください。画像やログから個人情報と認証情報を除いてください。
 
-[モバイル開発（中国語）](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
+[モバイル開発（中国語）](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
 
 ## ライセンス
 

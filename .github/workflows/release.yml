@@ -58,6 +58,9 @@ jobs:
           # e2e 会真实启动 Electron 并通过 CDP 断言渲染进程；Windows runner 无法可靠地
           # 无头启动它，因此只在 macOS 上跑，Windows 侧跳过（跳过会打印原因并以 0 退出）。
           BREVIA_SKIP_E2E: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
+      - name: Check legacy macOS backend before packaging Electron
+        if: matrix.os == 'macos-14'
+        run: npm run test:backend:legacy
       - name: Bundle Python runtime and dependencies
         run: python backend/pack_worker.py
       - name: Bundle llama sidecar
@@ -76,7 +79,8 @@ jobs:
           test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
       - name: Package and notarize macOS
         if: matrix.os == 'macos-14'
-        run: npm run package:mac
+        # 公证和跨版本升级验收通过后再切换正式发行渠道。
+        run: npm run package:mac:electron
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

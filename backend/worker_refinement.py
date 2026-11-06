@@ -18,6 +18,7 @@ from .asr import (
     OfflineVAD,
     OfflineDiarizer,
     RefinedASR,
+    legacy_voiceprint_model,
     SpeakerTracker,
     recover_speech_gaps,
 )
@@ -448,6 +449,7 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
+        recognizer = None
         try:
             self._refinement_progress(
                 {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中"},
@@ -458,6 +460,11 @@ class RefinementWorkerMixin:
                 refined_model_id,
                 language=meeting.get("language"),
                 threads=self.models.device()["threads"],
+                **(
+                    {"cancellation": control.cancelled}
+                    if self.models.get(refined_model_id).get("runtime_tier") == "optional"
+                    else {}
+                ),
                 **self.store.asr_term_options(meeting),
             )
             logger.info(
@@ -656,6 +663,9 @@ class RefinementWorkerMixin:
             return cancel_refinement()
         except Exception as error:
             return fail_refinement(error)
+        finally:
+            if callable(getattr(type(recognizer), "close_remote", None)):
+                recognizer.close_remote()
 
     @staticmethod
     def _vad_params_for(language):
@@ -1066,7 +1076,11 @@ class RefinementWorkerMixin:
             files = [Path(path)]
             models = []
             for model_id in (segmentation_id, SPEAKER_EMBEDDING_MODEL_ID):
-                model = self.models.get(model_id)
+                model = (
+                    legacy_voiceprint_model(self.models)
+                    if model_id == SPEAKER_EMBEDDING_MODEL_ID
+                    else self.models.get(model_id)
+                )
                 models.append((model_id, model["revision"], model["runtime"]))
                 files.extend(self.models.path(model_id) / name for name in model["files"])
             stamps = [

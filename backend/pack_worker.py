@@ -24,7 +24,8 @@ def resource(name, destination="backend"):
 
 
 # 清残留并补齐随包模型；`backend/bundled_models.py` 与打包前置校验共用同一份 allowlist。
-prepare_bundled_models(BUNDLED_MODELS)
+if "--runtime-only" not in sys.argv:
+    prepare_bundled_models(BUNDLED_MODELS)
 
 # mlx-audio and transformers select architectures/tokenizers dynamically. Keep
 # the installed speech families and Metal library beside mlx.core in the bundle.
@@ -152,6 +153,7 @@ if sys.platform == "darwin":
 PyInstaller.__main__.run(
     [
         *mlx_options,
+        "--hidden-import=backend.diarization_process",
         "--noconfirm",
         "--clean",
         "--onedir",

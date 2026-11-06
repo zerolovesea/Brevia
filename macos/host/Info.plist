@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.brevia.app</string>
+  <key>CFBundleName</key><string>Brevia</string>
+  <key>CFBundleDisplayName</key><string>Brevia</string>
+  <key>CFBundleExecutable</key><string>brevia-host</string>
+  <key>CFBundleIconFile</key><string>icon.icns</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1.4.5</string>
+  <key>CFBundleShortVersionString</key><string>1.4.5</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSLocalNetworkUsageDescription</key><string>Brevia connects to your phone on the local network for meeting recording.</string>
+  <key>NSBonjourServices</key><array><string>_brevia._tcp</string></array>
+  <key>NSAudioCaptureUsageDescription</key><string>Brevia captures system audio to transcribe meetings locally.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Brevia captures microphone audio to transcribe meetings locally.</string>
+</dict></plist>

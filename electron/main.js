@@ -8,6 +8,8 @@ const {
   globalShortcut,
   Menu,
   nativeImage,
+  nativeAudio,
+  nativeBackend,
   Tray,
   powerMonitor,
   protocol,
@@ -577,7 +579,9 @@ class WorkerClient {
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
     const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
     const recoverInterrupted = !this.refinement && !this.hasSpawned;
-    const child = spawn(python, args, {
+    const workerExecutable = nativeBackend ? process.execPath : python;
+    const workerArgs = nativeBackend ? [path.join(packagedRoot, 'control', 'worker.cjs')] : args;
+    const child = spawn(workerExecutable, workerArgs, {
       cwd: packagedRoot,
       env: {
         ...process.env,
@@ -588,6 +592,11 @@ class WorkerClient {
         BREVIA_MEETINGS_DIR: recordingsDir(),
         BREVIA_BUNDLED_MODELS_DIR: path.join(packagedRoot, 'backend', 'bundled-models'),
         BREVIA_RECOVER_INTERRUPTED: recoverInterrupted ? '1' : '0',
+        ...(nativeAudio && {
+          BREVIA_MACOS_NATIVE: '1',
+          BREVIA_RESOURCES: packagedRoot,
+          BREVIA_NATIVE_ENGINES: path.join(packagedRoot, 'engines'),
+        }),
         ...(ffmpeg ? { BREVIA_FFMPEG: ffmpeg } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1480,7 +1489,41 @@ function registerIpc() {
       });
     return pendingInstall;
   });
+  if (nativeAudio) {
+    handleIpc('native-audio.devices', () => nativeAudio.query('devices'));
+    handleIpc('native-audio.prepare', (_, payload) => {
+      const value = z
+        .object({
+          mic: z.boolean(),
+          system: z.boolean(),
+          deviceId: z.string().max(1024).optional(),
+          preview: z.boolean().optional(),
+        })
+        .parse(payload);
+      if (worker.active && !worker.active.mobile) throw new Error('A recording is already active');
+      return nativeAudio.prepare(
+        value,
+        (frame) => {
+          if (worker.active?.meeting_id !== frame.meeting_id)
+            throw new Error('Recording has ended');
+          return worker.request('meeting.audio', audio.parse(frame));
+        },
+        (type, event) => worker.sendEvent(type, event),
+      );
+    });
+    handleIpc('native-audio.start', (_, payload) => {
+      const value = id.parse(payload);
+      if (worker.active?.meeting_id !== value.meeting_id || worker.active.mobile)
+        throw new Error('Invalid recording');
+      return nativeAudio.command('start', value.meeting_id);
+    });
+    handleIpc('native-audio.pause', (_, payload) =>
+      nativeAudio.command(z.boolean().parse(payload.paused) ? 'pause' : 'resume'),
+    );
+    handleIpc('native-audio.stop', () => nativeAudio.command('stop'));
+  }
   handleIpc('permissions.status', () => {
+    if (nativeAudio) return nativeAudio.query('permissions');
     if (process.platform === 'darwin')
       return {
         microphone: systemPreferences.getMediaAccessStatus('microphone'),
@@ -1501,15 +1544,18 @@ function registerIpc() {
     };
   });
   handleIpc('permissions.request-microphone', () =>
-    process.platform === 'darwin'
-      ? systemPreferences.askForMediaAccess('microphone')
-      : // Windows has no runtime prompt; report whether the OS privacy toggle already allows access.
-        process.platform !== 'win32' ||
-        systemPreferences.getMediaAccessStatus('microphone') === 'granted',
+    nativeAudio
+      ? nativeAudio.query('request-microphone')
+      : process.platform === 'darwin'
+        ? systemPreferences.askForMediaAccess('microphone')
+        : // Windows has no runtime prompt; report whether the OS privacy toggle already allows access.
+          process.platform !== 'win32' ||
+          systemPreferences.getMediaAccessStatus('microphone') === 'granted',
   );
   handleIpc('permissions.open-screen-settings', async () => {
     if (process.platform !== 'darwin') return false;
-    await registerScreenPermission(desktopCapturer, writeLog);
+    if (nativeAudio) await nativeAudio.query('request-screen');
+    else await registerScreenPermission(desktopCapturer, writeLog);
     const settings = spawn(
       'open',
       ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'],
@@ -1551,7 +1597,7 @@ function registerIpc() {
     const value = meetingStart.parse(payload);
     let result;
     try {
-      result = await worker.request('meeting.start', { ...value, require_models: true });
+      result = await worker.request('meeting.start', { ...value, require_models: !nativeAudio });
     } catch (error) {
       const models = requiredModels(error);
       if (!models) throw error;
@@ -2124,7 +2170,7 @@ function registerIpc() {
       const window =
         BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
       if (!window) throw new Error('No window to anchor the share menu');
-      new ShareMenu({ filePaths: deliver.map((entry) => entry.path) }).popup({
+      await new ShareMenu({ filePaths: deliver.map((entry) => entry.path) }).popup({
         window,
         ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}),
       });
@@ -2132,9 +2178,9 @@ function registerIpc() {
     }
     return null;
   });
-  handleIpc('share.copy-text', (_, payload) => {
+  handleIpc('share.copy-text', async (_, payload) => {
     const value = z.object({ text: z.string().min(1).max(200000) }).parse(payload);
-    clipboard.writeText(value.text);
+    await clipboard.writeText(value.text);
     return { copied: true };
   });
   handleIpc('share.open-external', async (_, payload) => {
@@ -2210,7 +2256,7 @@ function registerIpc() {
     const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
     if (!window) throw new Error('No window to anchor the share menu');
     // 传入按钮坐标(相对窗口内容区),弹窗锚定在按钮处;无坐标时回退到窗口默认位置。
-    new ShareMenu(sharingItem).popup({
+    await new ShareMenu(sharingItem).popup({
       window,
       ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}),
     });
@@ -2362,6 +2408,7 @@ let macUpdateCheck;
 
 function checkForUpdate() {
   if (!app.isPackaged) return Promise.resolve({ status: 'unsupported' });
+  if (nativeAudio) return app.nativeUpdate('check');
   if (!['darwin', 'win32'].includes(process.platform))
     return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
@@ -2423,7 +2470,7 @@ async function installUpdate() {
       });
   };
   await requireIdle();
-  const { autoUpdater } = require('electron-updater');
+  const autoUpdater = nativeAudio ? null : require('electron-updater').autoUpdater;
 
   // 监听下载进度并发送给前端
   const progressHandler = (info) => {
@@ -2441,10 +2488,11 @@ async function installUpdate() {
     });
   };
 
-  autoUpdater.on('download-progress', progressHandler);
+  autoUpdater?.on('download-progress', progressHandler);
   let disabledWindow;
   try {
-    await autoUpdater.downloadUpdate();
+    if (nativeAudio) await app.nativeUpdate('download');
+    else await autoUpdater.downloadUpdate();
     await requireIdle();
     // 下载期间仍可开始会议或编辑笔记；进入系统安装阶段前需确认存盘及空闲状态。
     const window = desktop.mainWindow;
@@ -2459,7 +2507,12 @@ async function installUpdate() {
     // 手机建会在模型检查和写入 session 之间也有异步磁盘操作。
     await mobileServer?.queue;
     await requireIdle();
-    await handOffUpdate(autoUpdater, require('electron').autoUpdater);
+    if (nativeAudio) {
+      await app.nativeUpdate('install');
+      installingUpdate = true;
+      app.relaunch();
+      app.quit();
+    } else await handOffUpdate(autoUpdater, require('electron').autoUpdater);
     return true;
   } catch (error) {
     app.preparingUpdate = false;
@@ -2471,7 +2524,7 @@ async function installUpdate() {
     }
     throw error;
   } finally {
-    autoUpdater.removeListener('download-progress', progressHandler);
+    autoUpdater?.removeListener('download-progress', progressHandler);
   }
 }
 
@@ -2788,6 +2841,9 @@ async function closeFloatingCaption() {
   return true;
 }
 
+app.on('host-disconnected', () => {
+  for (const client of [worker, refinementWorker]) stopProcess(client.process);
+});
 app.whenReady().then(async () => {
   if (process.platform === 'win32') Menu.setApplicationMenu(null);
   try {
@@ -2968,6 +3024,13 @@ async function stopActiveMeeting() {
   const active = worker.active;
   if (!active) return;
   if (active.mobile) return; // Durable mobile spool is resumed after PC wake/restart.
+  if (nativeAudio)
+    try {
+      await nativeAudio.command('stop');
+    } catch (error) {
+      writeLog('WARNING', `stop native recorder: ${logText(error)}`);
+      worker.sendEvent('native-audio.error', { message: error.message });
+    }
   await worker.request('meeting.stop', {
     meeting_id: active.meeting_id,
     duration_ms: Math.max(0, Date.now() - active.started_at),

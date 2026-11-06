@@ -1,0 +1,1386 @@
+{
+  "seams": [
+    [["以此改变未来。", "来，有些网友会继续。", null, 2], "以此改变未来，有些网友会继续。"],
+    [["放电现象只会。", "则会停止。", null, 4], "放电现象只会停止。"],
+    [["结束第一句话。", "下一句话。", null, 0], null],
+    [["这是一。", "一个例子。", "comma", 0], "这是一，一个例子。"],
+    [["因为测试的。", "资源不足。", null, 0], "因为测试的资源不足。"],
+    [["前面的描述。", "这一句没有重叠。", null, 8], null],
+    [["前句，新的。", "新的一句。", "comma", 0], "前句，新的新的一句。"]
+  ],
+  "groups": [
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 4000,
+          "boundary": "cut",
+          "speaker": "local-user"
+        },
+        "前面是完整的一句。第二句被切在了。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 3600,
+          "end_ms": 6500,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "在了接口的边界。这里已经结束。"
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "boundary": "pause",
+          "speaker": "local-user"
+        },
+        "这是重复的一。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "一个字不能吞掉。"
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "boundary": "cut",
+          "speaker": "local-user"
+        },
+        "这就是放电现象只会。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 600,
+          "end_ms": 2000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "则会停止。接下来讨论其他问题。"
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "“这句带有引号。”下一句完整。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 2500,
+          "end_ms": 3500,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "停顿之后的一句。"
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 12000,
+          "boundary": "cut",
+          "speaker": "local-user"
+        },
+        "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。最后一句被切。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 11600,
+          "end_ms": 15000,
+          "boundary": "pause",
+          "speaker": "local-user"
+        },
+        "被切之后继续完整说明。随后还有话。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s3",
+          "track": "mic",
+          "start_ms": 15000,
+          "end_ms": 18000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "新的补充。"
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 12000,
+          "boundary": "cut",
+          "speaker": "local-user"
+        },
+        "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. Last pending."
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 11600,
+          "end_ms": 15000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "Pending text follows here. It ends."
+      ]
+    ],
+    [
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 5000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "甲的句子。"
+      ],
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "system",
+          "start_ms": 0,
+          "end_ms": 5000,
+          "boundary": "endpoint",
+          "speaker": "local-user"
+        },
+        "乙的句子。"
+      ]
+    ]
+  ],
+  "results": [
+    {
+      "steps": [
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 4000,
+            "text": "前面是完整的一句。第二句被切在了。"
+          }
+        },
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 6500,
+            "text": "前面是完整的一句。第二句被切在了接口的边界。这里已经结束。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 6500,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "前面是完整的一句。第二句被切在了接口的边界。这里已经结束。"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "text": "这是重复的一。"
+          }
+        },
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 2000,
+            "text": "这是重复的一，一个字不能吞掉。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-tail",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 2000,
+          "boundary": "pause",
+          "speaker": "local-user",
+          "text": "这是重复的一，一个字不能吞掉。"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "text": "这就是放电现象只会。"
+          }
+        },
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 2000,
+            "text": "这就是放电现象只会停止。接下来讨论其他问题。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-tail",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 2000,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "这就是放电现象只会停止。接下来讨论其他问题。"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "text": "“这句带有引号。”下一句完整。"
+          }
+        },
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 1000,
+              "boundary": "endpoint",
+              "speaker": "local-user",
+              "text": "“这句带有引号。”下一句完整。"
+            }
+          ],
+          "draft": {
+            "start_ms": 2500,
+            "end_ms": 3500,
+            "text": "停顿之后的一句。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "“这句带有引号。”下一句完整。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 2500,
+          "end_ms": 3500,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "停顿之后的一句。"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 6931,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。"
+            }
+          ],
+          "draft": {
+            "start_ms": 6931,
+            "end_ms": 12000,
+            "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。最后一句被切。"
+          }
+        },
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 6931,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。"
+            }
+          ],
+          "draft": {
+            "start_ms": 6931,
+            "end_ms": 15000,
+            "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。最后一句被切之后继续完整说明。随后还有话。"
+          }
+        },
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 6931,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。"
+            }
+          ],
+          "draft": {
+            "start_ms": 6931,
+            "end_ms": 18000,
+            "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。最后一句被切之后继续完整说明。随后还有话，新的补充。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 6931,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-s1",
+          "track": "mic",
+          "start_ms": 6931,
+          "end_ms": 18000,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。第一句内容。最后一句被切之后继续完整说明。随后还有话，新的补充。"
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 4321,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+            },
+            {
+              "meeting_id": "m",
+              "segment_id": "s1-s1",
+              "track": "mic",
+              "start_ms": 4321,
+              "end_ms": 8642,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+            }
+          ],
+          "draft": {
+            "start_ms": 8642,
+            "end_ms": 12000,
+            "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. Last pending."
+          }
+        },
+        {
+          "emitted": [
+            {
+              "meeting_id": "m",
+              "segment_id": "s1",
+              "track": "mic",
+              "start_ms": 0,
+              "end_ms": 4321,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+            },
+            {
+              "meeting_id": "m",
+              "segment_id": "s1-s1",
+              "track": "mic",
+              "start_ms": 4321,
+              "end_ms": 8642,
+              "boundary": "cut",
+              "speaker": "local-user",
+              "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+            }
+          ],
+          "draft": {
+            "start_ms": 8642,
+            "end_ms": 15000,
+            "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. Last pending. Pending text follows here. It ends."
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 4321,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-s1",
+          "track": "mic",
+          "start_ms": 4321,
+          "end_ms": 8642,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-s2",
+          "track": "mic",
+          "start_ms": 8642,
+          "end_ms": 15000,
+          "boundary": "cut",
+          "speaker": "local-user",
+          "text": "First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. First complete sentence. Last pending. Pending text follows here. It ends."
+        }
+      ]
+    },
+    {
+      "steps": [
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 5000,
+            "text": "甲的句子。"
+          }
+        },
+        {
+          "emitted": [],
+          "draft": {
+            "start_ms": 0,
+            "end_ms": 5000,
+            "text": "乙的句子。"
+          }
+        }
+      ],
+      "final": [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 5000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "甲的句子。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "system",
+          "start_ms": 0,
+          "end_ms": 5000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "乙的句子。"
+        }
+      ]
+    }
+  ],
+  "sentences": [
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s1",
+        "track": "mic",
+        "start_ms": 0,
+        "end_ms": 10001,
+        "boundary": "endpoint",
+        "speaker": "local-user"
+      },
+      "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。",
+      true,
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s1",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 4000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-s1",
+          "track": "mic",
+          "start_ms": 4000,
+          "end_ms": 7667,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s1-s2",
+          "track": "mic",
+          "start_ms": 7667,
+          "end_ms": 10001,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        }
+      ]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s2",
+        "track": "mic",
+        "start_ms": 200,
+        "end_ms": 10000,
+        "boundary": "endpoint",
+        "speaker": "local-user",
+        "word_timestamps": [
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 0
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 300
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 600
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 900
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 1200
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 1500
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 1800
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 2100
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 2400
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 2700
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 3000
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 3300
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 3600
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 3900
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 4200
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 4500
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 4800
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 5100
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 5400
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 5700
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 6000
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 6300
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 6600
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 6900
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 7200
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 7500
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 7800
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 8100
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 8400
+          },
+          {
+            "text": "一段😀较长的内容。",
+            "start_ms": 8700
+          }
+        ]
+      },
+      "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。",
+      false,
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s2",
+          "track": "mic",
+          "start_ms": 200,
+          "end_ms": 3600,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "word_timestamps": [
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 0
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8700
+            }
+          ],
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s2-s1",
+          "track": "mic",
+          "start_ms": 3600,
+          "end_ms": 6900,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "word_timestamps": [
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 0
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8700
+            }
+          ],
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s2-s2",
+          "track": "mic",
+          "start_ms": 6900,
+          "end_ms": 10000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "word_timestamps": [
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 0
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 1800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 2700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 3900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 4800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 5700
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6000
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6300
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6600
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 6900
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7200
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7500
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 7800
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8100
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8400
+            },
+            {
+              "text": "一段😀较长的内容。",
+              "start_ms": 8700
+            }
+          ],
+          "text": "一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。一段😀较长的内容。"
+        }
+      ]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s3",
+        "track": "mic",
+        "start_ms": 0,
+        "end_ms": 10000,
+        "boundary": "endpoint",
+        "speaker": "local-user"
+      },
+      "他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。",
+      true,
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s3",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 6273,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s3-s1",
+          "track": "mic",
+          "start_ms": 6273,
+          "end_ms": 10000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是他是。"
+        }
+      ]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s3",
+        "track": "mic",
+        "start_ms": 0,
+        "end_ms": 10000,
+        "boundary": "endpoint",
+        "speaker": "local-user"
+      },
+      "他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。",
+      false,
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s3",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 4625,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。"
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s3-s1",
+          "track": "mic",
+          "start_ms": 4625,
+          "end_ms": 10000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。他是。"
+        }
+      ]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s4",
+        "track": "mic",
+        "start_ms": 10,
+        "end_ms": 9000,
+        "boundary": "endpoint",
+        "speaker": "local-user"
+      },
+      "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. ",
+      false,
+      [
+        {
+          "meeting_id": "m",
+          "segment_id": "s4",
+          "track": "mic",
+          "start_ms": 10,
+          "end_ms": 1508,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s4-s1",
+          "track": "mic",
+          "start_ms": 1508,
+          "end_ms": 3007,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s4-s2",
+          "track": "mic",
+          "start_ms": 3007,
+          "end_ms": 4505,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s4-s3",
+          "track": "mic",
+          "start_ms": 4505,
+          "end_ms": 6003,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s4-s4",
+          "track": "mic",
+          "start_ms": 6003,
+          "end_ms": 7502,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        },
+        {
+          "meeting_id": "m",
+          "segment_id": "s4-s5",
+          "track": "mic",
+          "start_ms": 7502,
+          "end_ms": 9000,
+          "boundary": "endpoint",
+          "speaker": "local-user",
+          "text": "This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses. This is a long English sentence with meaningful pauses."
+        }
+      ]
+    ]
+  ],
+  "times": [
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s1",
+        "track": "mic",
+        "start_ms": 100,
+        "end_ms": 3000,
+        "boundary": "endpoint",
+        "speaker": "local-user",
+        "word_timestamps": [
+          {
+            "text": "你好",
+            "start_ms": 100
+          },
+          {
+            "text": "世界",
+            "start_ms": 2200
+          }
+        ]
+      },
+      "你好世界",
+      [0, 1, 2, 3, 4],
+      [100, 1150, 2200, 2600, 3000]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s1",
+        "track": "mic",
+        "start_ms": 100,
+        "end_ms": 3000,
+        "boundary": "endpoint",
+        "speaker": "local-user",
+        "word_timestamps": [
+          {
+            "text": "错误",
+            "start_ms": 2200
+          }
+        ]
+      },
+      "你好世界",
+      [0, 1, 2, 3, 4],
+      [100, 825, 1550, 2275, 3000]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s1",
+        "track": "mic",
+        "start_ms": 0,
+        "end_ms": 5,
+        "boundary": "endpoint",
+        "speaker": "local-user"
+      },
+      "😀甲",
+      [0, 1, 2],
+      [0, 2, 5]
+    ],
+    [
+      {
+        "meeting_id": "m",
+        "segment_id": "s1",
+        "track": "mic",
+        "start_ms": 100,
+        "end_ms": 3000,
+        "boundary": "endpoint",
+        "speaker": "local-user",
+        "word_timestamps": [
+          {
+            "text": "你好",
+            "start_ms": true
+          },
+          {
+            "text": "世界",
+            "start_ms": 2200
+          }
+        ]
+      },
+      "你好世界",
+      [0, 1, 2, 3, 4],
+      [100, 1150, 2200, 2600, 3000]
+    ]
+  ]
+}

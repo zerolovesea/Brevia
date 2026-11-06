@@ -7,7 +7,10 @@
 import os
 import shutil
 import subprocess
+import sys
 import wave
+from contextlib import closing
+from pathlib import Path
 
 from .worker_common import UserFacingError
 
@@ -24,6 +27,52 @@ def ffmpeg_path():
 
 def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
     """转为模型可预测的 PCM16 WAV，供临时推理使用。"""
+    if sys.platform == "darwin":
+        # 使用系统 AudioToolbox；旧系统缺少的 Ogg 等解码器由兼容运行包提供。
+        try:
+            subprocess.run(
+                [
+                    "/usr/bin/afconvert",
+                    "-f",
+                    "WAVE",
+                    "-d",
+                    f"LEI16@{sample_rate}",
+                    "-c",
+                    str(channels),
+                    str(source),
+                    str(destination),
+                ],
+                check=True,
+                stdin=subprocess.DEVNULL,
+                timeout=PROCESS_TIMEOUT_SECONDS,
+            )
+            return
+        except subprocess.CalledProcessError:
+            if Path(source).suffix.lower() in {".ogg", ".oga"}:
+                # 旧系统上的 Vorbis 复用 MLX 运行包已有的轻量解码器，并按块写出。
+                try:
+                    import miniaudio
+
+                    with (
+                        closing(
+                            miniaudio.stream_file(
+                                str(source), nchannels=channels, sample_rate=sample_rate
+                            )
+                        ) as samples,
+                        wave.open(str(destination), "wb") as output,
+                    ):
+                        output.setparams((channels, 2, sample_rate, 0, "NONE", "not compressed"))
+                        for block in samples:
+                            output.writeframesraw(block)
+                    return
+                except ImportError:
+                    pass
+                except miniaudio.DecodeError:
+                    pass
+            if os.environ.get("BREVIA_MACOS_NATIVE") == "1" or not (
+                os.environ.get("BREVIA_FFMPEG") or shutil.which("ffmpeg")
+            ):
+                raise ValueError("The system could not decode this audio file") from None
     subprocess.run(
         [
             ffmpeg_path(),

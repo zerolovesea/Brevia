@@ -106,11 +106,11 @@ class DesktopController {
     if (this.updatingShortcuts) this.globalShortcut.setSuspended(false);
     try {
       // 写入成功前保留旧注册，磁盘失败时无需重新争抢旧按键。
-      if (this.updatingShortcuts) this.registerShortcuts(next, true);
+      if (this.updatingShortcuts) await this.registerShortcuts(next, true);
       await writeAtomicFile(this.file(), JSON.stringify(next));
-      if (this.updatingShortcuts) this.registerShortcuts(next);
+      if (this.updatingShortcuts) await this.registerShortcuts(next);
     } catch (error) {
-      if (this.updatingShortcuts) this.registerShortcuts(previous);
+      if (this.updatingShortcuts) await this.registerShortcuts(previous);
       throw error;
     } finally {
       if (this.updatingShortcuts) this.globalShortcut.setSuspended(Boolean(this.shortcutEditing));
@@ -129,7 +129,7 @@ class DesktopController {
       .join('+');
   }
 
-  registerShortcuts(preferences, keepPrevious = false) {
+  async registerShortcuts(preferences, keepPrevious = false) {
     const next = new Map();
     for (const key of ['recordingShortcut', 'pauseShortcut']) {
       const value = preferences[key];
@@ -143,7 +143,11 @@ class DesktopController {
     try {
       for (const [name, binding] of next) {
         if (this.shortcuts.has(name)) continue;
-        if (!this.globalShortcut.register(binding.value, () => void this.runShortcut(name)))
+        const registered = this.globalShortcut.register(
+          binding.value,
+          () => void this.runShortcut(name),
+        );
+        if (!(registered instanceof Promise ? await registered : registered))
           throw new Error(this.text('快捷键不可用，请在设置中更换组合键', this.state?.locale));
         added.push(binding.value);
       }
@@ -253,12 +257,10 @@ class DesktopController {
     this.state = state;
     if (state.ready && !this.shortcutsReady) {
       this.shortcutsReady = true;
-      try {
-        this.registerShortcuts(this.preferences);
-      } catch (error) {
+      void this.registerShortcuts(this.preferences).catch((error) => {
         this.showMain();
         this.reportError(error);
-      }
+      });
     }
     this.sync(menuChanged);
     this.sendState();

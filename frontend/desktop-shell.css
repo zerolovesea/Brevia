@@ -903,6 +903,7 @@ body:has(#desktop-app.is-library-hidden) .settings-page {
     gap: 6px;
   }
 }
+body:has(#startup-splash) #desktop-statusbar,
 body:has(.onboarding-page) #desktop-statusbar {
   display: none;
 }

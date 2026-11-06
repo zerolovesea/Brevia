@@ -659,6 +659,8 @@ const asyncFn = (name) => {
   let windowDestroyed = false;
   const context = {
     process: { platform: 'win32' },
+    nativeAudio: undefined,
+    nativeBackend: undefined,
     URL,
     setTimeout: (callback) => {
       expireHandoff = callback;
@@ -839,6 +841,7 @@ const asyncFn = (name) => {
 const timers = new Map();
 let nextTimer = 0;
 const workerClientContext = {
+  nativeBackend: undefined,
   mobileServer: undefined,
   Buffer,
   maximumCommandBytes: 32 * 1024 * 1024,
@@ -972,6 +975,7 @@ assert.equal(timers.size, 0);
 
 const activeMeeting = { meeting_id: 'meeting-1', started_at: Date.now() };
 const stopContext = {
+  nativeAudio: undefined,
   worker: {
     active: activeMeeting,
     request: async () => {
@@ -986,7 +990,17 @@ runInNewContext(
 await assert.rejects(stopContext.stopActiveMeeting(), /offline/);
 assert.equal(stopContext.worker.active, activeMeeting, 'a failed stop remains retryable');
 stopContext.worker.request = async () => ({});
+const recorderErrors = [];
+stopContext.nativeAudio = {
+  command: async () => {
+    throw new Error('capture disconnected');
+  },
+};
+stopContext.writeLog = () => {};
+stopContext.logText = String;
+stopContext.worker.sendEvent = (type, event) => recorderErrors.push([type, event.message]);
 await stopContext.stopActiveMeeting();
+assert.deepEqual(recorderErrors, [['native-audio.error', 'capture disconnected']]);
 assert.equal(stopContext.worker.active, null, 'a confirmed stop clears the active meeting');
 
 const configDir = await mkdtemp(path.join(tmpdir(), 'brevia-summary-config-'));
@@ -1510,7 +1524,7 @@ console.log('Electron behavior tests passed');
 {
   const source = await readFile(new URL('../scripts/release-offline.cjs', import.meta.url), 'utf8');
   for (const [platform, target] of [
-    ['darwin', 'mac'],
+    ['darwin', 'mac:electron'],
     ['win32', 'win'],
   ]) {
     const calls = [];

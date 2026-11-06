@@ -1,7 +1,0 @@
-{
-  "iou": 1.0,
-  "src_only_px": 0,
-  "render_only_px": 0,
-  "same_pipeline_final_diff": 0,
-  "reason": "原样复用既有 SVG 几何，非重新描摹"
-}

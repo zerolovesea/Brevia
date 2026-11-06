@@ -151,7 +151,7 @@ Empieza por el modelo de voz recomendado para tu idioma; añade modelos locales 
 
 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — Informa de problemas indicando la versión, el dispositivo y los pasos para reproducirlos; elimina contenido privado y credenciales de capturas y registros.
 
-[Desarrollo móvil (chino)](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
+[Desarrollo móvil (chino)](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
 
 ## Licencia
 

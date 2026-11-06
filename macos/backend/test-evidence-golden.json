@@ -1,0 +1,266 @@
+{
+  "segments": [
+    {
+      "id": "s1",
+      "track": "mic",
+      "text": "由于测试失败，原因是接口超时，因为资源不足。",
+      "start_ms": 1000,
+      "end_ms": 4000,
+      "version": "postprocess",
+      "revision": 2,
+      "speaker": "甲"
+    },
+    {
+      "id": "s2",
+      "track": "system",
+      "text": "明天我们继续验证，next Monday launch.",
+      "start_ms": 5000,
+      "end_ms": 8000,
+      "version": "postprocess",
+      "revision": 2,
+      "speaker": "乙"
+    }
+  ],
+  "inputs": [
+    "## **原因**\n- 延期原因是接口超时 [[conclusion:S1]]\n- 下次重试 [[action:S2,INVALID,S2]]\n无引用",
+    "| 任务 | 负责人 |\n| --- | --- |\n| 验证接口 [[action:S1]] | 甲 |",
+    "```md\n- not citation [[cause:S1]]\n```\n## Heading\n- 原因 [[cause:S1,S2]]\n",
+    "### **粗体标题**\n- X [[decision:S1]]\n- X [[decision:S1]]"
+  ],
+  "results": [
+    [
+      "## **原因**\n- 延期原因是接口超时 〔00:01〕\n- 下次重试 〔00:05〕\n无引用",
+      [
+        {
+          "id": "CLAIM",
+          "kind": "cause",
+          "text": "延期原因是接口超时",
+          "original_text": "延期原因是接口超时",
+          "section": "延期",
+          "sources": [
+            {
+              "segment_id": "s1",
+              "text": "由于测试失败，原因是接口超时，因为资源不足。",
+              "speaker": "甲",
+              "start_ms": 1000,
+              "end_ms": 4000,
+              "track": "mic",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s1"
+            }
+          ],
+          "edited": false,
+          "line": "- 延期原因是接口超时 〔00:01〕",
+          "prefix": "- ",
+          "suffix": " 〔00:01〕",
+          "detached": false,
+          "status": "supported",
+          "source_chars": 22
+        },
+        {
+          "id": "CLAIM",
+          "kind": "action",
+          "text": "下次重试",
+          "original_text": "下次重试",
+          "section": "原因",
+          "sources": [
+            {
+              "segment_id": "s2",
+              "text": "明天我们继续验证，next Monday launch.",
+              "speaker": "乙",
+              "start_ms": 5000,
+              "end_ms": 8000,
+              "track": "system",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s2"
+            }
+          ],
+          "edited": false,
+          "line": "- 下次重试 〔00:05〕",
+          "prefix": "- ",
+          "suffix": " 〔00:05〕",
+          "detached": false,
+          "status": "supported",
+          "source_chars": 28
+        },
+        {
+          "id": "CLAIM",
+          "kind": "conclusion",
+          "text": "无引用",
+          "original_text": "无引用",
+          "section": "原因",
+          "sources": [],
+          "edited": false,
+          "line": "无引用",
+          "prefix": "",
+          "suffix": "",
+          "detached": false,
+          "status": "missing",
+          "source_chars": 0
+        }
+      ]
+    ],
+    [
+      "| 任务 | 负责人 |\n| --- | --- |\n| 验证接口  | 甲 〔00:01〕 |",
+      [
+        {
+          "id": "CLAIM",
+          "kind": "action",
+          "text": "验证接口  | 甲",
+          "original_text": "验证接口  | 甲",
+          "section": "",
+          "sources": [
+            {
+              "segment_id": "s1",
+              "text": "由于测试失败，原因是接口超时，因为资源不足。",
+              "speaker": "甲",
+              "start_ms": 1000,
+              "end_ms": 4000,
+              "track": "mic",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s1"
+            }
+          ],
+          "edited": false,
+          "line": "| 验证接口  | 甲 〔00:01〕 |",
+          "prefix": "| ",
+          "suffix": " 〔00:01〕 |",
+          "detached": false,
+          "status": "supported",
+          "source_chars": 22
+        }
+      ]
+    ],
+    [
+      "```md\n- not citation [[cause:S1]]\n```\n## Heading\n- 原因 〔00:01 · 00:05〕",
+      [
+        {
+          "id": "CLAIM",
+          "kind": "cause",
+          "text": "原因",
+          "original_text": "原因",
+          "section": "Heading",
+          "sources": [
+            {
+              "segment_id": "s1",
+              "text": "由于测试失败，原因是接口超时，因为资源不足。",
+              "speaker": "甲",
+              "start_ms": 1000,
+              "end_ms": 4000,
+              "track": "mic",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s1"
+            },
+            {
+              "segment_id": "s2",
+              "text": "明天我们继续验证，next Monday launch.",
+              "speaker": "乙",
+              "start_ms": 5000,
+              "end_ms": 8000,
+              "track": "system",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s2"
+            }
+          ],
+          "edited": false,
+          "line": "- 原因 〔00:01 · 00:05〕",
+          "prefix": "- ",
+          "suffix": " 〔00:01 · 00:05〕",
+          "detached": false,
+          "status": "supported",
+          "source_chars": 50
+        }
+      ]
+    ],
+    [
+      "### **粗体标题**\n- X 〔00:01〕\n- X 〔00:01〕",
+      [
+        {
+          "id": "CLAIM",
+          "kind": "decision",
+          "text": "X",
+          "original_text": "X",
+          "section": "粗体标题",
+          "sources": [
+            {
+              "segment_id": "s1",
+              "text": "由于测试失败，原因是接口超时，因为资源不足。",
+              "speaker": "甲",
+              "start_ms": 1000,
+              "end_ms": 4000,
+              "track": "mic",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s1"
+            }
+          ],
+          "edited": false,
+          "line": "- X 〔00:01〕",
+          "prefix": "- ",
+          "suffix": " 〔00:01〕",
+          "detached": true,
+          "status": "supported",
+          "source_chars": 22
+        },
+        {
+          "id": "CLAIM",
+          "kind": "decision",
+          "text": "X",
+          "original_text": "X",
+          "section": "粗体标题",
+          "sources": [
+            {
+              "segment_id": "s1",
+              "text": "由于测试失败，原因是接口超时，因为资源不足。",
+              "speaker": "甲",
+              "start_ms": 1000,
+              "end_ms": 4000,
+              "track": "mic",
+              "version": "postprocess",
+              "revision": 2,
+              "seekable": true,
+              "current_segment_id": "s1"
+            }
+          ],
+          "edited": false,
+          "line": "- X 〔00:01〕",
+          "prefix": "- ",
+          "suffix": " 〔00:01〕",
+          "detached": true,
+          "status": "supported",
+          "source_chars": 22
+        }
+      ]
+    ]
+  ],
+  "repair": [
+    ["- 结论。 - 后续。## **行动项**\n- 下一条", "- 结论。\n- 后续。\n\n## **行动项**\n- 下一条"],
+    [
+      "```\nabc## **Ignore**\n```\nreal## **Fix**",
+      "```\nabc## **Ignore**\n```\nreal\n\n## **Fix**"
+    ],
+    ["`abc## **Ignore**`text## **Next**", "`abc## **Ignore**`text\n\n## **Next**"],
+    [
+      "[abc## **Keep**](https://test) abc## **Next**",
+      "[abc## **Keep**](https://test) abc\n\n## **Next**"
+    ]
+  ],
+  "dates": [
+    [
+      "明天 下周一 Today next Monday 大后天 上星期天",
+      "2026-12-31",
+      "明天（2027 年 1 月 1 日） 下周一（2027 年 1 月 4 日） Today (2026-12-31) next Monday (2027-01-04) 大后天（2027 年 1 月 3 日） 上星期天（12 月 27 日）"
+    ]
+  ]
+}

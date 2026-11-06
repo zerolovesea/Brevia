@@ -1,0 +1,1163 @@
+[
+  [
+    "initial",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test",
+      "transcript_model_id": null,
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "recording",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": null,
+      "current_segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 0,
+        "rules": [],
+        "undo_count": 0,
+        "document_undo_counts": {},
+        "highlights": {},
+        "summary_stale": false,
+        "stale_translations": []
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 2,
+      "subtitle_lines": 2,
+      "subtitle_characters": 14,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ],
+  [
+    "replacement",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test",
+      "transcript_model_id": null,
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "recording",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": null,
+      "current_segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 1,
+        "rules": [
+          {
+            "find": "北威亚",
+            "replacement": "Brevia",
+            "enabled": true
+          }
+        ],
+        "undo_count": 2,
+        "document_undo_counts": {},
+        "highlights": {
+          "one": "Brevia"
+        },
+        "summary_stale": true,
+        "stale_translations": ["one"]
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 2,
+      "subtitle_lines": 2,
+      "subtitle_characters": 20,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ],
+  [
+    "future",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test",
+      "transcript_model_id": null,
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "recording",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的Brevia",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": null,
+      "current_segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的Brevia",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 2,
+        "rules": [
+          {
+            "find": "北威亚",
+            "replacement": "Brevia",
+            "enabled": true
+          }
+        ],
+        "undo_count": 3,
+        "document_undo_counts": {},
+        "highlights": {
+          "future": "Brevia",
+          "one": "Brevia"
+        },
+        "summary_stale": true,
+        "stale_translations": ["one"]
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 3,
+      "subtitle_lines": 3,
+      "subtitle_characters": 28,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ],
+  [
+    "document",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test",
+      "transcript_model_id": null,
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "recording",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的Brevia",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": null,
+      "current_segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "Brevia和Brevia",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的Brevia",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "Brevia的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 2,
+        "rules": [
+          {
+            "find": "北威亚",
+            "replacement": "Brevia",
+            "enabled": true
+          }
+        ],
+        "undo_count": 3,
+        "document_undo_counts": {
+          "summary": 1
+        },
+        "highlights": {
+          "future": "Brevia",
+          "one": "Brevia"
+        },
+        "summary_stale": true,
+        "stale_translations": ["one"]
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 3,
+      "subtitle_lines": 3,
+      "subtitle_characters": 28,
+      "summary_count": 1,
+      "summary_characters": 10
+    }
+  ],
+  [
+    "undo",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test",
+      "transcript_model_id": null,
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "recording",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的北威亚",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": null,
+      "current_segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的北威亚",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 3,
+        "rules": [],
+        "undo_count": 0,
+        "document_undo_counts": {},
+        "highlights": {},
+        "summary_stale": true,
+        "stale_translations": ["one"]
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 3,
+      "subtitle_lines": 3,
+      "subtitle_characters": 19,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ],
+  [
+    "refinement",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": null,
+      "refined_model_id": "test2",
+      "transcript_model_id": "test2",
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "refined",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "postprocess",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "精修😀北威亚",
+          "word_timestamps": [],
+          "translation": "ref translated",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "user",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "人工😀北威亚",
+          "word_timestamps": [],
+          "translation": "ref translated",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的北威亚",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": 0,
+      "current_segments": [
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "user",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "人工😀北威亚",
+          "word_timestamps": [],
+          "translation": "ref translated",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 5,
+        "rules": [],
+        "undo_count": 0,
+        "document_undo_counts": {},
+        "highlights": {},
+        "summary_stale": true,
+        "stale_translations": ["ref"]
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 1,
+      "subtitle_lines": 1,
+      "subtitle_characters": 6,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ],
+  [
+    "translation",
+    {
+      "id": "golden",
+      "title": "黄金验证",
+      "language": "zh",
+      "target_language": "en",
+      "refined_model_id": "test2",
+      "transcript_model_id": "test2",
+      "speaker_segmentation_model_id": null,
+      "vad_model_id": "silero-vad",
+      "num_speakers": -1,
+      "workspace_id": null,
+      "previous_workspace_id": null,
+      "category": "",
+      "tags": ["重要"],
+      "status": "refined",
+      "created_at": "DATE",
+      "started_at": "DATE",
+      "meeting_date": null,
+      "summary_template": null,
+      "ended_at": null,
+      "duration_ms": 0,
+      "archived_at": null,
+      "deleted_at": null,
+      "is_example": 0,
+      "example_locale": null,
+      "notes": "",
+      "speaker_count": 1,
+      "has_summary": 1,
+      "segments": [
+        {
+          "id": "one",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "北威亚和北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "postprocess",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "精修😀北威亚",
+          "word_timestamps": [],
+          "translation": "ref translated",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "user",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "人工😀北威亚",
+          "word_timestamps": [],
+          "translation": "new translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "two",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 1000,
+          "end_ms": 2000,
+          "speaker": "spk-1",
+          "text": "我们使用北威亚",
+          "word_timestamps": [],
+          "translation": "old translation",
+          "user_edited": 0,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        },
+        {
+          "id": "future",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "live",
+          "track": "mic",
+          "start_ms": 2000,
+          "end_ms": 3000,
+          "speaker": "spk-1",
+          "text": "新的北威亚",
+          "word_timestamps": [],
+          "translation": null,
+          "user_edited": 1,
+          "asr_text": "新的北威亚",
+          "speaker_name": "spk-1"
+        }
+      ],
+      "transcript_revision": 0,
+      "current_segments": [
+        {
+          "id": "ref",
+          "meeting_id": "golden",
+          "revision": 0,
+          "version": "user",
+          "track": "mic",
+          "start_ms": 0,
+          "end_ms": 1000,
+          "speaker": "spk-1",
+          "text": "人工😀北威亚",
+          "word_timestamps": [],
+          "translation": "new translation",
+          "user_edited": 1,
+          "asr_text": null,
+          "speaker_name": "spk-1"
+        }
+      ],
+      "speakers": [],
+      "speaker_turns": [],
+      "summary": {
+        "data": {
+          "markdown": "北威亚的旧纪要"
+        },
+        "raw_response": "raw",
+        "created_at": "DATE"
+      },
+      "accepted_claims": [],
+      "correction": {
+        "revision": 5,
+        "rules": [],
+        "undo_count": 0,
+        "document_undo_counts": {},
+        "highlights": {},
+        "summary_stale": true,
+        "stale_translations": []
+      },
+      "audio": {
+        "mic": [],
+        "system": [],
+        "playback": {
+          "mic": null,
+          "system": null,
+          "mix": null
+        }
+      }
+    },
+    {
+      "app_duration_ms": 0,
+      "meeting_count": 1,
+      "meeting_duration_ms": 0,
+      "subtitle_count": 1,
+      "subtitle_lines": 1,
+      "subtitle_characters": 6,
+      "summary_count": 1,
+      "summary_characters": 7
+    }
+  ]
+]
