@@ -59,6 +59,19 @@ jobs:
         run: cargo test --release --locked --manifest-path macos/host/Cargo.toml
       - name: Test real WebView2 and PDF export
         run: node macos/host/smoke.cjs dist/native-win/app
+      - name: Test upgrade from the last Electron release
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          node windows/test-upgrade.cjs "dist/native-win/Brevia-$version-x64-setup.exe"
+      - uses: actions/cache@v4
+        with:
+          path: dist/native-smoke-models
+          key: native-models-v1-${{ hashFiles('backend/models.json') }}
+      - name: Validate real ASR, VAD, voiceprints and translation
+        run: |
+          node scripts/prepare-native-smoke.cjs dist/native-smoke-models
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node macos/inference/smoke.cjs dist/native-smoke-models dist/native-win/app/resources/engines
       - uses: actions/upload-artifact@v4
         with:
           name: windows-native-${{ github.sha }}

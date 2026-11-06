@@ -1,10 +1,23 @@
 // 使用真实权重验证原生服务，临时输入由仓库样例提供，不访问设备。
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const readline = require('node:readline');
-const { once } = require('node:events');
+const { EngineClient } = require('../backend/engine.cjs');
+
+function smokeModelIds() {
+  const asr =
+    process.env.BREVIA_TEST_MODEL ||
+    (process.env.BREVIA_TEST_MLX ? 'qwen3-asr-0.6b-mlx' : 'funasr-nano-int8');
+  return process.env.BREVIA_TEST_MLX
+    ? [asr]
+    : [
+        asr,
+        'silero-vad',
+        'eres2net-base-3dspeaker-zh',
+        'pyannote-segmentation-3.0',
+        process.env.BREVIA_TEST_LLM || 'hy-mt2-1.8b-q4km',
+      ];
+}
 
 async function main() {
   const root = path.resolve(__dirname, '../..');
@@ -17,9 +30,7 @@ async function main() {
     assert.ok(fs.existsSync(directory), directory);
     return { ...model, path: directory };
   };
-  const modelID =
-    process.env.BREVIA_TEST_MODEL ||
-    (process.env.BREVIA_TEST_MLX ? 'qwen3-asr-0.6b-mlx' : 'funasr-nano-int8');
+  const modelID = smokeModelIds()[0];
   const english = modelID.startsWith('parakeet-');
   const wav = fs.readFileSync(
     path.join(root, `backend/fixtures/example-${english ? 'en' : 'zh'}.wav`),
@@ -32,30 +43,12 @@ async function main() {
   }
   assert.ok(audio);
   const pcm = audio.subarray(0, 16000 * 2 * 10).toString('base64');
-  let sequence = 0;
-  const pending = new Map();
-  const binary = process.env.BREVIA_TEST_MLX ? 'brevia-mlx' : 'brevia-inference';
-  const child = spawn(path.join(engines, binary), [], { stdio: ['pipe', 'pipe', 'inherit'] });
-  readline.createInterface({ input: child.stdout }).on('line', (line) => {
-    const result = JSON.parse(line);
-    if (result.id !== undefined) {
-      const request = pending.get(result.id);
-      assert.ok(request, line);
-      pending.delete(result.id);
-      result.ok ? request.resolve(result.result) : request.reject(new Error(result.error));
-    }
-  });
-  const exited = once(child, 'exit');
-  exited.then(() => {
-    for (const request of pending.values()) request.reject(new Error('Engine exited'));
-  });
-  const call = (type, payload) =>
-    new Promise((resolve, reject) => {
-      const id = ++sequence;
-      pending.set(id, { resolve, reject });
-      child.stdin.write(JSON.stringify({ id, type, payload }) + '\n');
-    });
-  const timer = setTimeout(() => child.kill('SIGKILL'), 300000);
+  const binary =
+    (process.env.BREVIA_TEST_MLX ? 'brevia-mlx' : 'brevia-inference') +
+    (process.platform === 'win32' ? '.exe' : '');
+  const engine = new EngineClient(path.join(engines, binary));
+  const signal = AbortSignal.timeout(300000);
+  const call = (type, payload) => engine.request(type, payload, { signal });
   try {
     const asr = lookup(modelID);
     const loaded = await call('asr.load', {
@@ -64,6 +57,7 @@ async function main() {
       files: asr.files,
       language: english ? 'en' : 'zh',
       hotwords: process.env.BREVIA_TEST_HOTWORDS?.split(',') || [],
+      threads: 2,
     });
     assert.equal(
       loaded.max_speech_seconds,
@@ -112,6 +106,7 @@ async function main() {
     const vector = await call('speaker.embed', {
       path: path.join(embedding.path, embedding.files[0]),
       pcm,
+      threads: 1,
     });
     assert.equal(vector.embedding.length, 512);
     const segmentation = lookup('pyannote-segmentation-3.0');
@@ -125,11 +120,12 @@ async function main() {
     const translator = lookup(process.env.BREVIA_TEST_LLM || 'hy-mt2-1.8b-q4km');
     await call('llama.load', {
       path: path.join(translator.path, translator.files[0]),
-      context_size: 4096,
+      context_size: 1024,
+      threads: 2,
     });
     const translation = await call('llama.generate', {
       prompt: 'Translate the following text into English. Output only the translation.\n\n你好。',
-      max_tokens: 64,
+      max_tokens: 24,
       temperature: 0,
       chat: true,
       require_complete: true,
@@ -149,7 +145,7 @@ async function main() {
     );
     const stopped = await call('llama.generate', {
       prompt: 'Translate the following text into English. Output only the translation.\n\n你好。',
-      max_tokens: 64,
+      max_tokens: 24,
       temperature: 0,
       chat: true,
       stop_tokens: ['Hello', 'hello'],
@@ -162,14 +158,12 @@ async function main() {
     );
     await assert.rejects(call('asr.decode', { pcm: '*', sample_rate: 16000 }), /PCM/);
   } finally {
-    clearTimeout(timer);
-    child.stdin.end();
-    const cleanup = setTimeout(() => child.kill('SIGKILL'), 5000);
-    await exited;
-    clearTimeout(cleanup);
+    engine.close();
   }
 }
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module)
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+module.exports = { smokeModelIds };

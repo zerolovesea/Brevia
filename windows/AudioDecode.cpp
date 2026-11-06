@@ -53,7 +53,8 @@ bool decode_windows_audio(const char *source, const char *destination, int rate,
         CoUninitialize();
     }
   } com{SUCCEEDED(initialized)};
-  check(startup(MF_VERSION, MFSTARTUP_LITE));
+  if (FAILED(startup(MF_VERSION, MFSTARTUP_LITE)))
+    return false;
   struct MF {
     decltype(&MFShutdown) shutdown;
     ~MF() { shutdown(); }

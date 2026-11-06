@@ -49,7 +49,21 @@ const escape = (text) =>
     /[&<>"']/g,
     (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[char],
   );
-const safeTitle = (text) => String(text).replace(/[<>:"/\\|?*]+/g, '-');
+function safeTitle(text) {
+  let name = String(text)
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '-')
+    .trim();
+  if (/^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/i.test(name)) name = '_' + name;
+  // Leave room for collision suffixes and .print.html on both desktop file systems.
+  let result = '',
+    bytes = 0;
+  for (const char of name) {
+    bytes += Buffer.byteLength(char);
+    if (bytes > 220) break;
+    result += char;
+  }
+  return result.replace(/[. ]+$/, '');
+}
 const inside = (file, directory) => file.startsWith(directory + path.sep);
 const mermaidLabel = (text) =>
   String(text)
@@ -117,6 +131,7 @@ function reserveStem(directory, stem, format) {
   if (path.dirname(resolveExisting(directory)) !== resolveExisting(path.dirname(directory)))
     throw new Error('Invalid export directory');
   fs.mkdirSync(directory, { recursive: true });
+  stem = safeTitle(stem) || 'Brevia';
   for (let index = 0; index < 10000; index++) {
     const candidate = stem + (index ? `(${index})` : ''),
       extensions = format === 'pdf' ? ['pdf', 'print.html'] : [format];

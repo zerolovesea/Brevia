@@ -195,12 +195,12 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
   });
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.match(
-    execFileSync('/usr/bin/unzip', ['-p', docx.path, 'word/document.xml'], { encoding: 'utf8' }),
+    execFileSync('tar', ['-xOf', docx.path, 'word/document.xml'], { encoding: 'utf8' }),
     /&lt;script&gt;/,
   );
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });
   assert.equal(bundle.recording_included, false);
-  execFileSync('/usr/bin/unzip', ['-t', bundle.path]);
+  assert.match(execFileSync('tar', ['-xOf', bundle.path], { encoding: 'utf8' }), /测试/);
   const html = await handlers['meeting.export']({ meeting_id: 'export', format: 'pdf' });
   assert.equal(html.print_pdf, true);
   assert.doesNotMatch(fs.readFileSync(html.path, 'utf8'), /<script>/);
@@ -217,6 +217,42 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
   );
   const collision = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.notEqual(collision.path, docx.path);
+});
+test('Exports accept imported long filenames and produce portable archive names', async (t) => {
+  const { store } = setup(t),
+    handlers = createExportHandlers({ store, tasks: new TaskRegistry() }),
+    title = 'a'.repeat(251) + '.wav';
+  store.createMeeting({
+    meeting_id: 'portable-export',
+    title,
+    language: 'en',
+    refined_model_id: 'test',
+  });
+  store.saveSegment({
+    meeting_id: 'portable-export',
+    segment_id: 'one',
+    start_ms: 0,
+    end_ms: 1000,
+    text: 'Kept transcript',
+  });
+  const first = await handlers['meeting.export']({ meeting_id: 'portable-export', format: 'md' }),
+    second = await handlers['meeting.export']({ meeting_id: 'portable-export', format: 'md' });
+  assert.notEqual(first.path, second.path);
+  assert.ok(Buffer.byteLength(path.basename(first.path)) <= 255);
+  assert.equal(fs.readFileSync(first.path, 'utf8').split('\n')[0], '# ' + title);
+  for (const name of ['CON', 'LPT¹.notes', 'nul\u0000:name. ', '汉😀'.repeat(60)]) {
+    store.updateMeeting('portable-export', { title: name });
+    const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' }),
+      filenames = execFileSync('tar', ['-tf', archive.path], { encoding: 'utf8' })
+        .trim()
+        .split('\n');
+    for (const filename of [path.basename(archive.path), ...filenames]) {
+      assert.ok(Buffer.byteLength(filename) <= 255);
+      assert.equal(filename, filename.toWellFormed());
+      assert.doesNotMatch(filename, /[<>:"/\\|?*\x00-\x1f]/);
+      assert.doesNotMatch(filename, /^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/i);
+    }
+  }
 });
 test('A stale correction rolls back edits and remembered terms together', (t) => {
   const { store } = setup(t);

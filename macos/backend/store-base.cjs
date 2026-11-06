@@ -24,9 +24,9 @@ function safeChild(root, id, label = 'identifier') {
 function atomicWrite(file, content) {
   const temporary = file + '.' + randomUUID() + '.tmp';
   try {
-    fs.writeFileSync(temporary, content, { flag: 'wx', mode: 0o600 });
-    const fd = fs.openSync(temporary, 'r');
+    const fd = fs.openSync(temporary, 'wx', 0o600);
     try {
+      fs.writeFileSync(fd, content);
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);

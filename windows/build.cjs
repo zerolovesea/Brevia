@@ -142,6 +142,7 @@ async function buildNative() {
   fs.mkdirSync(licenses, { recursive: true });
   for (const [file, name] of [
     ['llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565/LICENSE', 'llama.cpp-LICENSE'],
+    ['llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565/common/base64.hpp', 'base64-LICENSE'],
     ['libogg-1.3.6/COPYING', 'libogg-LICENSE'],
     ['opus-1.6.1/COPYING', 'opus-LICENSE'],
     ['opusfile-0.12/COPYING', 'opusfile-LICENSE'],

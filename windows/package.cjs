@@ -110,6 +110,7 @@ async function main() {
           tsp: true,
         }),
         nsis: {
+          installerHooks: path.join(root, 'windows/installer-hooks.nsh'),
           installMode: 'perMachine',
           displayLanguageSelector: false,
           languages: ['English', 'SimpChinese'],
@@ -146,6 +147,16 @@ async function main() {
   fs.copyFileSync(path.join(bundles, filename), installer);
   if (signed) {
     const signature = fs.readFileSync(path.join(bundles, filename + '.sig'), 'utf8').trim();
+    const keyId = (text) => {
+      const record = Buffer.from(
+        Buffer.from(text, 'base64').toString().split('\n')[1] || '',
+        'base64',
+      );
+      if (record.length < 10) throw new Error('Invalid native update key or signature');
+      return record.subarray(2, 10);
+    };
+    if (!keyId(signature).equals(keyId(process.env.BREVIA_NATIVE_UPDATE_PUBKEY)))
+      throw new Error('Updater public key and signature differ');
     fs.writeFileSync(installer + '.sig', signature + '\n');
     fs.writeFileSync(
       path.join(out, 'latest-windows.json'),
