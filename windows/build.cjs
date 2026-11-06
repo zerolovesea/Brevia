@@ -131,6 +131,10 @@ async function buildNative() {
   const engines = path.join(out, 'engines');
   fs.mkdirSync(engines, { recursive: true });
   fs.copyFileSync(
+    path.join(root, 'windows/funasr-cpu.conf'),
+    path.join(engines, 'funasr-cpu.conf'),
+  );
+  fs.copyFileSync(
     path.join(build, 'Release/brevia-inference.exe'),
     path.join(engines, 'brevia-inference.exe'),
   );

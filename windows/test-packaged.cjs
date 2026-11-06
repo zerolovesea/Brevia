@@ -39,6 +39,7 @@ async function main() {
     'resources/control/worker.cjs',
     'resources/control/brevia-audio.exe',
     'resources/engines/brevia-inference.exe',
+    'resources/engines/funasr-cpu.conf',
   ])
     assert.ok(fs.existsSync(path.join(app, file)), file);
   run(node, ['scripts/test-packaged-agent.cjs', app]);

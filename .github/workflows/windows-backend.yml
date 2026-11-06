@@ -2,11 +2,6 @@ name: Native Windows validation
 
 on:
   workflow_dispatch:
-    inputs:
-      asr_diagnosis:
-        description: Run isolated CPU diagnostics with verified model weights
-        type: boolean
-        default: false
   pull_request:
     paths:
       - 'windows/**'
@@ -31,7 +26,6 @@ concurrency:
 
 jobs:
   checks:
-    if: ${{ !inputs.asr_diagnosis }}
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -51,7 +45,6 @@ jobs:
         env:
           BREVIA_SKIP_E2E: '1'
   validate:
-    if: ${{ !inputs.asr_diagnosis }}
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
@@ -149,39 +142,15 @@ jobs:
           path: dist/native-smoke-models
           key: native-models-v1-${{ hashFiles('backend/models.json') }}
       - name: Validate real ASR, VAD, voiceprints and translation
-        id: real-models
         run: |
           $modelPath = 'dist/中文用户 模型'
+          $enginePath = 'dist/中文安装 引擎'
           Move-Item dist/native-smoke-models $modelPath
           try {
-            node macos/inference/smoke.cjs $modelPath dist/native-win/app/resources/engines
+            Copy-Item dist/native-win/app/resources/engines $enginePath -Recurse
+            node macos/inference/smoke.cjs $modelPath $enginePath
             if ($LASTEXITCODE) { throw 'Native model smoke failed' }
           } finally {
             Move-Item $modelPath dist/native-smoke-models
+            if (Test-Path $enginePath) { Remove-Item $enginePath -Recurse -Force }
           }
-      - name: Diagnose failed ASR with the official native CLI
-        if: failure() && steps.real-models.outcome == 'failure'
-        run: node windows/diagnose-asr.cjs dist/native-smoke-models dist/native-win/app/resources/engines
-  diagnose:
-    if: inputs.asr_diagnosis
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, windows-2025]
-        sample: [1, 2]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    steps:
-      - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.23.1
-          cache: npm
-      - run: npm ci
-      - uses: actions/cache/restore@v4
-        with:
-          path: dist/native-smoke-models
-          key: native-models-v1-${{ hashFiles('backend/models.json') }}
-      - run: node scripts/prepare-native-smoke.cjs dist/native-smoke-models
-      - run: node windows/diagnose-asr.cjs dist/native-smoke-models

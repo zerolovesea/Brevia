@@ -17,6 +17,7 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
 #define dup _dup
 #define dup2 _dup2
 #define fdopen _fdopen
@@ -56,6 +57,20 @@ static std::string file(const std::string &base, const std::string &name = "") {
     throw std::runtime_error("Model file not installed: " + path.u8string());
   return path.u8string();
 }
+#ifdef _WIN32
+static std::string nanoCPUProvider() {
+  std::wstring executable(32768, L'\0');
+  const auto length = GetModuleFileNameW(nullptr, executable.data(),
+                                       static_cast<DWORD>(executable.size()));
+  if (!length || length >= executable.size())
+    throw std::runtime_error("Could not locate bundled inference configuration");
+  executable.resize(length);
+  // Nano 的 encoder 使用 S8 权重；无 VNNI 的 x86 CPU 需要避免 U8S8 中间饱和。
+  // 固定配置随引擎提供；sherpa 按 UTF-8/UTF-16 读取，兼容中文安装目录。
+  return "cpu:" + file(std::filesystem::path(executable).parent_path().u8string(),
+                       "funasr-cpu.conf");
+}
+#endif
 static std::vector<float> pcm(const JSON &p) {
   if (number(p, "sample_rate", 16000) != 16000)
     throw std::runtime_error("Expected 16 kHz mono PCM16");
@@ -125,7 +140,12 @@ static JSON loadASR(const JSON &p) {
   SherpaOnnxOfflineRecognizerConfig config{};
   config.feat_config.sample_rate = 16000;
   config.feat_config.feature_dim = 80;
-  config.model_config.provider = "cpu";
+  std::string provider = "cpu";
+#ifdef _WIN32
+  if (kind == "funasr-nano")
+    provider = nanoCPUProvider();
+#endif
+  config.model_config.provider = provider.c_str();
   config.model_config.num_threads = integer(p, "threads", 4, 1, 32);
   config.decoding_method = "greedy_search";
   std::string encoder, decoder, embedding, tokens, tokenizer, conv, hint;

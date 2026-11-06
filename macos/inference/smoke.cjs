@@ -1,6 +1,7 @@
 // 使用真实权重验证原生服务，临时输入由仓库样例提供，不访问设备。
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { EngineClient } = require('../backend/engine.cjs');
 
@@ -20,6 +21,13 @@ function smokeModelIds() {
 }
 
 async function main() {
+  console.log(
+    'Native inference smoke:',
+    process.platform,
+    process.arch,
+    os.cpus()[0]?.model,
+    os.release(),
+  );
   const root = path.resolve(__dirname, '../..');
   const models = path.resolve(process.argv[2] || '.models');
   const engines = path.resolve(
