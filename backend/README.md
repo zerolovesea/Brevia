@@ -1,6 +1,6 @@
-# Brevia Worker
+# 历史 Worker 与兼容诊断
 
-Windows 和旧 Electron 主进程通过 stdin/stdout JSONL 驱动此 Python Worker。macOS WebKit 默认使用 `macos/backend/worker.cjs` 与 Swift/C++ 引擎，构建步骤见[开发者手册](../DEVELOPMENT.md#macos-开发与打包)。数据默认写入
+当前 macOS 与 Windows 均使用 `macos/backend/worker.cjs` 和原生引擎；构建、协议接入及检查见[开发者手册](../DEVELOPMENT.md)。此目录中的 Python 实现仅用于显式 `start:electron`、旧数据兼容对照与历史基准，不进入安装包。下列命令描述历史诊断路径。数据默认写入
 `~/brevia`，开发和测试可用 `BREVIA_DATA_DIR` 覆盖。
 
 ```bash

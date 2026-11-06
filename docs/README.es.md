@@ -1,166 +1,68 @@
-<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
+<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></h1>
 
-<p align="center"><strong>Concéntrate en la conversación. Conserva las notas.</strong><br />Graba en el ordenador o en el móvil y convierte las conversaciones en transcripciones, decisiones y tareas con IA local.</p>
+<p align="center"><strong>Concéntrate en la conversación. Conserva lo importante.</strong><br />Un asistente de reuniones con IA que prioriza tus dispositivos. Graba, transcribe y traduce conversaciones; conviértelas en notas y acciones vinculadas al audio original.</p>
 
-<p align="center"><a href="README.en.md">English</a> · <a href="../README.md">简体中文</a> · <strong>Español</strong> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
+<p align="center"><a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><img src="assets/showcase/desktop/en/live.gif" width="960" alt="Brevia: live transcript and AI notes (English)" /></p>
+![Brevia](assets/showcase/desktop/en/live.gif)
 
 ## Descargar
 
-| Dispositivo               | Obtener Brevia                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)                   |
-| Windows · x64             | [Instalador](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe)        |
-| Android 7+                | [Descargar APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) |
-| iPhone · iOS 15+          | [App Store](https://apps.apple.com/app/id6819869442)                                                           |
+| Plataforma | Descarga                                                                                                 | Requisitos                   |
+| ---------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac        | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows    | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone     | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
+| Android    | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
 
-<table align="center">
-  <tr><th><a href="https://apps.apple.com/app/id6819869442">iPhone · App Store</a></th><th><a href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk">Android · APK</a></th></tr>
-  <tr>
-    <td align="center"><a href="https://apps.apple.com/app/id6819869442"><img src="assets/download/ios-qr.png" width="160" alt="iPhone · App Store QR" /></a></td>
-    <td align="center"><a href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"><img src="assets/download/android-qr.png" width="160" alt="Android · APK QR" /></a></td>
-  </tr>
-</table>
+[GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Escanea para descargar en el teléfono.
-
-## Novedades de v1.4
-
-Nueva interfaz en ordenador y móvil: notas junto a la transcripción, biblioteca por espacios de trabajo y acceso directo a transcripción, notas y resumen. También puedes usar un teléfono conectado como micrófono del ordenador.
-
-![Biblioteca de reuniones](assets/showcase/desktop/en/library.gif)
-
-### Cápsula de grabación flotante
-
-Controla la grabación, consulta subtítulos y notas, pausa y reintenta el guardado desde la cápsula flotante.
-
-![Cápsula de grabación flotante](assets/showcase/desktop/en/capsule.gif)
-
-### Resumen editable con decisiones y tareas
-
-![Resumen editable con decisiones y tareas](assets/showcase/desktop/en/summary.gif)
+Si vienes de la versión Electron, instala el paquete nativo una vez. Se conservan las reuniones y los modelos; las siguientes actualizaciones se realizan desde la aplicación.
 
 ## Qué puedes hacer
 
-### Notas de IA siempre revisables
+- Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.
+- Identifica hablantes en segundo plano mientras aparecen los subtítulos. Después puedes refinar el texto, corregir nombres y guardar perfiles de voz.
+- Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
+- Organiza reuniones en espacios de trabajo, busca su contenido y exporta Markdown, TXT, JSON, SRT, DOCX, PDF o WAV.
+- Importa audio y vídeo para transcribir, traducir y analizar hablantes, también mediante tu agente local.
 
-Las notas de IA siguen la transcripción en vivo y señalan decisiones, tareas, cifras clave, riesgos, preguntas y cambios de tema. Elige entre activarlas bajo demanda, recibir avisos suaves u organizar automáticamente. Las sugerencias siempre se revisan: añade solo las útiles a tus notas y edítalas en texto enriquecido o Markdown.
-
-### Pantalla de reunión silenciosa con transcripción y traducción en vivo
-
-Ábrelo, pulsa grabar y observa los subtítulos aparecer. Brevia captura el micrófono y el audio del sistema a la vez, de modo que ambas partes de una llamada remota quedan en la misma transcripción. La traducción en vivo opcional se muestra junto al flujo de subtítulos para conversaciones multilingües.
-
-![Reunión y traducción en vivo](assets/showcase/desktop/en/live.gif)
-
-### 30+ idiomas de transcripción y resúmenes de reuniones
-
-Brevia transcribe voz en más de 30 idiomas — inglés, chino, japonés, coreano, francés, alemán, español, ruso, árabe, tailandés, vietnamita, indonesio y más. Al terminar la reunión, conecta cualquier proveedor de LLM y Brevia redactará el resumen, decisiones clave y tareas a partir de tu transcripción revisada.
-
-### Identificación de hablantes después de la reunión
-
-Graba una breve muestra de voz de cada participante. Una vez terminada la reunión, Brevia distingue a los hablantes durante el refinamiento y los compara con los perfiles de voz guardados para añadir sus nombres a la transcripción. Los subtítulos en directo no distinguen a los hablantes. Los perfiles de voz se pueden reutilizar en otras reuniones.
-
-Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose en el dispositivo.
-
-### Y más
-
-- **Controla la grabación al instante.** Reutiliza la configuración de la última reunión y controla la grabación, los subtítulos y las notas desde la barra de menús, la bandeja o la cápsula flotante mientras la ventana principal está minimizada u oculta.
-- **Correcciones por lotes** — previsualiza y selecciona reemplazos en transcripciones, notas y resúmenes, con opción de deshacer; durante la grabación, aplica reglas a los próximos subtítulos de esa reunión.
-- **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
-- **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en WAV.
-- **Notas revisables** — escribe en texto enriquecido o Markdown y acepta solo las sugerencias de IA que te sirvan.
-- **Biblioteca y espacios de trabajo** — busca títulos, transcripciones, hablantes y etiquetas; organiza las reuniones en espacios y restaura las eliminadas durante 30 días.
-- **Vista centrada** — temas claro y oscuro, edición en línea de transcripciones y resúmenes, y una ventana opcional de subtítulos flotantes mantienen despejada la reunión.
-- **Interfaz multilingüe** — inglés, chino simplificado, español, japonés, coreano, francés, alemán y ruso.
-
-## Modelos compatibles
-
-Descarga modelos de voz, notas IA y traducción desde **Ajustes → Biblioteca de modelos** según tus necesidades. Los modelos de actividad de voz y hablantes vienen incluidos. Todos se ejecutan en el ordenador; el móvil no necesita descargarlos. Consulta variantes y tamaños en la aplicación.
-
-| Uso                      | Modelo                                  | Idiomas / función                                      |
-| ------------------------ | --------------------------------------- | ------------------------------------------------------ |
-| Transcripción / revisión | FunASR Nano                             | Chino, cantonés, inglés                                |
-| Transcripción / revisión | Qwen3-ASR 0.6B                          | 30 idiomas, incluidos chino, inglés, japonés y coreano |
-| Revisión (opcional)      | Qwen3-ASR 1.7B / Whisper Large v3 Turbo | Varios idiomas; solo Mac con Apple Silicon             |
-| Transcripción / revisión | Parakeet TDT 0.6B v3                    | 25 idiomas europeos                                    |
-| Notas IA / resúmenes     | Qwen 3.5 2B / 4B                        | Chino / inglés                                         |
-| Traducción de subtítulos | Tencent Hy-MT2 1.8B                     | Traducción multilingüe                                 |
-| Actividad de voz         | Silero VAD                              | Detectar voz y pausas                                  |
-| Separación de hablantes  | Pyannote Segmentation 3.0               | Separar hablantes después de la reunión                |
-| Perfiles de voz          | 3D-Speaker ERes2Net Base                | Comparar perfiles guardados                            |
-
-## Graba con el móvil
-
-[**iPhone · App Store**](https://apps.apple.com/app/id6819869442) · [**Android · APK**](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)
-
-Lleva Brevia a reuniones, entrevistas y conversaciones cotidianas. Abre la aplicación y graba sin crear una cuenta. Conecta tu propio ordenador para seguir la transcripción y las notas mientras grabas.
-
-<p align="center">
-  <img src="assets/showcase/mobile/en/library.png" width="240" alt="Brevia phone meeting library (English)" />
-  <img src="assets/showcase/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
-  <img src="assets/showcase/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
-</p>
-
-### Micrófono del teléfono
-
-En una reunión nueva del ordenador, elige **Phone microphone**, comprueba el nivel de entrada y controla el inicio, pausa, reanudación y fin desde el ordenador. Requiere una app móvil compatible, conectada y en primer plano. La transcripción y las notas de estas reuniones permanecen en el ordenador; las reuniones iniciadas en el teléfono reciben el texto de vuelta.
-
-![Micrófono del teléfono](assets/showcase/desktop/en/phone-microphone.gif)
-
-- **Graba donde estés.** Sin emparejamiento ni internet: pausa, continúa y marca momentos importantes. El audio queda en el móvil hasta que eliges un ordenador y confirmas la subida para transcribirlo.
-- **El móvil capta; el ordenador organiza.** Tras emparejarlos, el ordenador reconoce la voz y devuelve transcripciones y notas en directo. Los modelos y los ajustes de IA permanecen en el ordenador; no necesitas descargar modelos grandes al móvil.
-- **Escucha y comparte después.** Busca grabaciones en la biblioteca, vuelve a escuchar la conversación, exporta audio WAV o comparte notas en Markdown y transcripciones como texto. Borrar la copia del móvil no borra la reunión del ordenador.
-
-Si se pierde la red, el audio sigue guardándose en el móvil y las subidas autorizadas se reanudan al reconectar. Se admite grabación en segundo plano, pero las llamadas, el cierre forzado y las restricciones del sistema pueden interrumpirla. Comprueba el estado al volver; las subidas posteriores pueden necesitar la aplicación abierta.
-
-## Cómo se conectan el móvil y el ordenador
-
-En la red local, el móvil envía audio mediante **HTTPS** al ordenador emparejado y recibe transcripciones y notas. Guarda el audio primero en el teléfono y avanza la posición de subida solo cuando el ordenador confirma que lo ha guardado. Tras una desconexión, continúa desde esa posición; subir el audio no elimina la copia del teléfono.
-
-El reconocimiento de voz se realiza en tu ordenador. Las grabaciones sin conexión permanecen en el móvil hasta que confirmas la subida; la transcripción en directo envía audio al ordenador emparejado. Brevia no envía automáticamente reuniones al desarrollador. Con los modelos descargados puedes usar IA local; si eliges un proveedor de IA en línea, recibe el texto pertinente, no el audio. [Privacidad](https://brevia.work/privacy.html).
+![Brevia](assets/showcase/desktop/en/summary.gif)
 
 ## Primeros pasos
 
-1. Instala Brevia en el ordenador, concede los permisos de audio y descarga el modelo de voz sugerido. Para notas sin conexión, elige también un modelo de IA local.
-2. Inicia una reunión o importa audio; revisa y exporta los resultados.
-3. Para conectar el móvil, usa la misma Wi-Fi. En el ordenador abre **Ajustes → Conexión de dispositivos → Conectar nuevo dispositivo**. Escanea el QR o introduce la dirección y el PIN, compara el código de verificación y autoriza en el ordenador.
+1. Instala la aplicación de escritorio y descarga un modelo de transcripción en **Ajustes → Biblioteca de modelos**.
+2. Inicia una reunión con el micrófono, el audio del sistema o un teléfono conectado; también puedes importar un archivo.
+3. Toma notas, refina la transcripción y edita o exporta los resultados.
 
-## Arquitectura
+Los motores de inferencia vienen incluidos. No necesitas instalar Python ni descargar un entorno adicional. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
 
-- **Escritorio:** Electron y JavaScript, con HTML y Tailwind CSS para la interfaz.
-- **Procesamiento local:** Un worker de Python coordina audio y modelos; MLX / sherpa-onnx procesan la voz y llama.cpp ejecuta la IA local.
-- **Móvil:** Flutter y Dart comparten la interfaz y el flujo de grabación entre iOS y Android.
-- **Almacenamiento y sincronización:** SQLite guarda las reuniones en el ordenador; los dispositivos se sincronizan mediante HTTPS en la red local.
+## Graba con el móvil
 
-## FAQ
+Graba sin conexión, toma notas y marca momentos importantes. Tras subir la grabación y recibir la confirmación del ordenador, puedes salir de la aplicación móvil: la importación y la transcripción continúan en el escritorio. El móvil conserva su copia. También puede funcionar como micrófono o mostrar subtítulos en directo. Empareja ambos dispositivos en la misma red local desde **Ajustes → Conexión de dispositivos**; el modo en directo necesita el ordenador encendido.
 
-### Windows muestra un aviso de Microsoft Defender SmartScreen
+## Conecta tu agente local
 
-Los builds de release no están firmados con un certificado de firma de código de pago, y SmartScreen bloquea por defecto los ejecutables recién vistos. Haz clic en **"Más información" → "Ejecutar de todas formas"** tras confirmar que la descarga provino de la página oficial de [Releases](https://github.com/zerolovesea/Brevia/releases).
+En **Ajustes → Agent y MCP**, copia el mensaje de configuración y entrégaselo a tu agente local. Leerá el Skill incluido y utilizará la CLI. Para clientes MCP, copia la configuración MCP de la misma página.
 
-### ¿Necesito instalar Python por separado?
+> Transcribe la entrevista de mi escritorio y guárdala como SRT.
+>
+> Busca las reuniones de la semana pasada sobre el lanzamiento y enumera las preguntas pendientes.
+>
+> Empieza a grabar esta reunión con el teléfono conectado.
 
-No. Los builds de release incluyen el runtime Python y todas las dependencias. Solo necesitas Python para ejecutar desde el código fuente.
+El agente puede transcribir, traducir, identificar voces, buscar reuniones y controlar la grabación. Las tareas largas permiten consultar el progreso y cancelar. No se sobrescriben archivos existentes; Brevia puede iniciarse en segundo plano.
 
-### ¿Cuánto espacio en disco requieren los modelos?
+[CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
-Empieza por el modelo de voz recomendado para tu idioma; añade modelos locales de IA y traducción solo si los necesitas. La biblioteca muestra el tamaño de cada descarga. No es necesario instalarlos todos.
+## Tus datos
 
-## Ayuda y contribuciones
+No requiere cuenta. Grabaciones, reuniones y modelos se guardan en tus dispositivos. La sincronización usa HTTPS local. La IA local funciona sin conexión; si eliges un proveedor en línea, se le enviará el texto correspondiente. [Privacy](https://brevia.work/privacy.html).
 
-[GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — Informa de problemas indicando la versión, el dispositivo y los pasos para reproducirlos; elimina contenido privado y credenciales de capturas y registros.
+El escritorio usa el WebView del sistema (WebKit en macOS y WebView2 en Windows), lógica compartida y motores nativos. El móvil usa Flutter.
 
-[Desarrollo móvil (chino)](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
+## Participar
 
-## Licencia
+[Issues](https://github.com/zerolovesea/Brevia/issues) · [Development](../DEVELOPMENT.md) · [Docs](README.md)
 
-Brevia se publica bajo la [ISC License](../LICENSE). Los archivos de modelos y paquetes de terceros mantienen sus propias licencias y términos.
-
-## Agradecimientos
-
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — el runtime local que impulsa ASR, VAD, puntuación y procesamiento de hablantes. Licenciado bajo [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero y Tencent Hy-MT2.
-- Electron, ONNX Runtime, Python y la comunidad open-source de voz hacen posible este flujo local.
-
-Las aplicaciones para macOS nativo y Windows admiten agentes locales autenticados mediante CLI JSON y MCP stdio: inicio automático en segundo plano, transcripción y traducción de archivos con exportación, búsqueda de reuniones y control de grabación del ordenador y del teléfono. En **Configuración → Agent y MCP** puede gestionar los permisos de lectura, inferencia y grabación y copiar la configuración MCP; en **Configuración → Instrucciones**, editar instrucciones adicionales para resúmenes, notas de IA en directo y traducción. Consulte la [API de agentes locales](../DEVELOPMENT.md#本机-agent-接口) para ejemplos y instrucciones de instalación.
+Licencia ISC. Los modelos y componentes externos conservan sus licencias. Gracias a Tauri, MLX, sherpa-onnx, llama.cpp, miniaudio y a los autores de los modelos. [ISC](../LICENSE).

@@ -1,8 +1,9 @@
 # Brevia 开发者手册
 
-本手册统一维护开发环境、代码协作、检查、桌面构建与正式发布流程。用户介绍见 [README](README.md)，手机录音、同步与送审详见[手机开发手册](mobile/README.md)，Windows/旧 Electron Worker 协议见[后端 README](backend/README.md)，原生推理接口见[引擎 README](macos/inference/README.md)。
+本手册统一维护开发环境、代码协作、检查、桌面构建与正式发布流程。用户介绍见 [README](README.md)，手机录音、同步与送审详见[手机开发手册](mobile/README.md)，历史 Worker 协议见[后端 README](backend/README.md)，原生推理接口见[引擎 README](macos/inference/README.md)。
 
-- [macOS 开发与打包](#macos-开发与打包)
+- [原生桌面开发与打包](#macos-开发与打包)
+- [Windows 开发与打包](#windows-开发与打包)
 - [协作与检查](#协作与检查)
 - [正式发布](#正式发布)
 
@@ -27,11 +28,11 @@ macOS WebKit 实现面向 Apple Silicon、macOS 14 及以上。安装文件是�
 | GGUF 推理      | C++ 直接调用 llama.cpp；本地纪要、实时 AI 笔记和 Hy-MT 翻译独立调度并支持取消。                                           |
 | 会议业务       | 随包 Node.js 使用内置 SQLite 接口处理会议、手机同步、工作区、笔记、导出和任务；数据库字段、文件格式及手机协议保持兼容。   |
 
-不依赖用户安装 Node.js 或其他解释器。Node.js 随应用提供；Python 已退出 macOS 的运行和打包路径。仓库的旧 Python 后端仍用于 Windows/Electron 和迁移对照，不进入 WebKit 成品。
+不依赖用户安装 Node.js 或其他解释器。Node.js 随应用提供；Python 已退出 macOS 的运行和打包路径。Windows 也使用同一业务层和 C++ 推理引擎。仓库中的旧 Python 后端仅保留显式 Electron 开发入口、兼容测试和迁移对照，两端安装包均不包含它。
 
 ### 接入模型
 
-在 `backend/models.json` 注册稳定 ID、平台、权重来源、校验摘要、`runtime` 与 `backend`。WebKit 优先采用带 `macos-webkit` 平台的条目。`models.list` 中全部引擎的 `runtime_tier` 都是 `core`；这个兼容字段不再决定下载运行包。
+在 `backend/models.json` 注册稳定 ID、平台、权重来源、校验摘要、`runtime` 与 `backend`。macOS 优先采用带 `macos-webkit` 平台的条目，Windows 使用 `windows` 条目。`models.list` 中全部引擎的 `runtime_tier` 都是 `core`；这个兼容字段不再决定下载运行包。
 
 `capabilities` 按能力名称声明 `input` 和 `output`，支持文本生成、转写、翻译、VAD、音源分离、说话人分段和声纹嵌入。原生业务端定义见 `macos/backend/models.cjs`；例如音源分离声明 `"separation": {"input":"audio","output":"audio_tracks"}`。接入新引擎需要实现对应 JSONL 执行命令、取消与资源释放，并加入完整应用构建。权重下载和执行引擎分开管理，既有模型 ID 不因实现语言变化而重命名。当前音源分离仍是扩展契约，尚未提供分离模型。
 
@@ -58,7 +59,34 @@ npm run test:mac:webkit
 
 `npm run test:backend` 和 `npm run test:mac:webkit` 验证新业务后端与原生应用，不需要 Python。完整兼容回归 `npm test` 还包括旧 Electron 端到端和 Python 静态检查，需要旧开发环境；旧后端单测可单独运行 `npm run test:backend:legacy`。原生检查使用临时会议库，验证真实 WKWebView、打包后的控制层与新业务后端、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地已下载的真实模型验证各引擎。
 
-正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 工作流只构建和公证 macOS WebKit 版，Windows 继续使用 Electron。旧 Electron 版的 macOS 用户需下载安装一次新 DMG，之后通过原生更新通道升级。
+正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。旧 Electron 用户首次升级需要手动安装新包，之后使用各自的原生更新通道。
+
+## Windows 开发与打包
+
+Windows 10/11 x64，CPU 需支持 AVX2。Rust/Tauri 使用 WebView2；界面、Node 业务层、SQLite 数据和 Agent/MCP 与 macOS 共用。C++ 使用 WASAPI 采集麦克风与系统回环音频，Media Foundation 解码系统支持的音视频，miniaudio/Opus 补充 WAV、FLAC、MP3、Ogg 等格式。不打包 Python、Electron、FFmpeg。Windows N 缺少媒体组件时，仍能处理原生解码器支持的格式。
+
+构建需要 Node.js 22.23.1、Rust MSVC 工具链、Visual Studio C++ Build Tools、Windows SDK、CMake 和 Tauri CLI 2.12.2。
+
+```powershell
+npm ci
+cargo install tauri-cli --version 2.12.2 --locked
+npm start                  # 构建并启动原生版
+npm run start:fresh         # 同上，并重置新手引导
+npm run dist:win            # 构建 NSIS 安装包
+npm run test:windows:native
+```
+
+输出为 `dist/native-win/app/` 和 `dist/native-win/Brevia-<版本>-x64-setup.exe`。原生依赖固定版本并校验 SHA256。安装包内含必要推理引擎、Node 和 WebView2 离线安装器；用户无需另外下载运行包。WebView2 离线安装器会增加成品大小，实际大小以 CI 构件为准。模型权重仍按所选模型下载；macOS 的 MLX 模型由 Windows 的 ONNX/GGUF 实现承担相应功能，不能直接运行 MLX 权重。当前 Windows 推理使用 CPU，不保证与 Apple Silicon 的 Metal 性能相同。
+
+首次从 Electron 升级会清理旧程序文件，保留会议、模型和原安装目录。升级前结束录音并退出应用；安装器不会强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
+
+`npm start` 在两端都复用原生依赖的编译缓存，但仍重新组装应用；`start:fresh` 只额外重置引导，不清会议。`npm run clean` 回收可重建的原生编译目录，保留安装包和已下载模型；下次启动会重新编译。`npm run clean:dist` 删除整个 `dist`（包括本地安装包与下载缓存），先退出其中运行的应用。
+
+### 手机导入与实时说话人
+
+离线手机录音先按序上传并在电脑持久化完整 PCM；电脑确认 `received` 后手机结束发送，可离开应用。桌面持久化队列独立完成导入与完整转写，重启后恢复；缺模型或处理失败不删除原音。实时手机会议继续边录边传，不能把上传完成误当作识别完成。
+
+实时字幕落盘后，独立低优先级进程异步补充说话人，使用已安装的 ERes2Net 权重；没有该模型时不下载、不阻塞录音。每次最多读取 4 秒语音，单线程、至少间隔 8 秒，并按实际推理耗时退避；字幕积压时让出资源。过期任务丢弃，暂停/结束取消，闲置释放模型；不覆盖人工绑定或较新修订。会后精修继续承担完整说话人分段。
 
 ## 协作与检查
 
@@ -106,7 +134,7 @@ Swift 使用与移动端 CI 一致的 Xcode 自带的 `swift-format`（`xcrun sw
 
 提交前运行上述范围内的格式与静态检查。桌面/后端修改运行 `npm test`；手机修改在 `mobile` 下运行 `flutter test`；发布脚本修改运行 `ruby mobile/scripts/test-release.rb`。网站演示修改运行 `node_modules/.bin/electron scripts/test-website-demos.cjs`（需要桌面环境）。格式检查由 CI 执行，不在发布流程里自动重写源码。
 
-依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`。Electron 虽列在开发依赖，仍是 Windows 成品的运行时，不能只依据生产依赖审计判断安全。2026-11-06 已更新 Zod、Electron、Undici 与 fast-uri 的安全版本；生产依赖无已知公告，全量审计剩余的中危记录来自构建器同一条 [minimatch 公告](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249)及其影响链。该问题要求不可信 glob 模式和 `optimizationLevel >= 2`，当前打包模式来自仓库，调用仅采用默认优化级别。上游构建器仍依赖旧主版本，暂不跨主版本强制覆盖；更新构建器或接入外部打包模式时重新核对。
+依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`。开发依赖也要检查；Electron 只用于显式旧壳开发及测试，不进入两端成品。2026-11-06 移除退役 electron-builder 及其依赖后，全量与生产依赖审计均无已知公告。
 
 ## 正式发布
 
@@ -136,9 +164,9 @@ Swift 使用与移动端 CI 一致的 Xcode 自带的 `swift-format`（`xcrun sw
 
 ### 3. 代码卫生（发版前最后一遍）
 
-- [ ] 没有历史兼容分支：下架的功能不留占位字段、别名、空函数钩子或「保留旧客户端字段」的注释。
+- [ ] 兼容逻辑只服务仍受支持的旧数据或客户端；下架功能不留无调用方的占位字段、别名和空钩子。
 - [ ] 删除的配置项同时从 `backend/settings.json` 移除；用户覆盖文件的多余键由 `config._prune_to_template` 统一丢弃。
-- [ ] 删除的模型 ID 同步从 `backend/config.py` 的 `BUNDLED_MODEL_IDS` 移除（否则 `pack:backend` 会以 `Unknown model` 直接失败）。
+- [ ] 删除的模型 ID 同步检查模型清单、平台覆盖及出厂 VAD 准备步骤；成品真实加载失败必须阻止发布。
 - [ ] 没有只写不读的状态、没有无调用方的函数、没有只被演示数据触发的渲染分支。
 - [ ] 删掉的功能同时删掉它的 CSS 类与 i18n 文案。
 - [ ] 新增的手写组件类二选一：颜色走语义令牌（`text-(--color-…)` / `var(--color-…)`），或者补一条 `html[data-theme="dark"]` 规则；两者都不做会被 `test-ui.mjs` 的暗色覆盖门禁拦下。
@@ -168,7 +196,7 @@ npm run build         # tailwind.css → styles.css，构建后 styles.css 应�
 
 macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.2 与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
 
-工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 的冻结后端、签名与安装器验证流程保持不变。
+工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 使用 MSVC 构建原生引擎和 Tauri NSIS 安装器，验证随包 CLI/MCP、WebView2、PDF、旧版迁移和更新签名。Windows 更新复用上述 Tauri 密钥；可配置 `WIN_CERTIFICATE_P12_BASE64` 和 `WIN_CERTIFICATE_PASSWORD` 进行 Authenticode 签名，未配置时 Windows 会显示未签名发布者提示。
 
 本机仅构建安装包时运行：
 
@@ -176,21 +204,21 @@ macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.2 与固定版本的
 npm run release:offline
 ```
 
-`release:offline` 在 macOS 生成原生 DMG，不运行 Python 或 Electron 打包；Windows 仍冻结后端并生成安装器。此入口不提交 Apple 公证。Windows 的 `pack:backend` 会在打包开始时校验出厂模型清单，模型下架不同步会立刻失败。
+`release:offline` 按当前系统生成原生 DMG 或 Windows 安装器，不运行 Python 或 Electron 打包。未提供 Apple 凭据时不提交公证。手动触发 Release 工作流会构建和验证两端签名成品；只有 `v*` 标签触发才公开发布。
 
 ### 6. 发布后
 
-- [ ] 确认 GitHub Release 里的 `Brevia-WebKit-<version>-arm64.dmg`、签名原生更新包和 `latest-webkit.json` 与 `Brevia-<version>-x64-setup.exe` 存在。
+- [ ] 确认 GitHub Release 里的 `Brevia-WebKit-<version>-arm64.dmg`、签名原生更新包和 `latest-webkit.json` 与 `Brevia-<version>-x64-setup.exe`、其签名和 `latest-windows.json` 存在。
 - [ ] 确认 CI 已更新官网与各语言 README 的下载链接（`scripts/update-release-links.mjs`）。
 - [ ] 在应用内「更新日志」里确认新版本被标为当前版本。
 
 ## 本机 Agent 接口
 
-macOS 原生应用和 Windows Electron 应用提供同一套本地认证接口；CLI 和 stdio MCP 只连接应用已运行的业务控制器，不直接打开数据库或创建第二套 Worker。两端支持本地推理、电脑录音和已连接手机录音，沿用各平台业务引擎与授权检查。
+macOS 和 Windows 原生应用提供同一套本地认证接口；CLI 和 stdio MCP 只连接应用已运行的业务控制器，不直接打开数据库或创建第二套 Worker。两端支持本地推理、电脑录音和已连接手机录音，沿用各平台业务引擎与授权检查。
 
-macOS 安装版入口为 `/Applications/Brevia.app/Contents/MacOS/brevia`，随包携带 Node。Windows 入口为安装目录的 `brevia.cmd`（默认 `C:\Program Files\Brevia\brevia.cmd`），使用同目录 `Brevia.exe` 的 Node 模式；两端都无需安装系统 Node。源码入口为 `npm run brevia --`。以下示例用 `brevia` 表示入口，可自行添加 shell alias；Windows 参数里的绝对路径使用 `C:/Users/me/...` 或 JSON 转义反斜杠。Skill 位于仓库 `skills/brevia/SKILL.md`，macOS 包内为 `Contents/Resources/skills/brevia/SKILL.md`，Windows 为 `resources/skills/brevia/SKILL.md`。
+macOS 安装版入口为 `/Applications/Brevia.app/Contents/MacOS/brevia`，随包携带 Node。Windows 入口为安装目录的 `brevia.cmd`（默认 `C:\Program Files\Brevia\brevia.cmd`），使用随包 `resources/control/node.exe`；两端都无需安装系统 Node。源码入口为 `npm run brevia --`。以下示例用 `brevia` 表示入口，可自行添加 shell alias；Windows 参数里的绝对路径使用 `C:/Users/me/...` 或 JSON 转义反斜杠。Skill 位于仓库 `skills/brevia/SKILL.md`，macOS 包内为 `Contents/Resources/skills/brevia/SKILL.md`，Windows 为 `resources/skills/brevia/SKILL.md`。
 
-Windows 打包在 `package:win` 中先 bundle CLI，再把命令、脚本和 Skill 放入安装包。`runAsNode` fuse 保持启用；CLI 自动启动应用时移除继承的 `ELECTRON_RUN_AS_NODE`，避免把 GUI 误当脚本执行。CI 用安装包自身的 `Brevia.exe` 验证 CLI/MCP 与 `status --no-start`，不借用构建机 Node。
+Windows 打包在 `package:win` 中 bundle CLI，并把命令、脚本和 Skill 放入安装包。CI 使用包内 Node 验证 CLI/MCP 与 `status --no-start`，不依赖构建机 Node。
 
 ```sh
 brevia status --no-start
@@ -256,9 +284,8 @@ Windows MCP 客户端可直接调用随包运行时，避免依赖 shell 对 JSO
 {
   "mcpServers": {
     "brevia": {
-      "command": "C:\\Program Files\\Brevia\\Brevia.exe",
-      "args": ["C:\\Program Files\\Brevia\\resources\\control\\brevia.cjs", "mcp"],
-      "env": {"ELECTRON_RUN_AS_NODE": "1"}
+      "command": "C:\\Program Files\\Brevia\\resources\\control\\node.exe",
+      "args": ["C:\\Program Files\\Brevia\\resources\\control\\brevia.cjs", "mcp"]
     }
   }
 }

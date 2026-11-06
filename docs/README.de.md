@@ -1,166 +1,68 @@
-<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
+<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></h1>
 
-<p align="center"><strong>Beim Gespräch bleiben. Das Wichtige festhalten.</strong><br />Auf Computer oder Smartphone aufnehmen und Gespräche mit lokaler KI in Transkripte, Entscheidungen und Aufgaben verwandeln.</p>
+<p align="center"><strong>Auf das Gespräch konzentrieren. Das Wichtige festhalten.</strong><br />Ein KI-Meetingassistent mit lokaler Verarbeitung. Gespräche aufnehmen, transkribieren und übersetzen – mit bearbeitbaren Notizen und Aufgaben, die zur Originalaufnahme zurückführen.</p>
 
-<p align="center"><a href="README.en.md">English</a> · <a href="../README.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <strong>Deutsch</strong> · <a href="README.ru.md">Русский</a></p>
+<p align="center"><a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <strong>Deutsch</strong> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><img src="assets/showcase/desktop/en/live.gif" width="960" alt="Brevia: live transcript and AI notes (English)" /></p>
+![Brevia](assets/showcase/desktop/en/live.gif)
 
 ## Download
 
-| Gerät                     | Brevia herunterladen                                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)                       |
-| Windows · x64             | [Installationsprogramm](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) |
-| Android 7+                | [APK herunterladen](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) |
-| iPhone · iOS 15+          | [App Store](https://apps.apple.com/app/id6819869442)                                                               |
+| Plattform | Download                                                                                                 | Voraussetzungen              |
+| --------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac       | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows   | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
+| Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
 
-<table align="center">
-  <tr><th><a href="https://apps.apple.com/app/id6819869442">iPhone · App Store</a></th><th><a href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk">Android · APK</a></th></tr>
-  <tr>
-    <td align="center"><a href="https://apps.apple.com/app/id6819869442"><img src="assets/download/ios-qr.png" width="160" alt="iPhone · App Store QR" /></a></td>
-    <td align="center"><a href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"><img src="assets/download/android-qr.png" width="160" alt="Android · APK QR" /></a></td>
-  </tr>
-</table>
+[GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Mit dem Smartphone scannen und herunterladen.
+Beim Wechsel von Electron das native Paket einmal installieren. Meetings und Modelle bleiben erhalten; spätere Updates erfolgen über die App.
 
-## Neu in v1.4
+## Funktionen
 
-Neue Oberflächen für Computer und Smartphone: Notizen neben dem Live-Transkript, eine nach Arbeitsbereichen geordnete Bibliothek und direkte Zugänge zu Notizen, Transkript und Zusammenfassung. Ein verbundenes Smartphone kann auch als Mikrofon des Computers dienen.
+- Mikrofon und Systemton gemeinsam aufnehmen, mit Live-Transkription, Übersetzung, schwebenden Untertiteln und Aufnahmesteuerung.
+- Sprecher im Hintergrund erkennen, während Untertitel sofort erscheinen. Anschließend Transkripte verbessern, Namen korrigieren und Stimmprofile speichern.
+- Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
+- Meetings in Arbeitsbereichen organisieren, Inhalte durchsuchen und als Markdown, TXT, JSON, SRT, DOCX, PDF oder WAV exportieren.
+- Vorhandene Audio- und Videodateien transkribieren, übersetzen und nach Sprechern auswerten – auch über einen lokalen Agenten.
 
-![Neue Meeting-Bibliothek](assets/showcase/desktop/en/library.gif)
-
-### Schwebende Aufnahmekapsel
-
-Aufnahme steuern, Untertitel und Notizen lesen, pausieren und das Speichern bei Bedarf erneut versuchen.
-
-![Schwebende Aufnahmekapsel](assets/showcase/desktop/en/capsule.gif)
-
-### Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben
-
-![Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben](assets/showcase/desktop/en/summary.gif)
-
-## Das kann Brevia
-
-### Ueberpruefbare KI-Notizen
-
-KI-Notizen verfolgen das Live-Transkript und koennen Entscheidungen, Aufgaben, wichtige Zahlen, Risiken, Fragen und Themenwechsel hervorheben. Waehle bei Bedarf, dezente Hinweise oder automatische Organisation. Alle Vorschlaege bleiben ueberpruefbar: Fuege nur Nuetzliches zu deinen Notizen hinzu und schreibe daneben in Rich Text oder Markdown weiter.
-
-### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung
-
-Oeffnen, Aufnahme starten, Untertitel zusehen. Brevia erfasst Mikrofon und Systemaudio gleichzeitig, sodass beide Seiten eines Remote-Gespraechs im gleichen Transkript landen. Die optionale Live-Uebersetzung wird neben dem Untertitel-Stream angezeigt und unterstuetzt mehrsprachige Gespraeche.
-
-![Live-Meeting und Uebersetzung](assets/showcase/desktop/en/live.gif)
-
-### 30+ Transkriptionssprachen und Meeting-Zusammenfassungen
-
-Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Nach Ende des Meetings verbindest du einen beliebigen LLM-Anbieter, und Brevia entwirft aus deinem ueberprueften Transkript die Zusammenfassung, wichtigen Entscheidungen und To-dos.
-
-### Sprechererkennung bei der Nachbearbeitung
-
-Nimm pro Teammitglied eine kurze Sprachprobe auf. Nach dem Meeting trennt Brevia bei der Nachbearbeitung die Sprecher und gleicht sie mit gespeicherten Stimmprofilen ab, um das Transkript mit Namen zu versehen. Live-Untertitel unterscheiden keine Sprecher. Stimmprofile lassen sich in weiteren Meetings wiederverwenden.
-
-Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles auf dem Geraet.
-
-### Und mehr
-
-- **Aufnahme jederzeit im Griff.** Übernehmen Sie die letzte Besprechungskonfiguration für eine schnelle Aufnahme. Über Menüleiste, Taskleiste oder schwebende Kapsel steuern Sie die Aufnahme und sehen Untertitel und Notizen, auch wenn das Hauptfenster minimiert oder ausgeblendet ist.
-- **Texte gesammelt korrigieren** — Ersetzungen in Transkripten, Notizen und Zusammenfassungen vorab prüfen, auswählen und rückgängig machen; während der Aufnahme Regeln auf folgende Untertitel desselben Meetings anwenden.
-- **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
-- **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als WAV.
-- **Ueberpruefbare Notizen** — schreibe in Rich Text oder Markdown und uebernimm nur hilfreiche KI-Vorschlaege.
-- **Meeting-Bibliothek und Arbeitsbereiche** — durchsuche Titel, Transkripte, Sprecher und Tags; ordne Meetings in Arbeitsbereichen und stelle kuerzlich geloeschte Meetings 30 Tage lang wieder her.
-- **Fokussierte Ansicht** — helle und dunkle Designs, Inline-Bearbeitung von Transkript und Zusammenfassung sowie ein optionales schwebendes Untertitelfenster halten die Meeting-Ansicht ruhig.
-- **Mehrsprachige Oberflaeche** — Englisch, vereinfachtes Chinesisch, Spanisch, Japanisch, Koreanisch, Franzoesisch, Deutsch und Russisch.
-
-## Unterstützte Modelle
-
-Sprach-, KI-Notiz- und Übersetzungsmodelle bei Bedarf unter **Einstellungen → Modellbibliothek** herunterladen. Modelle für Sprachaktivität und Sprecher sind enthalten. Alle Modelle laufen auf dem Computer; auf dem Smartphone müssen keine Modelle installiert werden. Varianten und Größen stehen in der App.
-
-| Zweck                           | Modell                                  | Sprachen / Funktion                                                  |
-| ------------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| Transkription / Nachbearbeitung | FunASR Nano                             | Chinesisch, Kantonesisch, Englisch                                   |
-| Transkription / Nachbearbeitung | Qwen3-ASR 0.6B                          | 30 Sprachen, darunter Chinesisch, Englisch, Japanisch und Koreanisch |
-| Nachbearbeitung (optional)      | Qwen3-ASR 1.7B / Whisper Large v3 Turbo | Mehrsprachig; nur Macs mit Apple Silicon                             |
-| Transkription / Nachbearbeitung | Parakeet TDT 0.6B v3                    | 25 europäische Sprachen                                              |
-| KI-Notizen / Zusammenfassungen  | Qwen 3.5 2B / 4B                        | Chinesisch / Englisch                                                |
-| Untertitelübersetzung           | Tencent Hy-MT2 1.8B                     | Mehrsprachige Übersetzung                                            |
-| Sprachaktivität                 | Silero VAD                              | Sprache und Pausen erkennen                                          |
-| Sprechertrennung                | Pyannote Segmentation 3.0               | Sprecher nach der Besprechung trennen                                |
-| Stimmprofile                    | 3D-Speaker ERes2Net Base                | Gespeicherte Profile abgleichen                                      |
-
-## Mit dem Smartphone aufnehmen
-
-[**iPhone · App Store**](https://apps.apple.com/app/id6819869442) · [**Android · APK**](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)
-
-Nehmen Sie Brevia zu Besprechungen, Interviews und alltäglichen Gesprächen mit. Öffnen Sie die App und starten Sie ohne Konto eine Aufnahme. Verbinden Sie Ihren eigenen Computer, um währenddessen Transkripte und Notizen zu verfolgen.
-
-<p align="center">
-  <img src="assets/showcase/mobile/en/library.png" width="240" alt="Brevia phone meeting library (English)" />
-  <img src="assets/showcase/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
-  <img src="assets/showcase/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
-</p>
-
-### Smartphone als Mikrofon
-
-Wähle bei einem neuen Meeting am Computer **Phone microphone**, prüfe den Eingangspegel und steuere Start, Pause, Fortsetzen und Ende am Computer. Die kompatible Smartphone-App muss verbunden und im Vordergrund bereit sein. Transkript und Notizen dieser Meetings bleiben am Computer. Am Smartphone gestartete Meetings erhalten den Text auf dem Smartphone zurück.
-
-![Smartphone als Mikrofon](assets/showcase/desktop/en/phone-microphone.gif)
-
-- **Überall aufnehmen.** Ohne Kopplung oder Internet aufnehmen, pausieren, fortsetzen und wichtige Stellen markieren. Audio bleibt auf dem Smartphone, bis Sie einen Computer auswählen und den Upload zur Transkription bestätigen.
-- **Das Smartphone nimmt auf, der Computer organisiert.** Nach der Kopplung übernimmt der Computer die Spracherkennung und sendet Live-Transkripte und Notizen zurück. Modelle und KI-Einstellungen bleiben auf dem Computer; auf dem Smartphone sind keine großen Modelle nötig.
-- **Später anhören und teilen.** Aufnahmen in der Bibliothek finden, Gespräche erneut anhören, WAV-Audio exportieren oder Notizen als Markdown und Transkripte als Text teilen. Das Löschen der Smartphone-Kopie löscht nicht die Besprechung auf dem Computer.
-
-Bei einem Netzausfall wird Audio auf dem Smartphone weiter gespeichert; erlaubte Uploads laufen nach der Verbindung weiter. Hintergrundaufnahme wird unterstützt, kann aber durch Anrufe, erzwungenes Beenden oder Systembeschränkungen unterbrochen werden. Prüfen Sie den Status bei der Rückkehr; für Uploads nach der Aufnahme muss die App eventuell geöffnet bleiben.
-
-## So kommunizieren Smartphone und Computer
-
-Im lokalen Netzwerk sendet das Smartphone Audio per **HTTPS** an den gekoppelten Computer und erhält Transkripte und Notizen zurück. Audio wird zuerst auf dem Smartphone gespeichert. Der Upload-Fortschritt wird erst bestätigt, wenn der Computer die Daten gespeichert hat. Nach einer Unterbrechung geht es an dieser Stelle weiter; die Kopie auf dem Smartphone wird nicht automatisch gelöscht.
-
-Spracherkennung läuft auf Ihrem Computer. Offline-Aufnahmen bleiben bis zur Upload-Bestätigung auf dem Smartphone; Live-Transkription sendet Audio an den gekoppelten Computer. Brevia überträgt Besprechungen nicht automatisch an den Entwickler. Mit heruntergeladenen Modellen ist lokale KI möglich. Ein selbst gewählter Online-KI-Anbieter erhält relevante Texte, kein Audio. [Datenschutz](https://brevia.work/privacy.html).
+![Brevia](assets/showcase/desktop/en/summary.gif)
 
 ## Erste Schritte
 
-1. Brevia am Computer installieren, Audioberechtigungen erteilen und das vorgeschlagene Sprachmodell herunterladen. Für Offline-Notizen zusätzlich ein lokales KI-Modell wählen.
-2. Eine Besprechung starten oder Audio importieren, Ergebnisse prüfen und exportieren.
-3. Zum Koppeln dasselbe WLAN verwenden. Am Computer **Einstellungen → Geräteverbindung → Neues Gerät verbinden** öffnen. QR-Code scannen oder Adresse und PIN eingeben, Prüfcode vergleichen und am Computer bestätigen.
+1. Desktop-App installieren und unter **Einstellungen → Modellbibliothek** ein Transkriptionsmodell herunterladen.
+2. Ein Meeting mit Mikrofon, Systemton oder verbundenem Smartphone starten oder eine Datei importieren.
+3. Notizen machen, das Transkript nachbearbeiten und Ergebnisse bearbeiten oder exportieren.
 
-## Technischer Aufbau
+Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Laufzeitumgebung werden nicht benötigt. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
 
-- **Desktop:** Electron und JavaScript, mit HTML und Tailwind CSS für die Oberfläche.
-- **Lokale Verarbeitung:** Ein Python-Worker steuert Audio und Modelle; MLX / sherpa-onnx übernehmen die Sprachverarbeitung, llama.cpp die lokale KI.
-- **Mobil:** Flutter und Dart teilen Oberfläche und Aufnahmeablauf zwischen iOS und Android.
-- **Speicherung und Abgleich:** SQLite speichert Besprechungen auf dem Computer; die Geräte synchronisieren über HTTPS im lokalen Netzwerk.
+## Mit dem Smartphone aufnehmen
 
-## FAQ
+Offline aufnehmen, Notizen schreiben und wichtige Stellen markieren. Sobald der Computer den Empfang bestätigt, kann die Smartphone-App verlassen werden: Import und Transkription laufen auf dem Desktop weiter. Die lokale Kopie bleibt erhalten. Das Smartphone kann auch als Mikrofon oder zur Anzeige von Live-Untertiteln dienen. Beide Geräte unter **Einstellungen → Geräteverbindung** im selben lokalen Netzwerk koppeln; für den Live-Modus muss der Computer laufen.
 
-### Windows zeigt eine Microsoft-Defender-SmartScreen-Warnung
+## Lokalen Agenten verbinden
 
-Release-Builds sind nicht mit einem kostenpflichtigen Code-Signing-Zertifikat signiert, und SmartScreen blockiert neu gesehene ausfuehrbare Dateien standardmaessig. Klicke auf **„Weitere Informationen" → „Trotzdem ausfuehren"**, nachdem du bestaetigt hast, dass der Download von der offiziellen [Releases](https://github.com/zerolovesea/Brevia/releases)-Seite stammt.
+Unter **Einstellungen → Agent & MCP** die Einrichtungsnachricht kopieren und dem lokalen Agenten geben. Er liest den enthaltenen Skill und nutzt Brevia über die CLI. Für MCP-Clients die MCP-Konfiguration auf derselben Seite kopieren.
 
-### Muss ich Python separat installieren?
+> Transkribiere das Interview auf meinem Desktop und speichere es als SRT.
+>
+> Finde die Meetings der letzten Woche zur Veröffentlichung und liste offene Fragen auf.
+>
+> Starte die Aufnahme dieses Meetings mit meinem verbundenen Smartphone.
 
-Nein. Release-Builds bundeln die Python-Runtime und alle noetigen Abhaengigkeiten. Eine separate Python-Installation wird nur benoetigt, wenn du aus dem Quellcode startest.
+Agenten können transkribieren, übersetzen, Stimmen erkennen, Meetings durchsuchen und Aufnahmen steuern. Lange Aufgaben bieten Fortschrittsanzeige und Abbruch. Vorhandene Dateien werden nicht überschrieben; Brevia startet bei Bedarf im Hintergrund.
 
-### Wie viel Speicherplatz benoetigen die Modelle?
+[CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
-Beginnen Sie mit dem empfohlenen Sprachmodell für Ihre Sprache. Lokale KI- und Übersetzungsmodelle nur bei Bedarf ergänzen. Die Modellbibliothek zeigt die Downloadgrößen; nicht alle Modelle sind nötig.
+## Deine Daten
 
-## Hilfe und Beiträge
+Kein Konto erforderlich. Aufnahmen, Meetings und Modelle bleiben auf deinen Geräten. Das Smartphone synchronisiert per lokalem HTTPS. Lokale KI funktioniert offline; bei einem gewählten Onlinedienst werden die betreffenden Texte an diesen Anbieter gesendet. [Privacy](https://brevia.work/privacy.html).
 
-[GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — Probleme bitte mit App-Version, Gerät und Schritten zur Reproduktion melden. Private Inhalte und Zugangsdaten aus Bildern und Protokollen entfernen.
+Der Desktop nutzt das System-WebView (WebKit auf macOS, WebView2 auf Windows), gemeinsame Meetinglogik und native Engines. Die mobile App verwendet Flutter.
 
-[Mobile Entwicklung (Chinesisch)](../mobile/README.md) · [CONTRIBUTING](../DEVELOPMENT.md#协作与检查).
+## Mitmachen
 
-## Lizenz
+[Issues](https://github.com/zerolovesea/Brevia/issues) · [Development](../DEVELOPMENT.md) · [Docs](README.md)
 
-Brevia wird unter der [ISC License](../LICENSE) veroeffentlicht. Modelldateien und Drittanbieterpakete behalten ihre eigenen Lizenzen und Bedingungen.
-
-## Danksagungen
-
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — die lokale Runtime hinter ASR, VAD, Zeichensetzung und Sprecherverarbeitung. Lizenziert unter [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Dank an die Modellautorinnen und -maintainer, deren herunterladbare Artefakte in [`backend/models.json`](../backend/models.json) deklariert sind, darunter Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero und Tencent Hy-MT2.
-- Electron, ONNX Runtime, Python und die Open-Source-Sprach-Community machen diesen local-first Workflow moeglich.
-
-Die native macOS-App und die Windows-App unterstützen authentifizierte lokale Agents über JSON-CLI und stdio MCP: automatischer Hintergrundstart, Transkription und Übersetzung lokaler Medien mit Export, Besprechungssuche sowie Aufnahmesteuerung am Computer und Smartphone. Unter **Einstellungen → Agent und MCP** verwalten Sie Lese-, Inferenz- und Aufnahmeberechtigungen und kopieren die MCP-Konfiguration; unter **Einstellungen → Prompts** bearbeiten Sie zusätzliche Anweisungen für Zusammenfassungen, Live-KI-Notizen und Übersetzungen. Beispiele und die Installationshinweise beschreibt die [lokale Agent-API](../DEVELOPMENT.md#本机-agent-接口).
+ISC-Lizenz. Für Modelle und Drittanbieterkomponenten gelten deren eigene Lizenzen. Danke an Tauri, MLX, sherpa-onnx, llama.cpp, miniaudio und die Modellautoren. [ISC](../LICENSE).

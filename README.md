@@ -17,6 +17,8 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
 
+从旧 Electron 版升级时，需先手动安装一次原生版。会议和模型继续保留，之后通过应用内更新。
+
 ## 能做什么
 
 - **记录会议。** 同时录制麦克风和系统声音，实时转写、翻译；收起主窗口后用悬浮字幕、录音胶囊和快捷键继续操作。
