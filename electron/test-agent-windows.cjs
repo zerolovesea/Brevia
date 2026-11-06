@@ -77,12 +77,23 @@ test('Windows CLI distribution is standalone and needs no installed Node package
 });
 
 test(
-  'Windows credentials inherit only the current user ACL',
+  'Windows credentials retain private ACLs with incompatible inherited PowerShell modules',
   { skip: process.platform !== 'win32' },
   async () => {
     const { AgentService, locations } = require('./agent-service.cjs');
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-windows-acl-'));
     const service = new AgentService({ root });
+    const previousModules = process.env.PSModulePath;
+    const modules = path.join(root, 'modules');
+    const security = path.join(modules, 'Microsoft.PowerShell.Security');
+    fs.mkdirSync(security, { recursive: true });
+    fs.writeFileSync(
+      path.join(security, 'Microsoft.PowerShell.Security.psd1'),
+      "@{ ModuleVersion='99.0'; RootModule='incompatible.psm1'; FunctionsToExport=@('Set-Acl','Get-Acl') }",
+    );
+    fs.writeFileSync(path.join(security, 'incompatible.psm1'), "throw 'Incompatible module'");
+    // 从 PowerShell 7 启动时，Windows PowerShell 5 不能加载继承路径中的同名模块。
+    process.env.PSModulePath = modules;
     try {
       await service.listen();
       const result = spawnSync(
@@ -94,8 +105,8 @@ test(
           `
       $ErrorActionPreference = 'Stop'
       $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-      $acl = Get-Acl -LiteralPath $env:BREVIA_AGENT_CREDENTIALS
-      $directory = Get-Acl -LiteralPath (Split-Path -LiteralPath $env:BREVIA_AGENT_CREDENTIALS)
+      $acl = [System.IO.File]::GetAccessControl($env:BREVIA_AGENT_CREDENTIALS)
+      $directory = [System.IO.Directory]::GetAccessControl([System.IO.Path]::GetDirectoryName($env:BREVIA_AGENT_CREDENTIALS))
       ConvertTo-Json -Compress -InputObject @{ sid=$sid; protected=$directory.AreAccessRulesProtected; rules=@($acl.Access | ForEach-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }) }
     `,
         ],
@@ -111,6 +122,8 @@ test(
       assert.equal(acl.protected, true);
       assert.deepEqual(acl.rules, [acl.sid]);
     } finally {
+      if (previousModules === undefined) delete process.env.PSModulePath;
+      else process.env.PSModulePath = previousModules;
       await service.close();
       fs.rmSync(root, { recursive: true, force: true });
     }

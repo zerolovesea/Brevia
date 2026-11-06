@@ -156,7 +156,7 @@ class AgentService {
         $acl.SetAccessRuleProtection($true, $false)
         $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
         $acl.AddAccessRule($rule)
-        Set-Acl -LiteralPath $env:BREVIA_AGENT_DIRECTORY -AclObject $acl
+        [System.IO.Directory]::SetAccessControl($env:BREVIA_AGENT_DIRECTORY, $acl)
       `,
         ],
         {
