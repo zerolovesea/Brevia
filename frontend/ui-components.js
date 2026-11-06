@@ -143,6 +143,7 @@ function renderSettingsNavigation(kind) {
       [
         ['models', '模型库', 'model'],
         ['ai-features', 'AI 功能', 'ai'],
+        ['prompts', '提示词', 'document'],
         ['speaker-profiles', '声纹管理', 'microphone'],
       ],
     ],
@@ -150,6 +151,7 @@ function renderSettingsNavigation(kind) {
       '设备与数据',
       [
         ['device-connection', '设备连接', 'phone'],
+        ['agent-settings', 'Agent 与 MCP', 'advanced'],
         ['storage', '存储与隐私', 'storage'],
       ],
     ],
@@ -353,6 +355,8 @@ function renderTranscriptSegment({
   textError = '',
   userEdited = false,
   translationStale = false,
+  translationPending = false,
+  translationAvailable = true,
   replacementHighlight = '',
   backlinks = '',
 }) {
@@ -394,24 +398,27 @@ function renderTranscriptSegment({
       : `<div class="segment-copy">${userEdited ? `<small class="segment-modified-state">${t('已修改')}</small>` : ''}<p>${renderCorrectedTranscript(text, replacementHighlight)}</p>${translationLine}</div>`;
   // 右键菜单按段落 id 定位：详情页（原始/精修稿）只带顶层 segmentId，实时条目只带 speaker.segmentId。
   const contextSegmentId = segmentId || speaker.segmentId;
+  const segmentToolActions = [
+    ...(segmentId && timing && endSeconds > startSeconds ? [['play', 'play', '播放此段']] : []),
+    ...(segmentId && translationAvailable ? [['translate', 'translate', '翻译']] : []),
+    ...(!showSpeaker ? [['edit', 'edit', '编辑']] : []),
+    ['speaker', 'person', '标记说话人'],
+    ['note', 'notes', '加入笔记'],
+    ['highlight', 'bookmark', '重点'],
+    ['profile', 'waveform', '添加到声纹库'],
+  ];
   const tools =
     contextSegmentId && !textEditable
-      ? `<div class="segment-tools" role="group" aria-label="${escapeHtml(t('字幕'))}">${[
-          ...(!showSpeaker ? [['edit', 'edit', '编辑']] : []),
-          ['speaker', 'person', '标记说话人'],
-          ['note', 'notes', '加入笔记'],
-          ['highlight', 'bookmark', '重点'],
-          ['profile', 'waveform', '添加到声纹库'],
-        ]
+      ? `<div class="segment-tools" role="group" aria-label="${escapeHtml(t('字幕'))}">${segmentToolActions
           .map(
             ([action, icon, label]) =>
-              `<button type="button" data-segment-tool="${action}" data-tooltip="${escapeHtml(t(label))}" aria-label="${escapeHtml(t(label))}"${action === 'speaker' ? ' aria-haspopup="dialog"' : ''}>${interfaceIcon(icon)}</button>`,
+              `<button type="button" data-segment-tool="${action}" title="${escapeHtml(t(action === 'translate' && translationPending ? '正在翻译字幕' : label))}" aria-label="${escapeHtml(t(action === 'translate' && translationPending ? '正在翻译字幕' : label))}"${action === 'speaker' ? ' aria-haspopup="dialog"' : ''}${action === 'play' ? ' aria-pressed="false"' : ''}${action === 'translate' && translationPending ? ' disabled aria-busy="true"' : ''}>${interfaceIcon(icon)}</button>`,
           )
           .join(
             '',
           )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
       : '';
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
@@ -1587,17 +1594,27 @@ function renderSaveState(state = 'saved') {
   const mark = state === 'saved' ? interfaceIcon('check') : state === 'failed' ? '!' : '';
   return `<span class="save-state" data-save-state="${state}" role="status"><i class="save-state-mark" aria-hidden="true">${mark}</i>${escapeHtml(t(label || '已保存'))}</span>`;
 }
-function renderSummaryDocument(markdown) {
-  const html = renderMarkdown(cleanSummaryMarkdown(markdown));
-  const parts = html.split(/(<h[12]\b[^>]*>[\s\S]*?<\/h[12]>)/i);
-  if (parts.length < 3) return html;
-  let result = parts[0];
-  for (let index = 1; index < parts.length; index += 2) {
-    const title = parts[index];
-    const content = parts[index + 1] || '';
-    result += `<section class="summary-reading-section">${title}<div>${content}</div></section>`;
+function summaryDocumentSections(markdown) {
+  const sections = [];
+  for (const line of cleanSummaryMarkdown(markdown).replace(/\r/g, '').split('\n')) {
+    const heading = line.match(/^(#{1,2})\s+(.+)$/);
+    if (heading || !sections.length)
+      sections.push({
+        id: String(sections.length),
+        title: heading?.[2] || t('会议纪要'),
+        lines: [],
+      });
+    sections.at(-1).lines.push(line);
   }
-  return result;
+  return sections;
+}
+function renderSummaryDocument(markdown) {
+  return summaryDocumentSections(markdown)
+    .map(
+      ({ id, lines }) =>
+        `<section class="summary-reading-section" data-summary-section="${id}" tabindex="-1">${renderMarkdown(lines.join('\n'))}</section>`,
+    )
+    .join('');
 }
 /** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
@@ -1660,7 +1677,7 @@ function renderRefineStatus(d) {
     .slice(1)
     .map(
       ([code, name]) =>
-        `<button type="button" data-detail-translation="${escapeHtml(code)}">${escapeHtml(name)}</button>`,
+        `<button type="button" data-detail-translation="${escapeHtml(code)}"${d.translationPending ? ' disabled' : ''}>${escapeHtml(name)}</button>`,
     )
     .join('')}</div></span>`;
   const refineMenu =
@@ -1813,8 +1830,32 @@ function renderMeetingDetail() {
           end: focusedField.selectionEnd,
         }
       : null;
-  document.querySelector('.final-transcript').innerHTML =
-    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
+  const reading = document.querySelector('.final-transcript');
+  const oldRail = reading.querySelector('.detail-cause-rail');
+  const railState =
+    oldRail?.dataset.meetingId === String(currentMeetingDetail?.id)
+      ? {
+          scroll: oldRail.querySelector('.detail-cause-scroll').scrollTop,
+          summaryScroll: reading.querySelector('.summary-body')?.scrollTop || 0,
+          open: [...oldRail.querySelectorAll('details[open]')].map(
+            (card) => card.dataset.evidenceId,
+          ),
+        }
+      : null;
+  const causeRail = renderDetailCauseRail(
+    d.summary?.claims || [],
+    d.summary?.markdown || '',
+    currentMeetingDetail?.id,
+  );
+  reading.classList.toggle('has-cause-rail', Boolean(causeRail));
+  reading.innerHTML = `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
+  reading.insertAdjacentHTML('beforeend', causeRail);
+  if (railState) {
+    reading.querySelectorAll('.detail-cause-rail details').forEach((card) => {
+      card.open = railState.open.includes(card.dataset.evidenceId);
+    });
+    reading.querySelector('.detail-cause-scroll')?.scrollTo({ top: railState.scroll });
+  }
   document.querySelectorAll('[data-segment-text]').forEach((field) => resizeTranscriptField(field));
   filterDetailTranscript();
   if (focusState) {
@@ -1846,6 +1887,8 @@ function renderMeetingDetail() {
     participants: currentMeetingDetail?.speakers || [],
   });
   syncDetailSummaryPanel();
+  const summaryBody = reading.querySelector('.summary-body');
+  if (railState && summaryBody) summaryBody.scrollTop = railState.summaryScroll;
   const summaryPreview = document.querySelector('#detail-view .summary-preview');
   if (summaryPreview && typeof correctionFeedback === 'function')
     summaryPreview.insertAdjacentHTML(
@@ -1899,4 +1942,5 @@ function syncDetailSummaryPanel() {
   if (people) root.querySelector('.detail-title').append(people);
   aside.hidden = true;
   main.append(preview);
+  if (typeof syncEvidenceReading === 'function') syncEvidenceReading();
 }

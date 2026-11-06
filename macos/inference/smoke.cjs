@@ -132,15 +132,28 @@ async function main() {
       max_tokens: 64,
       temperature: 0,
       chat: true,
+      require_complete: true,
     });
     assert.match(translation.text, /hello/i);
     assert.doesNotMatch(translation.text, /<think>/);
+    await assert.rejects(
+      call('llama.generate', {
+        prompt:
+          'Translate the following text into English. Output only the translation.\n\n我们明天上午九点召开项目评审会议。',
+        max_tokens: 1,
+        temperature: 0,
+        chat: true,
+        require_complete: true,
+      }),
+      /Translation exceeded output token limit/,
+    );
     const stopped = await call('llama.generate', {
       prompt: 'Translate the following text into English. Output only the translation.\n\n你好。',
       max_tokens: 64,
       temperature: 0,
       chat: true,
       stop_tokens: ['Hello', 'hello'],
+      require_complete: true,
     });
     assert.doesNotMatch(stopped.text, /hello/i);
     console.log(

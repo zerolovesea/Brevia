@@ -140,7 +140,8 @@ class SpeakerCommandMixin:
     def verify_speaker_profile(self, payload, control=None):
         """验证一段临时选择的音频是否匹配指定本地声纹。"""
         require(payload, "profile_id", "path")
-        return self.voice_profiles.verify(payload)
+        self.wait_task(control)
+        return self.voice_profiles.verify(payload, cancellation=control.cancelled)
 
     def delete_speaker_profile(self, payload):
         """删除指定的本地声纹档案。"""

@@ -8,11 +8,12 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import wave
 from contextlib import closing
 from pathlib import Path
 
-from .worker_common import UserFacingError
+from .worker_common import TaskCancelled, UserFacingError
 
 PROCESS_TIMEOUT_SECONDS = 60 * 60
 
@@ -25,12 +26,37 @@ def ffmpeg_path():
     return executable
 
 
-def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
+def _convert_process(command, cancellation=None):
+    if cancellation is None:
+        return subprocess.run(
+            command, check=True, stdin=subprocess.DEVNULL, timeout=PROCESS_TIMEOUT_SECONDS
+        )
+    if cancellation.is_set():
+        raise TaskCancelled()
+    with subprocess.Popen(command, stdin=subprocess.DEVNULL) as process:
+        deadline = time.monotonic() + PROCESS_TIMEOUT_SECONDS
+        try:
+            while process.poll() is None:
+                if cancellation.wait(0.1):
+                    raise TaskCancelled()
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(command, PROCESS_TIMEOUT_SECONDS)
+            if cancellation.is_set():
+                raise TaskCancelled()
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, command)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+
+
+def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1, cancellation=None):
     """转为模型可预测的 PCM16 WAV，供临时推理使用。"""
     if sys.platform == "darwin":
         # 使用系统 AudioToolbox；旧系统缺少的 Ogg 等解码器由兼容运行包提供。
         try:
-            subprocess.run(
+            _convert_process(
                 [
                     "/usr/bin/afconvert",
                     "-f",
@@ -42,9 +68,7 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
                     str(source),
                     str(destination),
                 ],
-                check=True,
-                stdin=subprocess.DEVNULL,
-                timeout=PROCESS_TIMEOUT_SECONDS,
+                cancellation,
             )
             return
         except subprocess.CalledProcessError:
@@ -63,6 +87,8 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
                     ):
                         output.setparams((channels, 2, sample_rate, 0, "NONE", "not compressed"))
                         for block in samples:
+                            if cancellation is not None and cancellation.is_set():
+                                raise TaskCancelled()
                             output.writeframesraw(block)
                     return
                 except ImportError:
@@ -73,7 +99,7 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
                 os.environ.get("BREVIA_FFMPEG") or shutil.which("ffmpeg")
             ):
                 raise ValueError("The system could not decode this audio file") from None
-    subprocess.run(
+    _convert_process(
         [
             ffmpeg_path(),
             "-y",
@@ -90,9 +116,7 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
             "pcm_s16le",
             str(destination),
         ],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        timeout=PROCESS_TIMEOUT_SECONDS,
+        cancellation,
     )
 
 

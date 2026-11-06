@@ -152,6 +152,53 @@ test('长段落分块保留来源且小预算不会死循环', () => {
   assert.throws(() => splitTranscript(source, 0));
 });
 
+test(
+  'queued local cancellation returns promptly without interrupting or overtaking the active request',
+  { timeout: 2000 },
+  async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-llm-cancel-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(directory, 'model.gguf'), 'fixture');
+    let release, entered;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise((resolve) => {
+      entered = resolve;
+    });
+    t.after(() => release());
+    const requests = [];
+    const worker = {
+      models: { isReady: () => true, path: () => directory },
+      engineFactory: () => ({
+        request: async (type, payload) => {
+          if (type === 'llama.load') return {};
+          requests.push(payload.prompt);
+          if (payload.prompt === 'first') {
+            entered();
+            await gate;
+          }
+          return { text: payload.prompt };
+        },
+      }),
+    };
+    createLLMHandlers(worker);
+    const options = { provider: 'builtin', model: 'local' };
+    const first = worker.llmComplete(options, 'first');
+    await started;
+    const controller = new AbortController();
+    const cancelled = worker.llmComplete(options, 'cancelled', { signal: controller.signal });
+    controller.abort(new Error('cancelled while queued'));
+    await assert.rejects(cancelled, /cancelled while queued/);
+    const third = worker.llmComplete(options, 'third');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(requests, ['first']);
+    release();
+    assert.deepEqual(await Promise.all([first, third]), ['first', 'third']);
+    assert.deepEqual(requests, ['first', 'third']);
+  },
+);
+
 test('AI 建议解析兼容噪声、转义括号、旧格式且一次仅返回一条', () => {
   assert.deepEqual(
     parseSuggestions(
@@ -327,4 +374,29 @@ test('纪要生成保留并发文稿保护，拒绝分享时不启动推理', as
     events.some(([type]) => type === 'summary.ready'),
     false,
   );
+});
+
+test('complete file translation reserves output and reports token exhaustion instead of exporting a fragment', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-complete-translation-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'model.gguf'), 'fixture');
+  const worker = {
+    models: { isReady: () => true, path: () => directory },
+    engineFactory: () => ({
+      request: async (type, p) => {
+        if (type === 'llama.load') return {};
+        if (!p.require_complete) {
+          assert.equal(p.max_tokens, 512);
+          return { text: 'UI translation' };
+        }
+        assert.equal(p.max_tokens, 2048);
+        throw new Error('Translation exceeded output token limit; no complete result was produced');
+      },
+    }),
+  };
+  createLLMHandlers(worker);
+  assert.equal(await worker.translateText('你好', 'en'), 'UI translation');
+  await assert.rejects(worker.translateText('你好', 'en', undefined, { complete: true }), {
+    code: 'translation_truncated',
+  });
 });

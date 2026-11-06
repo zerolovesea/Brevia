@@ -178,3 +178,5 @@ Brevia uses the [ISC License](../LICENSE), which permits use, modification and d
 ## Acknowledgments
 
 Thanks to [mlx-audio](https://github.com/Blaizzy/mlx-audio), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), [Electron](https://github.com/electron/electron), and the authors and maintainers of Qwen, FunASR, Parakeet, Pyannote, 3D-Speaker, Silero and Tencent Hy-MT2.
+
+The native macOS and Windows apps support authenticated local agents through a JSON CLI and stdio MCP: automatic background startup, local media transcription/translation exports, meeting search, and computer/phone recording control. In **Settings → Agent & MCP**, manage read, inference and recording permissions and copy the MCP configuration; in **Settings → Prompts**, edit additional instructions for summaries, live AI notes and translation. See [Local Agent API](../DEVELOPMENT.md#本机-agent-接口) for examples and platform installation instructions.

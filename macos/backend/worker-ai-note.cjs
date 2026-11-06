@@ -234,7 +234,7 @@ function createAiNoteHandlers(worker) {
     try {
       const raw = await worker.llmComplete(
         { ...session.connection, max_tokens: 160, timeout: 40, temperature: 0.2 },
-        prompt +
+        (worker.prompts?.apply('ai_note', prompt) ?? prompt) +
           (['built-in', 'builtin'].includes(session.connection.provider?.toLowerCase())
             ? '\n/no_think'
             : ''),

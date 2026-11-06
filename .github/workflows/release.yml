@@ -17,12 +17,12 @@ jobs:
       matrix:
         include:
           - name: macOS ARM64
-            os: macos-14
+            os: macos-26
             artifact: |
-              dist/Brevia-*.dmg
-              dist/Brevia-*.zip
-              dist/Brevia-*.zip.blockmap
-              dist/latest-mac.yml
+              dist/native/Brevia-WebKit-*-arm64.dmg
+              dist/native/Brevia-WebKit-*-arm64.app.tar.gz
+              dist/native/Brevia-WebKit-*-arm64.app.tar.gz.sig
+              dist/native/latest-webkit.json
           - name: Windows x64
             os: windows-latest
             artifact: |
@@ -30,20 +30,25 @@ jobs:
               dist/Brevia-*-x64-setup.exe.blockmap
               dist/latest.yml
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     env:
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.1
           cache: npm
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: npm ci
-      - run: python -m pip install -r backend/requirements-build.txt
-        if: matrix.os != 'windows-latest'
+      - name: Prepare native macOS toolchain
+        if: runner.os == 'macOS'
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.2.app
+          xcodebuild -downloadComponent MetalToolchain
+          cargo install tauri-cli --version 2.12.2 --locked
       - name: Build Windows llama runtime with AVX2
         if: matrix.os == 'windows-latest'
         env:
@@ -55,38 +60,61 @@ jobs:
         run: python -m pip install --no-binary=llama-cpp-python --no-cache-dir -r backend/requirements-build.txt
       - run: npm test
         env:
-          # e2e 会真实启动 Electron 并通过 CDP 断言渲染进程；Windows runner 无法可靠地
-          # 无头启动它，因此只在 macOS 上跑，Windows 侧跳过（跳过会打印原因并以 0 退出）。
-          BREVIA_SKIP_E2E: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
-      - name: Check legacy macOS backend before packaging Electron
-        if: matrix.os == 'macos-14'
-        run: npm run test:backend:legacy
+          # macOS 由成品 WKWebView 冒烟验证；Windows runner 无法可靠启动 Electron。
+          BREVIA_SKIP_E2E: '1'
       - name: Bundle Python runtime and dependencies
+        if: runner.os == 'Windows'
         run: python backend/pack_worker.py
       - name: Bundle llama sidecar
+        if: runner.os == 'Windows'
         run: python backend/pack_llama_sidecar.py
       - name: Verify frozen Windows runtime
         if: matrix.os == 'windows-latest'
         run: python backend/diagnose_windows_bundle.py --runtime backend/runtime
-      - name: Configure Apple signing and notarization
-        if: matrix.os == 'macos-14'
+      - name: Configure Apple signing and native updates
+        if: runner.os == 'macOS'
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
-      - name: Package and notarize macOS
-        if: matrix.os == 'macos-14'
-        # 公证和跨版本升级验收通过后再切换正式发行渠道。
-        run: npm run package:mac:electron
+          for name in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD BREVIA_NATIVE_UPDATE_PUBKEY TAURI_SIGNING_PRIVATE_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Secret: $name (see DEVELOPMENT.md)"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/brevia.p12"
+          keychain="$RUNNER_TEMP/brevia.keychain-db"
+          password=$(openssl rand -hex 32)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/brevia.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:.*\)".*/\1/p' | head -1)
+          test -n "$identity"
+          printf 'BREVIA_SIGN_IDENTITY=%s\n' "$identity" >> "$GITHUB_ENV"
+      - name: Package and notarize native macOS
+        if: runner.os == 'macOS'
+        run: npm run dist:mac
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Check packaged native macOS application
+        if: runner.os == 'macOS'
+        run: npm run test:mac:webkit
       - name: Package Windows
         if: matrix.os == 'windows-latest'
         run: npm run package:win
@@ -95,17 +123,28 @@ jobs:
           # 未配置时保持未签名构建，不会导致流程失败。
           CSC_LINK: ${{ secrets.WIN_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+      - name: Verify packaged Windows CLI and MCP
+        if: runner.os == 'Windows'
+        run: node scripts/test-packaged-agent.cjs dist/win-unpacked
       - name: Verify packaged Windows runtime
         if: matrix.os == 'windows-latest'
         run: python backend/diagnose_windows_bundle.py --runtime dist/win-unpacked/resources/backend/runtime --packaged
       - name: Verify macOS signature and notarization
-        if: matrix.os == 'macos-14'
+        if: runner.os == 'macOS'
         shell: bash
         run: |
-          APP="dist/mac-arm64/Brevia.app"
+          APP="dist/native/image/Brevia.app"
           codesign --verify --deep --strict --verbose=2 "$APP"
           xcrun stapler validate "$APP"
           spctl --assess --type execute --verbose=4 "$APP"
+          xcrun stapler validate dist/native/Brevia-WebKit-*-arm64.dmg
+          test -s dist/native/latest-webkit.json
+          test -s dist/native/Brevia-WebKit-*-arm64.app.tar.gz.sig
+      - name: Remove Apple signing material
+        if: always() && runner.os == 'macOS'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/brevia.keychain-db" || true
+          rm -f "$RUNNER_TEMP/brevia.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}

@@ -46,7 +46,7 @@ function renderEvidenceClaim(claim, accepted, branch = null) {
       const time =
         source.seekable === false
           ? ''
-          : `<button type="button" data-play-evidence="${index}" aria-label="${escapeHtml(t('播放') + ' ' + formatMeetingTime(source.start_ms))}">${interfaceIcon('play')}${formatMeetingTime(source.start_ms)}</button>`;
+          : `<button type="button" data-play-evidence="${index}" aria-label="${escapeHtml(t('播放此段') + ' ' + formatMeetingTime(source.start_ms))}">${interfaceIcon('play')}${formatMeetingTime(source.start_ms)}</button>`;
       const locate = source.current_segment_id
         ? `<button class="evidence-locate" type="button" data-locate-evidence="${index}">${escapeHtml(t('逐字稿'))}${interfaceIcon('chevron-right')}</button>`
         : '';
@@ -76,8 +76,7 @@ if (typeof customElements !== 'undefined') {
       connectedCallback() {
         this.observer = new ResizeObserver(() => this.drawBranches());
         this.observer.observe(this);
-        this.observer.observe(this.querySelector('h3'));
-        this.querySelectorAll('details, details > summary').forEach((node) =>
+        this.querySelectorAll('h3, h4, details, details > summary').forEach((node) =>
           this.observer.observe(node),
         );
       }
@@ -87,37 +86,116 @@ if (typeof customElements !== 'undefined') {
       drawBranches() {
         const bounds = this.getBoundingClientRect();
         if (!bounds.width) return;
-        const subject = this.querySelector('h3').getBoundingClientRect();
+        const heading = this.querySelector('h3').getBoundingClientRect();
         const curves = this.querySelectorAll('svg.cause-tree-links > g');
-        const stacked = getComputedStyle(this).getPropertyValue('--tree-stacked').trim() === '1';
-        const x = (stacked ? subject.left + 13 : subject.right) - bounds.left;
-        const y = (stacked ? subject.bottom : subject.top + subject.height / 2) - bounds.top;
-        this.querySelectorAll('details > summary').forEach((summary, i) => {
-          const card = summary.getBoundingClientRect();
-          const endX = card.left - bounds.left;
-          const endY = card.top + card.height / 2 - bounds.top;
-          const midX = (x + endX) / 2;
-          const d = stacked
-            ? `M ${x} ${y} C ${x} ${y + (endY - y) * 0.48}, ${x} ${endY}, ${endX} ${endY}`
-            : `M ${x} ${y} C ${midX} ${y}, ${midX} ${endY}, ${endX} ${endY}`;
-          curves[i].querySelector('path').setAttribute('d', d);
-          curves[i].querySelector('circle').setAttribute('cx', endX);
-          curves[i].querySelector('circle').setAttribute('cy', endY);
+        const x = 8;
+        const top = heading.bottom - bounds.top;
+        let bottom = top;
+        let index = 0;
+        this.querySelectorAll('.cause-tree-topic').forEach((topic) => {
+          const subject = topic.querySelector('h4').getBoundingClientRect();
+          topic.querySelectorAll('details > summary').forEach((summary) => {
+            const card = summary.getBoundingClientRect();
+            const endX = card.left - bounds.left;
+            const endY = card.top + card.height / 2 - bounds.top;
+            const y = Math.max(subject.bottom - bounds.top + 8, endY - 32);
+            const midX = (x + endX) / 2;
+            const curve = curves[index++];
+            curve
+              .querySelector('path')
+              .setAttribute('d', `M ${x} ${y} C ${x} ${y + 16}, ${midX} ${endY}, ${endX} ${endY}`);
+            curve.querySelector('circle').setAttribute('cx', endX);
+            curve.querySelector('circle').setAttribute('cy', endY);
+            bottom = Math.max(bottom, endY);
+          });
         });
+        this.querySelector('.cause-tree-spine').setAttribute('d', `M ${x} ${top} V ${bottom + 16}`);
       }
     },
   );
 }
 
-function renderCauseTree(label, items) {
-  const group = items[0].id;
-  const branches = items
-    .map((claim, index) => renderEvidenceClaim(claim, false, { group, index }))
+function renderCauseTree(groups) {
+  const topics = groups
+    .map(({ label, items, section, chapter }, index) => {
+      const branches = items
+        .map((claim) => renderEvidenceClaim(claim, false, { group: items[0].id, index }))
+        .join('');
+      const heading =
+        section === undefined
+          ? escapeHtml(label)
+          : `<button type="button" data-summary-section-link="${section}" title="${escapeHtml(t('会议纪要') + ' · ' + chapter)}">${escapeHtml(label)}${interfaceIcon('chevron-right')}</button>`;
+      return `<section class="cause-tree-topic" data-ink="${index % 4}"${section === undefined ? '' : ` data-cause-section="${section}"`}><h4>${heading}</h4><div class="cause-tree-branches">${branches}</div></section>`;
+    })
     .join('');
-  const curves = items
-    .map((_, index) => `<g data-ink="${index % 4}"><path/><circle r="2.5"/></g>`)
+  const curves = groups
+    .flatMap(({ items }, index) =>
+      items.map(() => `<g data-ink="${index % 4}"><path/><circle r="2.5"/></g>`),
+    )
     .join('');
-  return `<section class="evidence-group evidence-cause-tree" aria-label="${escapeHtml(t('原因分析'))}"><brevia-cause-tree><svg class="cause-tree-links" aria-hidden="true">${curves}</svg><h3>${label !== t('原因分析') ? `<small>${escapeHtml(t('原因分析'))}</small>` : ''}<span>${escapeHtml(label)}</span></h3><div class="cause-tree-branches">${branches}</div></brevia-cause-tree></section>`;
+  return `<section class="evidence-group evidence-cause-tree" aria-label="${escapeHtml(t('原因分析'))}"><brevia-cause-tree><svg class="cause-tree-links" aria-hidden="true"><path class="cause-tree-spine"/>${curves}</svg><h3>${escapeHtml(t('原因分析'))}</h3>${topics}</brevia-cause-tree></section>`;
+}
+function causeChapterGroups(claims, markdown) {
+  const sections = summaryDocumentSections(markdown);
+  const groups = new Map();
+  for (const claim of claims.filter((item) => item.kind === 'cause' && !item.detached)) {
+    // 只接受当前正文中唯一的原始结论行，章节名或旧段落序号不能证明关联。
+    const matches = claim.line
+      ? sections.flatMap((section) =>
+          section.lines.filter((line) => line === claim.line).map(() => section),
+        )
+      : [];
+    const chapter = matches.length === 1 ? matches[0] : null;
+    const label = claim.section || t('原因分析');
+    const key = JSON.stringify([chapter?.id, label]);
+    if (!groups.has(key))
+      groups.set(key, { label, section: chapter?.id, chapter: chapter?.title, items: [] });
+    groups.get(key).items.push(claim);
+  }
+  return [...groups.values()].sort(
+    (a, b) => Number(a.section ?? Infinity) - Number(b.section ?? Infinity) || 0,
+  );
+}
+function renderDetailCauseRail(claims, markdown, meetingId) {
+  const groups = causeChapterGroups(claims, markdown);
+  if (!groups.length) return '';
+  return `<aside class="detail-cause-rail" data-meeting-id="${escapeHtml(String(meetingId))}" aria-label="${escapeHtml(t('原因分析'))}"><div class="detail-cause-scroll">${renderCauseTree(groups)}</div></aside>`;
+}
+function syncEvidenceReading() {
+  const preview = document.querySelector('#detail-view .summary-body');
+  const rail = document.querySelector('#detail-view .detail-cause-scroll');
+  if (!preview || !rail) return;
+  let active;
+  let initialized = false;
+  const followChapter = (scroll) => {
+    if (detailActiveTab !== 'summary' || !preview.isConnected) return;
+    const top = preview.getBoundingClientRect().top;
+    const sections = [...preview.querySelectorAll('[data-summary-section]')];
+    const section =
+      sections.findLast((item) => item.getBoundingClientRect().top <= top + 40) || sections[0];
+    if (!section || active === section.dataset.summarySection) return;
+    active = section.dataset.summarySection;
+    rail
+      .querySelectorAll('[data-cause-section]')
+      .forEach((topic) =>
+        topic.classList.toggle('is-reading', topic.dataset.causeSection === active),
+      );
+    const topic = rail.querySelector(`[data-cause-section="${active}"]`);
+    if (topic && scroll)
+      rail.scrollTo({
+        top:
+          rail.scrollTop +
+          topic.getBoundingClientRect().top -
+          rail.getBoundingClientRect().top -
+          Math.max(16, section.getBoundingClientRect().top - top),
+      });
+  };
+  preview.onscroll = () => followChapter(initialized);
+  // 刷新只恢复章节高亮，保留用户独立浏览原因图的位置。
+  requestAnimationFrame(() => {
+    followChapter(false);
+    initialized = true;
+  });
 }
 function renderClaimGroups(claims, accepted = false) {
   const groups = new Map();
@@ -129,23 +207,26 @@ function renderClaimGroups(claims, accepted = false) {
     if (!groups.has(key)) groups.set(key, { label, causal: claim.kind === 'cause', items: [] });
     groups.get(key).items.push(claim);
   }
-  return [...groups.values()]
-    .map(({ label, causal, items }) =>
-      causal && !accepted
-        ? renderCauseTree(label, items)
-        : `<section class="evidence-group"><header>${interfaceIcon('notebook')}<h3>${escapeHtml(label)}</h3></header><div class="evidence-branches">${items.map((item) => renderEvidenceClaim(item, accepted)).join('')}</div></section>`,
-    )
-    .join('');
+  const causes = accepted ? [] : [...groups.values()].filter((group) => group.causal);
+  return (
+    (causes.length ? renderCauseTree(causes) : '') +
+    [...groups.values()]
+      .filter((group) => accepted || !group.causal)
+      .map(
+        ({ label, items }) =>
+          `<section class="evidence-group"><header>${interfaceIcon('notebook')}<h3>${escapeHtml(label)}</h3></header><div class="evidence-branches">${items.map((item) => renderEvidenceClaim(item, accepted)).join('')}</div></section>`,
+      )
+      .join('')
+  );
 }
 function renderEvidenceNotebook(claims, markdown) {
-  const causes = claims.filter((claim) => claim.kind === 'cause' && !claim.detached);
   const references = claims.filter((claim) => claim.kind !== 'cause' && !claim.detached);
   const history = claims.filter((claim) => claim.detached);
   const disclosure = (items, label) =>
     items.length
       ? `<details class="evidence-document"><summary>${interfaceIcon('notebook')}${escapeHtml(t(label))}${interfaceIcon('chevron-down')}</summary>${renderClaimGroups(items)}</details>`
       : '';
-  return `<div class="evidence-notebook">${renderClaimGroups(causes)}<div class="summary-document">${renderSummaryDocument(markdown)}</div>${disclosure(references, '引用')}${disclosure(history, '生成时的结论')}</div>`;
+  return `<div class="evidence-notebook"><div class="summary-document">${renderSummaryDocument(markdown)}</div>${disclosure(references, '引用')}${disclosure(history, '生成时的结论')}</div>`;
 }
 function seekEvidence(source, play = false) {
   if (!source || source.seekable === false || !Number.isFinite(source.start_ms) || !playerAudio.src)
@@ -200,12 +281,27 @@ function editEvidenceClaim(claim, meetingId) {
   input.focus();
 }
 document.addEventListener('click', (event) => {
+  const sectionLink = event.target.closest('[data-summary-section-link]');
+  if (sectionLink) {
+    if (uiData.detail.summaryEditing) return showToast(t('请先保存或取消当前编辑'));
+    if (!switchDetailDocument('summary')) return;
+    const section = document.querySelector(
+      `[data-summary-section="${CSS.escape(sectionLink.dataset.summarySectionLink)}"]`,
+    );
+    section?.scrollIntoView({ block: 'start' });
+    section?.focus({ preventScroll: true });
+    return;
+  }
   const back = event.target.closest('[data-evidence-back]');
   if (back) {
-    if (!switchDetailDocument(back.dataset.evidenceDocument)) return;
     const card = document.querySelector(
       `[data-evidence-document="${CSS.escape(back.dataset.evidenceDocument)}"][data-evidence-id="${CSS.escape(back.dataset.evidenceBack)}"]`,
     );
+    if (
+      !card?.closest('.detail-cause-rail') &&
+      !switchDetailDocument(back.dataset.evidenceDocument)
+    )
+      return;
     if (card) {
       const document = card.closest('.evidence-document');
       if (document) document.open = true;

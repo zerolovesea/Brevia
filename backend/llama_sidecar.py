@@ -157,6 +157,7 @@ class LlamaSidecar:
         top_p: float = 0.95,
         stop: Optional[list] = None,
         chat: bool = False,
+        require_complete: bool = False,
     ) -> str:
         """从已加载的模型生成文本。
 
@@ -176,6 +177,10 @@ class LlamaSidecar:
                 top_p=top_p,
                 stop=stop or [],
             )
+            if require_complete and response["choices"][0].get("finish_reason") != "stop":
+                raise RuntimeError(
+                    "Translation exceeded output token limit; no complete result was produced"
+                )
             return response["choices"][0]["message"]["content"]
 
         response = self.model(
@@ -188,6 +193,10 @@ class LlamaSidecar:
             echo=False,
         )
 
+        if require_complete and response["choices"][0].get("finish_reason") != "stop":
+            raise RuntimeError(
+                "Translation exceeded output token limit; no complete result was produced"
+            )
         return response["choices"][0]["text"]
 
     def handle_request(self, request: dict) -> dict:
@@ -224,6 +233,7 @@ class LlamaSidecar:
                     top_p=top_p,
                     stop=stop,
                     chat=chat,
+                    **({"require_complete": True} if request.get("require_complete") else {}),
                 )
 
                 return {"type": "response", "text": text, "error": None}

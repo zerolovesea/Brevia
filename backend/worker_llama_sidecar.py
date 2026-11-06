@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from .worker_common import ModelNotInstalled
+from .worker_common import ModelNotInstalled, UserFacingError
 
 
 # 推理模型（Qwen3.5 等）将思维链包装在 <think>...</think> 中。即使思考实际关闭，
@@ -121,7 +121,10 @@ class _Sidecar:
 
     def request(self, request: dict, timeout_seconds=None, cancellation=None, partial=None) -> dict:
         """发送请求并返回 sidecar 响应；``timeout_seconds`` 为空时用默认超时。"""
-        with self.lock:
+        while not self.lock.acquire(timeout=0.1):
+            if cancellation is not None and cancellation.is_set():
+                return {"type": "error", "message": "Sidecar request cancelled"}
+        try:
             with self.lifecycle_lock:
                 if cancellation is not None and cancellation.is_set():
                     return {"type": "error", "message": "Sidecar request cancelled"}
@@ -170,6 +173,8 @@ class _Sidecar:
                     if failed or timed_out.is_set():
                         self._close(process)
                     self.cancellation = None
+        finally:
+            self.lock.release()
 
     def cancel(self, cancellation=None):
         """立即终止在飞的推理（不持有锁，以便从请求等待中解除阻塞）。"""
@@ -271,6 +276,8 @@ class LlamaSidecarMixin:
         top_p: float = 0.95,
         stop_tokens: Optional[list] = None,
         chat: bool = False,
+        cancellation=None,
+        require_complete: bool = False,
     ) -> str:
         """通过命名 sidecar 使用已下载的 GGUF 模型生成文本。
 
@@ -289,8 +296,15 @@ class LlamaSidecarMixin:
             "stop_tokens": stop_tokens,
             "chat": chat,
         }
-        response = self._get_sidecar(sidecar_name).request(request)
+        if require_complete:
+            request["require_complete"] = True
+        options = {"cancellation": cancellation} if cancellation is not None else {}
+        response = self._get_sidecar(sidecar_name).request(request, **options)
         if response.get("type") == "error":
+            if require_complete and "Translation exceeded output token limit" in response.get(
+                "message", ""
+            ):
+                raise UserFacingError("translation_truncated", response["message"])
             raise RuntimeError(f"Sidecar error: {response.get('message')}")
         if response.get("type") != "response":
             raise RuntimeError(f"Unexpected sidecar response: {response.get('type')}")
@@ -320,7 +334,9 @@ class LlamaSidecarMixin:
             chat=True,
         )
 
-    def llama_generate_realtime(self, model_id: str, prompt: str, cancellation=None) -> str:
+    def llama_generate_realtime(
+        self, model_id: str, prompt: str, cancellation=None, context_size=4096
+    ) -> str:
         """通过共享 ``assistant`` sidecar 运行实时短任务（短超时、可取消、限长输出）。
 
         Qwen3 系列（2B/4B）默认把思维链包在 <think> 块里，会占满实时任务本就有限的
@@ -336,9 +352,8 @@ class LlamaSidecarMixin:
             "model_path": str(model_file),
             "prompt": prompt,
             "max_tokens": REALTIME_MAX_TOKENS,
-            # Live notes retain < 1K tokens of prompt context.  A 16K KV cache wastes
-            # hundreds of MB on CPU-only laptops and competes with streaming ASR.
-            "context_size": 4096,
+            # 默认短提示沿用 4K，避免 KV 缓存与实时识别争抢内存；用户额外指令才扩容。
+            "context_size": context_size,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.95,

@@ -15,7 +15,9 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options });
   if (result.error) throw result.error;
   if (result.status !== 0)
-    throw new Error(`${command} exited with ${result.signal || result.status}`);
+    throw new Error(
+      `${command} exited with ${result.signal || result.status}: ${String(result.stderr || result.stdout || '').trim()}`,
+    );
   return result.stdout;
 }
 async function digest(file) {
@@ -28,6 +30,44 @@ function sign(file, entitlements) {
   if (identity !== '-') args.push('--options', 'runtime', '--timestamp');
   if (entitlements) args.push('--entitlements', path.join(__dirname, entitlements));
   run('codesign', [...args, file], { stdio: 'pipe', timeout: 60000 });
+}
+function notarize(file) {
+  const credentials = ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'].map(
+    (name) => process.env[name],
+  );
+  if (!credentials.some(Boolean)) return;
+  if (!credentials.every(Boolean) || identity === '-')
+    throw new Error('Notarization requires Apple credentials and Developer ID');
+  const archive = file.endsWith('.app') ? file + '.zip' : file;
+  try {
+    if (archive !== file) run('ditto', ['-c', '-k', '--keepParent', file, archive]);
+    const response = JSON.parse(
+      run(
+        'xcrun',
+        [
+          'notarytool',
+          'submit',
+          archive,
+          '--apple-id',
+          credentials[0],
+          '--password',
+          credentials[1],
+          '--team-id',
+          credentials[2],
+          '--wait',
+          '--output-format',
+          'json',
+        ],
+        { encoding: 'utf8', stdio: 'pipe', timeout: 30 * 60 * 1000 },
+      ),
+    );
+    if (response.status !== 'Accepted')
+      throw new Error(`Apple notarization ${response.status}: ${response.id}`);
+    run('xcrun', ['stapler', 'staple', file]);
+    run('xcrun', ['stapler', 'validate', file]);
+  } finally {
+    if (archive !== file) fs.rmSync(archive, { force: true });
+  }
 }
 function inspect(binary) {
   const text = run('otool', ['-arch', 'arm64', '-l', binary], { encoding: 'utf8', stdio: 'pipe' });
@@ -213,7 +253,7 @@ async function main() {
       path.join(resources, 'icon.icns'),
     );
     fs.mkdirSync(path.join(resources, 'frontend'));
-    for (const name of ['summary-providers.js', 'i18n-data.js'])
+    for (const name of ['summary-providers.js', 'i18n-data.js', 'model-selection.js'])
       fs.copyFileSync(path.join(root, 'frontend', name), path.join(resources, 'frontend', name));
     fs.cpSync(path.join(out, 'engines'), path.join(resources, 'engines'), {
       recursive: true,
@@ -235,6 +275,21 @@ async function main() {
       alias: { electron: './macos/electron-compat.cjs' },
       external: ['electron-updater'],
       outfile: path.join(control, 'control.cjs'),
+    });
+    await build({
+      ...options,
+      entryPoints: ['scripts/brevia.cjs'],
+      outfile: path.join(control, 'brevia.cjs'),
+    });
+    // shell 留在 Resources 由资源封印覆盖；MacOS 下的裸脚本依赖易丢失的签名扩展属性。
+    fs.writeFileSync(
+      path.join(control, 'brevia'),
+      '#!/bin/sh\ncontrol="$(CDPATH= cd -- "$(dirname -- "$0")/../Resources/control" && pwd)"\nexec "$control/node" "$control/brevia.cjs" "$@"\n',
+      { mode: 0o755 },
+    );
+    fs.symlinkSync('../Resources/control/brevia', path.join(contents, 'MacOS/brevia'));
+    fs.cpSync(path.join(root, 'skills/brevia'), path.join(resources, 'skills/brevia'), {
+      recursive: true,
     });
     await build({
       ...options,
@@ -272,6 +327,7 @@ async function main() {
         timeout: 30000,
       });
     run('node', ['macos/test-packaged-control.cjs', app]);
+    notarize(app);
     if (process.argv[2] === 'app') {
       const image = path.join(out, 'image');
       fs.rmSync(image, { recursive: true, force: true });
@@ -297,6 +353,7 @@ async function main() {
     ]);
     if (identity !== '-') sign(pending);
     run('hdiutil', ['verify', pending]);
+    notarize(pending);
     // 完整推理引擎统一随包，以原始 200 MB 目标作为回归上限。
     const size = fs.statSync(pending).size;
     if (size > 200_000_000) throw new Error('Complete DMG exceeds 200 MB: ' + size);
@@ -316,4 +373,4 @@ if (require.main === module)
     console.error(error);
     process.exitCode = 1;
   });
-module.exports = { binaries, inspect };
+module.exports = { binaries, inspect, notarize };

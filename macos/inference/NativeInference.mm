@@ -561,10 +561,13 @@ static id generate(NSDictionary *p, id requestID) {
     if (![stop isKindOfClass:NSString.class])
       throw std::runtime_error("Invalid stop token");
   std::string output;
+  bool complete = false;
   for (int i = 0; i < maximum; ++i) {
     llama_token token = llama_sampler_sample(sampler.get(), context, -1);
-    if (llama_vocab_is_eog(vocab, token))
+    if (llama_vocab_is_eog(vocab, token)) {
+      complete = true;
       break;
+    }
     char buffer[256];
     int count =
         llama_token_to_piece(vocab, token, buffer, sizeof(buffer), 0, false);
@@ -593,12 +596,16 @@ static id generate(NSDictionary *p, id requestID) {
         @"type" : @"llama.partial",
         @"payload" : @{@"id" : requestID, @"text" : partial}
       });
-    if (stopped)
+    if (stopped) {
+      complete = true;
       break;
+    }
     auto batch = llama_batch_get_one(&token, 1);
     if (llama_decode(context, batch))
       throw std::runtime_error("GGUF generation failed");
   }
+  if ([p[@"require_complete"] boolValue] && !complete)
+    throw std::runtime_error("Translation exceeded output token limit; no complete result was produced");
   return @{@"text" : completeUTF8Prefix(output)};
 }
 int main() {

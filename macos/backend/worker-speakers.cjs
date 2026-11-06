@@ -147,14 +147,14 @@ function createSpeakerHandlers(worker) {
         const file = meeting.audio.playback[segment.track];
         if (!file || !fs.existsSync(file)) continue;
         const pcm = readWindow(file, segment.start_ms, segment.end_ms),
-          fallback = await worker.speakerEmbedding(engine, pcm, control),
           text = segment.text || '',
           sentences = text
             .trim()
             .split(/(?<=[。！？.!?])\s*/)
             .filter(Boolean);
         const total = sentences.reduce((n, s) => n + [...s].length, 0);
-        let cursor = segment.start_ms,
+        let fallback,
+          cursor = segment.start_ms,
           position = 0;
         for (let index = 0; index < sentences.length; index++) {
           const sentence = sentences[index],
@@ -189,7 +189,10 @@ function createSpeakerHandlers(worker) {
                 Math.round((cursor - segment.start_ms) * 16) * 2,
                 Math.round((end - segment.start_ms) * 16) * 2,
               ),
-              embedding = (await worker.speakerEmbedding(engine, clip, control)) || fallback;
+              // 只有短句无法提取时才计算整段声纹，多条短句共用同一个回退请求。
+              embedding =
+                (await worker.speakerEmbedding(engine, clip, control)) ||
+                (await (fallback ||= worker.speakerEmbedding(engine, pcm, control)));
             if (embedding) {
               const directory = path.join(store.speakerProfilesDir, profile.id);
               fs.mkdirSync(directory, { recursive: true });

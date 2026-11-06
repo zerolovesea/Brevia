@@ -814,6 +814,28 @@ const phoneContext = {
   },
 };
 runInNewContext(text(backendClient), phoneContext);
+{
+  const context = {
+    window: { brevia: {} },
+    navigator: {
+      mediaDevices: {
+        enumerateDevices: async () => [
+          { kind: 'audioinput', deviceId: 'default', label: 'Default' },
+          { kind: 'audioinput', deviceId: 'windows-mic', label: '' },
+          { kind: 'audiooutput', deviceId: 'speakers', label: 'Speakers' },
+        ],
+        getUserMedia: () => {
+          throw Error('设备查询不得请求麦克风授权');
+        },
+      },
+    },
+  };
+  runInNewContext(text(backendClient), context);
+  const devices = await context.window.breviaClient.listMicrophones();
+  assert.equal(devices.length, 1);
+  assert.equal(devices[0].deviceId, 'windows-mic');
+  assert.equal(devices[0].label, '', '未授权时保留平台提供的空标签');
+}
 // WebKit 输入经过宿主，预览或缺少模型时都须释放硬件并撤销电平监听。
 {
   const calls = [];
@@ -867,6 +889,17 @@ runInNewContext(text(backendClient), phoneContext);
     ['stop'],
   ]);
   assert.equal(handlers.size, 0);
+  calls.length = 0;
+  client.adoptNativeRecording({ id: 'agent-recording' }, { mic: true });
+  const adopted = client.capture;
+  client.adoptNativeRecording({ id: 'agent-recording' }, { mic: true });
+  assert.equal(client.capture, adopted, '重复确认不能替换采集或重复订阅');
+  assert.equal(calls.length, 0, 'Agent 已打开设备，界面接管不能再 prepare/start');
+  assert.equal(handlers.size, 2);
+  await client.pause(true);
+  await client.stop(5000);
+  assert.deepEqual(calls, [['pause', true], ['stop']]);
+  assert.equal(handlers.size, 0, 'Agent 录音结束同样释放事件订阅');
 }
 const phoneClient = phoneContext.window.breviaClient;
 await phoneClient.start(
@@ -1048,6 +1081,35 @@ pauseCapture.sources = [
 await pauseCapture.setPaused(true);
 await pauseCapture.setPaused(false);
 assert.deepEqual(contextStates, ['suspend', 'resume']);
+{
+  const failedCapture = new mediaContext.AudioCapture();
+  failedCapture.paused = true;
+  const first = {
+    state: 'suspended',
+    async resume() {
+      this.state = 'running';
+    },
+    async suspend() {
+      this.state = 'suspended';
+    },
+  };
+  failedCapture.sources = [
+    { context: first },
+    {
+      context: {
+        state: 'suspended',
+        resume: async () => {
+          throw Error('device unavailable');
+        },
+      },
+    },
+  ];
+  await assert.rejects(failedCapture.setPaused(false), /device unavailable/);
+  assert.equal(failedCapture.paused, true, '设备恢复失败不能声称已继续录音');
+  assert.equal(first.state, 'suspended', '另一个成功恢复的输入也需回滚');
+  failedCapture.sources = [{ context: { state: 'closed' } }];
+  await assert.rejects(failedCapture.setPaused(false), /操作未完成/);
+}
 let audioContexts = 0,
   closedAudioContexts = 0;
 const sharedProcessors = [];
@@ -1204,7 +1266,7 @@ runInNewContext(text(i18nData), localeContext);
       }));
       return { buttons, hidden: false, querySelectorAll: () => buttons };
     });
-    assert.equal(groups.flatMap((group) => group.buttons).length, 8);
+    assert.equal(groups.flatMap((group) => group.buttons).length, 10);
     const empty = { hidden: true };
     const navigation = { querySelectorAll: () => groups, querySelector: () => empty };
     const input = {
@@ -1400,6 +1462,7 @@ const i18nStaticKeys = new Set(
     text(workspaces),
     text(components),
     await readFile('mobile-connection.js', 'utf8'),
+    await readFile('meeting-evidence.js', 'utf8'),
     await readFile('transcript-corrections.js', 'utf8'),
   ].flatMap((source) => [...source.matchAll(/\bt\(\s*'([^']+)'\s*\)/g)].map((match) => match[1])),
 );
@@ -1685,6 +1748,62 @@ assert.match(
   'the edit action turns the subtitle into an editable field',
 );
 assert.match(editingSegment, /data-start=|data-end=/, 'editing keeps playback alignment');
+// 回看片段工具可独立播放、翻译；实时条目和旧稿不冒充当前稿翻译。
+const playableSegment = componentContext.renderTranscriptSegment({
+  time: '00:12',
+  startSeconds: 12,
+  endSeconds: 18,
+  speaker: { name: 'A' },
+  text: '第一句',
+  segmentId: 'seg-1',
+});
+assert.match(
+  playableSegment,
+  /data-segment-tool="play"[^>]*title="[^"]+"[^>]*aria-pressed="false"/,
+);
+assert.match(playableSegment, /data-segment-tool="translate"[^>]*title="[^"]+"/);
+assert.match(
+  playableSegment,
+  new RegExp(
+    `--segment-tool-count:${(playableSegment.match(/data-segment-tool=|data-segment-actions/g) || []).length}`,
+  ),
+  '工具条预留宽度随可用操作数量变化',
+);
+assert.doesNotMatch(editingSegment, /data-segment-tool="(?:play|translate)"/);
+assert.doesNotMatch(
+  componentContext.renderTranscriptSegment({
+    time: '00:12',
+    startSeconds: 12,
+    endSeconds: 18,
+    speaker: { name: 'A', segmentId: 'live-1' },
+    text: '第一句',
+  }),
+  /data-segment-tool="(?:play|translate)"/,
+);
+assert.doesNotMatch(
+  componentContext.renderTranscriptSegment({
+    time: '00:12',
+    startSeconds: 12,
+    endSeconds: 18,
+    speaker: { name: 'A' },
+    text: '第一句',
+    segmentId: 'old-1',
+    translationAvailable: false,
+  }),
+  /data-segment-tool="translate"/,
+);
+assert.match(
+  componentContext.renderTranscriptSegment({
+    time: '00:12',
+    startSeconds: 12,
+    endSeconds: 18,
+    speaker: { name: 'A' },
+    text: '第一句',
+    segmentId: 'seg-1',
+    translationPending: true,
+  }),
+  /data-segment-tool="translate"[^>]*disabled aria-busy="true"/,
+);
 const translatedEdit = componentContext.renderTranscriptSegment({
   time: '00:00',
   speaker: { name: 'A' },
@@ -2229,7 +2348,6 @@ assert.match(text(components), /function renderTranscriptSegment/);
 assert.match(text(components), /inline-segment-speaker-form/);
 assert.match(text(components), /function renderMeetingSummary/);
 assert.match(text(components), /function cleanSummaryMarkdown/);
-assert.match(text(components), /renderMarkdown\(cleanSummaryMarkdown\(markdown\)\)/);
 assert.match(text(components), /function desktopSelect/);
 assert.match(text(js), /renderMeetingDetail\(\);/);
 assert.match(text(js), /function saveInlineSegmentSpeaker/);
@@ -4276,8 +4394,12 @@ assert.match(text(backendClient), /this\.state\.meeting\?\.id \|\| this\.capture
 assert.match(text(backendClient), /await capture\.stop\(\)/);
 assert.match(text(electronMain), /handleIpc\('permissions\.status'/);
 assert.match(text(electronMain), /systemPreferences\.askForMediaAccess\('microphone'\)/);
-assert.ok(packageManifest.build.mac.extendInfo.NSAudioCaptureUsageDescription);
-assert.ok(packageManifest.build.mac.extendInfo.NSMicrophoneUsageDescription);
+const nativeInfoPlist = await readFile(
+  new URL('../macos/host/Info.plist', import.meta.url),
+  'utf8',
+);
+assert.ok(nativeInfoPlist.includes('<key>NSAudioCaptureUsageDescription</key>'));
+assert.ok(nativeInfoPlist.includes('<key>NSMicrophoneUsageDescription</key>'));
 assert.match(text(electronMain), /MacCatapLoopbackAudioForScreenShare/);
 assert.match(text(electronMain), /autoUpdater\.downloadUpdate\(\)/);
 assert.match(
@@ -4793,7 +4915,6 @@ assert.match(text(js), /target\.textContent = refinementMeetingTitle/);
 
 assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['转写中'], 'Transcribing');
 
-assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);
 assert.match(
   text(meetingDetail),
   /playback\?\.mix\s+\|\|\s*\(?meeting\?\.audio\?\.playback\?\.mic/,
@@ -4860,6 +4981,143 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
+// Agent 权限回显真实保存值；提示词失败保留草稿，导航后不抢回当前页面。
+{
+  let settingsLocale = 'zh';
+  const changes = [];
+  const controls = [{ disabled: false }, { disabled: false }];
+  let releaseSave;
+  const context = {
+    agentSettings: {
+      enabled: true,
+      permissions: { read: true, infer: true, record: false },
+      status: { ready: true },
+      cli_path: '/Applications/Brevia.app/control/brevia',
+      mcp: { command: 'brevia', args: ['mcp'] },
+      token: 'must-never-render',
+    },
+    agentSettingsBusy: false,
+    agentSettingsError: '',
+    promptSettingsDraft: { summary: '<structure>', ai_note: '', translation: 'Keep names' },
+    promptSaveState: 'dirty',
+    promptSaving: false,
+    t: (key) => localeContext.window.BreviaLocaleData.catalog[settingsLocale].labels[key] || key,
+    escapeHtml: (value) =>
+      String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
+    renderSaveState: (state) => `<span class="save-state">${state}</span>`,
+    activeModal: 'agent-settings',
+    settingsModal: {
+      hidden: false,
+      querySelectorAll: () => controls,
+      querySelector: () => ({ focus() {} }),
+    },
+    renderModal: (kind) => changes.push(kind),
+    userFacingError: (message) => message,
+    showToast: (message) => changes.push(message),
+    window: {
+      brevia: {
+        agent: {
+          settings: {
+            save: (value) =>
+              new Promise((resolve) => {
+                releaseSave = () => resolve({ ...context.agentSettings, ...value });
+              }),
+            get: async () => context.agentSettings,
+          },
+        },
+        prompts: { save: async (value) => value },
+      },
+    },
+  };
+  runInNewContext(
+    ['renderAgentSettings', 'renderPromptSettings'].map(summaryFn).join('\n') +
+      '\n' +
+      ['saveAgentPermission', 'savePromptSettings']
+        .map((name) => 'async ' + summaryFn(name))
+        .join('\n'),
+    context,
+  );
+  for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+    settingsLocale = code;
+    const labels = localeContext.window.BreviaLocaleData.catalog[code].labels;
+    const agentMarkup = context.renderAgentSettings();
+    const promptMarkup = context.renderPromptSettings();
+    assert.equal((agentMarkup.match(/role="switch"/g) || []).length, 4);
+    assert.match(agentMarkup, /data-agent-permission="record" role="switch" aria-checked="false"/);
+    assert.doesNotMatch(agentMarkup, /must-never-render/);
+    assert.equal((promptMarkup.match(/maxlength="4000"/g) || []).length, 3);
+    assert.match(promptMarkup, /&lt;structure>/);
+    for (const key of [
+      'Agent 与 MCP',
+      '提示词',
+      '本机访问',
+      '允许本机 Agent 访问',
+      '复制 MCP 配置',
+      '复制路径',
+      '最多 4000 字；补充要求不会替换应用的基础规则。',
+    ]) {
+      assert.ok(labels[key], `${code}: ${key} has a translation`);
+      if (code !== 'zh') assert.notEqual(labels[key], key);
+    }
+  }
+  const saving = context.saveAgentPermission({ dataset: { agentPermission: 'record' } });
+  assert.equal(context.agentSettingsBusy, true);
+  assert.ok(controls.every(({ disabled }) => disabled));
+  assert.equal(
+    context.agentSettings.permissions.record,
+    false,
+    'only confirmed settings become visible',
+  );
+  await context.saveAgentPermission({ dataset: { agentPermission: 'read' } });
+  releaseSave();
+  await saving;
+  assert.equal(context.agentSettings.permissions.record, true);
+  assert.equal(
+    context.agentSettings.permissions.read,
+    true,
+    'busy clicks do not toggle another permission',
+  );
+  assert.equal(context.agentSettingsBusy, false);
+  context.window.brevia.agent.settings.save = async () => {
+    throw new Error('save failed');
+  };
+  context.window.brevia.agent.settings.get = async () => ({
+    ...context.agentSettings,
+    enabled: false,
+  });
+  await context.saveAgentPermission({ dataset: { agentPermission: 'enabled' } });
+  assert.equal(
+    context.agentSettings.enabled,
+    false,
+    'reload the actual settings after a failed response',
+  );
+  assert.equal(context.agentSettingsError, 'save failed');
+  context.activeModal = 'prompts';
+  const form = {
+    reportValidity: () => true,
+    elements: controls,
+    querySelector: () => ({ outerHTML: '' }),
+  };
+  context.window.brevia.prompts.save = async () => {
+    throw new Error('disk full');
+  };
+  await context.savePromptSettings(form);
+  assert.equal(context.promptSettingsDraft.summary, '<structure>');
+  assert.equal(context.promptSaveState, 'failed');
+  assert.equal(context.promptSaving, false);
+  context.window.brevia.prompts.save = (value) =>
+    new Promise((resolve) => {
+      releaseSave = () => resolve(value);
+    });
+  const retry = context.savePromptSettings(form);
+  context.activeModal = 'general';
+  const renderCount = changes.length;
+  releaseSave();
+  await retry;
+  assert.equal(context.promptSaveState, 'saved');
+  assert.equal(changes.length, renderCount, 'late save does not replace the page the user opened');
+  assert.equal(context.promptSettingsDraft.translation, 'Keep names');
+}
 {
   const panel = {
     parentElement: { classList: { toggle() {} } },
@@ -5836,6 +6094,7 @@ const refinementEventsContext = {
   },
   syncBackendMeeting() {},
   refreshBackendMeetings() {},
+  async translateRefinedTranscript() {},
 };
 runInNewContext(
   summaryAppSource.slice(
@@ -6695,8 +6954,9 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
 // 树的主题来自原小节，只连接该节明确标记的原因；决定、已采纳笔记和缺少原因的会议独立展示。
 {
-  const { renderClaimGroups } = runInNewContext(
-    (await readFile('meeting-evidence.js', 'utf8')) + '\n({ renderClaimGroups })',
+  const { renderClaimGroups, causeChapterGroups, renderDetailCauseRail } = runInNewContext(
+    (await readFile('meeting-evidence.js', 'utf8')) +
+      '\n({ renderClaimGroups, causeChapterGroups, renderDetailCauseRail })',
     {
       document: { addEventListener() {} },
       t: (s) => s,
@@ -6704,6 +6964,7 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
       interfaceIcon: () => '<svg></svg>',
       formatMeetingTime: (ms) => String(ms),
       formatSpeakerName: (speaker) => speaker,
+      summaryDocumentSections: summaryContext.summaryDocumentSections,
     },
   );
   const cause = {
@@ -6726,12 +6987,12 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
   const trees = [...result.matchAll(/<brevia-cause-tree>([\s\S]*?)<\/brevia-cause-tree>/g)].map(
     (m) => m[1],
   );
-  assert.equal(trees.length, 2);
+  assert.equal(trees.length, 1);
   assert.match(trees[0], /延迟&lt;复盘&gt;/);
-  assert.doesNotMatch(trees[0], /周五再灰度|cause-3/);
-  assert.equal((trees[0].match(/<path\/>/g) || []).length, 2);
-  assert.equal((trees[1].match(/<path\/>/g) || []).length, 1);
-  assert.match(trees[1], /<span>原因分析<\/span>/);
+  assert.doesNotMatch(trees[0], /周五再灰度/);
+  assert.equal((trees[0].match(/<path\/>/g) || []).length, 3);
+  assert.match(trees[0], /cause-tree-spine/);
+  assert.match(trees[0], /data-evidence-id="cause-3"/);
   assert.match(
     trees[0],
     /data-evidence-id="cause-1"[\s\S]*?data-play-evidence="0"[\s\S]*?data-locate-evidence="0"[\s\S]*?这里只看平均值。/,
@@ -6739,6 +7000,57 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
   assert.match(result, /data-evidence-id="decision-1"/);
   assert.doesNotMatch(renderClaimGroups([decision]), /brevia-cause-tree/);
   assert.doesNotMatch(renderClaimGroups([cause], true), /brevia-cause-tree/);
+  const markdown =
+    '模型前言\n# 评审\n保留正文\n## 同名章节\n- 已完成设计\n### 细节\n- 等待验收\n## 同名章节\n- 资源不足\n- 重复\n- 重复';
+  const linked = [
+    { ...cause, id: 'later', line: '- 资源不足' },
+    { ...cause, id: 'first', line: '- 已完成设计', edited: true },
+    { ...cause, id: 'subheading', line: '- 等待验收' },
+    { ...cause, id: 'duplicate', line: '- 重复' },
+    { ...cause, id: 'removed', line: '- 已删除的结论' },
+    { ...cause, id: 'detached', line: '- 已完成设计', detached: true },
+  ];
+  const chapters = causeChapterGroups(linked, markdown);
+  assert.equal(chapters.length, 3);
+  assert.deepEqual(
+    Array.from(chapters, (group) => group.section),
+    ['1', '2', undefined],
+  );
+  assert.deepEqual(
+    Array.from(chapters[0].items, (item) => item.id),
+    ['first', 'subheading'],
+  );
+  assert.equal(
+    chapters[0].label,
+    cause.section,
+    '原因问题保留原名，章节关联来自正文而不是问题标题',
+  );
+  assert.equal(chapters[1].chapter, '同名章节', '同名章节按位置区分，不误连第一节');
+  assert.deepEqual(
+    Array.from(chapters[2].items, (item) => item.id),
+    ['duplicate', 'removed'],
+  );
+  assert.equal(
+    causeChapterGroups([{ ...cause, line: '无标题正文' }], '无标题正文')[0].section,
+    '0',
+  );
+  assert.equal(
+    causeChapterGroups(
+      [{ ...cause, line: '- 已完成设计' }],
+      markdown.replace('## 同名章节', '## 新标题'),
+    )[0].chapter,
+    '新标题',
+  );
+  assert.equal(renderDetailCauseRail([decision], markdown, 'm'), '');
+  const rail = renderDetailCauseRail(linked, markdown, 'm');
+  assert.equal((rail.match(/<brevia-cause-tree>/g) || []).length, 1);
+  assert.equal((rail.match(/data-summary-section-link=/g) || []).length, 2);
+  assert.doesNotMatch(rail, /data-evidence-id="detached"/);
+  const rendered = summaryContext.renderSummaryDocument(markdown);
+  assert.equal((rendered.match(/data-summary-section=/g) || []).length, 3);
+  assert.match(rendered, /保留正文/);
+  assert.match(rendered, /<h3>细节<\/h3>/);
+  assert.doesNotMatch(rendered, /模型前言/);
 }
 // 补充引用依据时必须同时更新展示中与暂存的建议，不能因队列重赋值中断事件。
 const evidenceHandlers = new Map();
@@ -8030,6 +8342,57 @@ assert.equal(activeDrafts.size, 0);
 
 // 配对刷新途中关闭浮窗，返回的旧请求不能重新打开它。
 const mobileConnectionSource = await readFile('mobile-connection.js', 'utf8');
+{
+  // WebKit 不实现 window.confirm；撤销必须经应用内确认且等待服务端成功。
+  assert.doesNotMatch(mobileConnectionSource, /window\.confirm\(/);
+  const revoke = {};
+  const device = { id: 'trusted-phone', name: '<手机>' };
+  let confirmed, rendered, finish;
+  let calls = 0;
+  const revokeContext = {
+    revoke,
+    device,
+    t: (value) => value,
+    openConfirmation: (title, detail, action, anchor) => {
+      assert.equal(title, '取消信任');
+      assert.ok(detail.includes(device.name));
+      assert.equal(anchor, revoke);
+      confirmed = action;
+    },
+    api: {
+      revoke: ({ id }) => {
+        assert.equal(id, device.id);
+        calls++;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    },
+    run: (action) => action(),
+    message() {},
+    render: (value) => {
+      rendered = value;
+    },
+  };
+  const start = mobileConnectionSource.indexOf('        revoke.onclick =');
+  runInNewContext(
+    mobileConnectionSource.slice(
+      start,
+      mobileConnectionSource.indexOf('        // 配对记录', start),
+    ),
+    revokeContext,
+  );
+  revoke.onclick();
+  assert.equal(calls, 0, '取消或关闭确认不应撤销信任');
+  const pending = confirmed();
+  assert.equal(revoke.disabled, true);
+  assert.equal(rendered, undefined);
+  finish({ devices: [] });
+  await pending;
+  assert.equal(calls, 1);
+  assert.equal(rendered.devices.length, 0);
+  assert.equal(revoke.disabled, false);
+}
 const mobilePairFunction = mobileConnectionSource.match(
   /  (async function pair\([\s\S]*?)(?=  async function render)/,
 );
@@ -8304,7 +8667,7 @@ assert.ok(!renderCorrectionText('<script>x</script>', '<script>').includes('<scr
   const form = {
     isConnected: true,
     elements: fields,
-    matches: () => true,
+    matches: (selector) => selector === '.advanced-settings-form',
     reportValidity: () => true,
     querySelector: (selector) => (selector === '.save-state' ? status : fields[0]),
   };
@@ -8397,6 +8760,10 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   const live = { id: 'live', segments: [{ id: 'line', text: 'live text' }] };
   const context = {
     currentMeetingDetail: { id: 'previous' },
+    transcriptTranslationRequests: new Set(),
+    isMeetingTranslationPending: () => false,
+    syncDetailTranslationPending() {},
+    releaseTranscriptTranslation() {},
     latestTranscriptSegments: (meeting) => ({ segments: meeting.segments }),
     uiData: { detail: {} },
     renderMeetingDetail: () => assert.fail('实时翻译不能重建上一场详情'),
@@ -8416,6 +8783,611 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   assert.deepEqual(calls, [['line', 'en']]);
   assert.deepEqual(applied, ['live']);
   assert.equal(context.uiData.detail.translationPending, undefined);
+}
+
+// 片段播放守住结束边界；显式暂停、拖动和换会议会清理边界，异步 play 不串段。
+{
+  const timers = new Map(),
+    events = new Map(),
+    messages = [];
+  let nextTimer = 0,
+    rejectPlay = false;
+  const playerAudio = {
+    src: 'meeting-a.wav',
+    duration: 60,
+    currentTime: 0,
+    paused: true,
+    playbackRate: 1,
+    getAttribute: () => playerAudio.src,
+    pause() {
+      this.paused = true;
+    },
+    async play() {
+      if (rejectPlay) throw new Error('play failed');
+      this.paused = false;
+    },
+    addEventListener: (name, listener) => events.set(name, listener),
+  };
+  const context = {
+    playerAudio,
+    progress: {},
+    segmentPlayback: undefined,
+    segmentPlaybackTimer: undefined,
+    currentMeetingDetail: {
+      id: 'a',
+      current_segments: [
+        { id: 'first', start_ms: 1000, end_ms: 3000 },
+        { id: 'second', start_ms: 5000, end_ms: 6500 },
+      ],
+      original_segments: [{ id: 'first', start_ms: 1200, end_ms: 2800 }],
+    },
+    uiData: { detail: {} },
+    document: { querySelectorAll: () => [] },
+    followPlaybackTranscript: false,
+    renderPlayerTime() {},
+    syncPlaybackTranscript() {},
+    setTimeout: (fn, delay) => {
+      const id = ++nextTimer;
+      timers.set(id, { fn, delay });
+      return id;
+    },
+    clearTimeout: (id) => timers.delete(id),
+    showToast: (message) => messages.push(message),
+    t: (key) => key,
+    userFacingError: (value) => value,
+  };
+  const listenersStart = summaryAppSource.indexOf(
+    "playerAudio.addEventListener('timeupdate', checkSegmentPlayback);",
+  );
+  const listenersEnd = summaryAppSource.indexOf('const segmentTranslationRequests', listenersStart);
+  runInNewContext(
+    [
+      'detailSegmentFor',
+      'syncSegmentPlaybackButtons',
+      'clearSegmentPlayback',
+      'checkSegmentPlayback',
+    ]
+      .map(summaryFn)
+      .join('\n') +
+      '\nasync ' +
+      summaryFn('playTranscriptSegment') +
+      '\n' +
+      summaryAppSource.slice(listenersStart, listenersEnd),
+    context,
+  );
+  await context.playTranscriptSegment('a', 'first');
+  assert.equal(playerAudio.currentTime, 1);
+  assert.equal(playerAudio.paused, false);
+  assert.equal(context.segmentPlayback.end, 3);
+  assert.equal(timers.size, 1);
+  playerAudio.currentTime = 3.04;
+  events.get('timeupdate')();
+  assert.equal(playerAudio.paused, true);
+  assert.equal(playerAudio.currentTime, 3);
+  assert.equal(context.segmentPlayback, undefined);
+  assert.equal(timers.size, 0);
+  await context.playTranscriptSegment('a', 'first');
+  await context.playTranscriptSegment('a', 'second');
+  events.get('pause')(); // 前一个片段的 pause 事件延后到达时，新片段已经在播放。
+  assert.equal(context.segmentPlayback.segmentId, 'second');
+  assert.equal(playerAudio.currentTime, 5);
+  await context.playTranscriptSegment('a', 'second');
+  assert.equal(playerAudio.paused, true);
+  assert.equal(context.segmentPlayback, undefined);
+  await context.playTranscriptSegment('a', 'first');
+  events.get('seeking')();
+  assert.ok(context.segmentPlayback, '片段自身的首次定位仍保留边界');
+  events.get('seeked')();
+  playerAudio.currentTime = 10;
+  events.get('seeking')();
+  assert.equal(context.segmentPlayback, undefined, '手动跳转后不再按旧片段停止');
+  await context.playTranscriptSegment('a', 'first');
+  context.currentMeetingDetail = {
+    id: 'b',
+    current_segments: [{ id: 'first', start_ms: 0, end_ms: 2000 }],
+  };
+  playerAudio.src = 'meeting-b.wav';
+  events.get('timeupdate')();
+  assert.equal(context.segmentPlayback, undefined);
+  assert.equal(playerAudio.paused, false, '旧片段检查不能暂停新会议播放');
+  await context.playTranscriptSegment('a', 'first');
+  assert.equal(context.segmentPlayback, undefined, '过期会议操作不会改动当前播放');
+  rejectPlay = true;
+  await context.playTranscriptSegment('b', 'first');
+  assert.equal(context.segmentPlayback, undefined);
+  assert.equal(timers.size, 0);
+  assert.deepEqual(messages, ['play failed']);
+  playerAudio.src = '';
+  await context.playTranscriptSegment('b', 'first');
+  assert.equal(messages.at(-1), '这场会议没有可播放的录音');
+}
+
+// 单句翻译并发完成时只合并对应来源；编辑、重分段、切会议和取消均不能污染字幕。
+{
+  const calls = [],
+    messages = [],
+    renderedLines = [];
+  const makeSegment = (id, text) => ({
+    id,
+    text,
+    version: 'live',
+    revision: 0,
+    start_ms: 0,
+    end_ms: 2000,
+  });
+  const first = makeSegment('first', 'first source'),
+    second = makeSegment('second', 'second source');
+  const detail = {
+    id: 'a',
+    current_segments: [first, second],
+    correction: { stale_translations: ['first'] },
+  };
+  const rendered = detail.current_segments.map((item) => ({
+    ...item,
+    segmentId: item.id,
+    translationStale: true,
+  }));
+  let visibleCopy;
+  const context = {
+    currentMeetingDetail: detail,
+    uiData: { detail: { transcript: rendered } },
+    segmentTranslationRequests: new Map(),
+    transcriptTranslationRequests: new Set(),
+    liveTranslationRequests: new Map(),
+    translationWaiters: new Map(),
+    formatMeetingTime: () => '00:00',
+    formatSpeakerName: (value) => value || 'A',
+    editingSegmentSpeakerId: null,
+    CSS: { escape: (value) => value },
+    document: {
+      querySelectorAll: (selector) =>
+        selector.endsWith('.segment-copy') && visibleCopy ? [visibleCopy] : [],
+      createElement: () => ({ className: '', textContent: '' }),
+    },
+    window: { brevia: { translation: {} } },
+    generateSegmentTranslation: (snapshot, target) =>
+      new Promise((resolve, reject) => calls.push({ snapshot, target, resolve, reject })),
+    showToast: (message) => messages.push(message),
+    t: (key) => key,
+    userFacingError: (value) => value,
+  };
+  runInNewContext(
+    [
+      'detailSegmentFor',
+      'isMeetingTranslationPending',
+      'isSegmentTranslationPending',
+      'notifyTranslationSettled',
+      'syncDetailTranslationPending',
+      'applySegmentTranslation',
+    ]
+      .map(summaryFn)
+      .join('\n') +
+      '\nasync ' +
+      summaryFn('translateTranscriptSegment') +
+      '\n' +
+      text(meetingDetail).slice(
+        text(meetingDetail).indexOf('function renderSegmentData('),
+        text(meetingDetail).indexOf('\n}\n') + 2,
+      ),
+    context,
+  );
+  const firstRequest = context.translateTranscriptSegment('a', 'first', 'en');
+  await context.translateTranscriptSegment('a', 'first', 'en');
+  const secondRequest = context.translateTranscriptSegment('a', 'second', 'en');
+  assert.equal(calls.length, 2, '同一句不能重复排队，另一个句子可以独立翻译');
+  assert.equal(rendered[0].translationPending, true);
+  assert.equal(context.uiData.detail.translationPending, true, '单句在途时也禁用全文翻译');
+  // 模拟同会议详情刷新重建段落，忙碌状态必须来自在途请求而非旧 DOM。
+  rendered.splice(
+    0,
+    rendered.length,
+    ...detail.current_segments.map((item) => context.renderSegmentData(item, true, new Map())),
+  );
+  assert.match(
+    componentContext.renderTranscriptSegment(rendered[0]),
+    /data-segment-tool="translate"[^>]*disabled aria-busy="true"/,
+  );
+  assert.equal(calls[0].snapshot.meeting_id, 'a');
+  calls[1].resolve({ meeting_id: 'a', segment_id: 'second', translation: 'second translated' });
+  await secondRequest;
+  assert.equal(context.uiData.detail.translationPending, true, '其余单句仍在途时不能提前开放全文');
+  assert.equal(first.translation, undefined);
+  assert.equal(second.translation, 'second translated');
+  visibleCopy = {
+    querySelector: (selector) =>
+      selector === 'p:not(.translation)' ? { textContent: first.text } : null,
+    append: (line) => renderedLines.push(line),
+  };
+  calls[0].resolve({ meeting_id: 'a', segment_id: 'first', translation: 'first translated' });
+  await firstRequest;
+  assert.equal(first.translation, 'first translated');
+  assert.equal(rendered[0].translation, 'first translated');
+  assert.equal(rendered[0].translationPending, false);
+  assert.equal(context.uiData.detail.translationPending, false);
+  assert.equal(rendered[0].translationStale, false);
+  assert.equal(renderedLines[0].textContent, 'first translated');
+  assert.equal(detail.correction.stale_translations.length, 0);
+  const editedRequest = context.translateTranscriptSegment('a', 'first', 'en');
+  first.text = 'edited source';
+  first.revision++;
+  calls[2].resolve({ meeting_id: 'a', segment_id: 'first', translation: 'outdated' });
+  await editedRequest;
+  assert.equal(first.translation, 'first translated');
+  const oldVisibleRequest = context.translateTranscriptSegment('a', 'first', 'en');
+  visibleCopy = {
+    querySelector: (selector) =>
+      selector === 'p:not(.translation)' ? { textContent: 'historical source' } : null,
+    append: () => assert.fail('切到旧稿后不能把当前稿的译文塞进旧原文'),
+  };
+  calls[3].resolve({ meeting_id: 'a', segment_id: 'first', translation: 'edited translation' });
+  await oldVisibleRequest;
+  assert.equal(first.translation, 'edited translation');
+  const cancelRequest = context.translateTranscriptSegment('a', 'second', 'en');
+  calls[4].resolve({ cancelled: true });
+  await cancelRequest;
+  assert.equal(second.translation, 'second translated');
+  const failedRequest = context.translateTranscriptSegment('a', 'second', 'en');
+  calls[5].reject(new Error('offline'));
+  await failedRequest;
+  assert.equal(rendered[1].translationPending, false);
+  assert.deepEqual(messages, ['翻译失败: offline']);
+  const navigateRequest = context.translateTranscriptSegment('a', 'second', 'en');
+  context.currentMeetingDetail = {
+    id: 'b',
+    current_segments: [makeSegment('second', second.text)],
+  };
+  context.uiData.detail = { transcript: [{ segmentId: 'second', text: second.text }] };
+  calls[6].resolve({ meeting_id: 'a', segment_id: 'second', translation: 'from other meeting' });
+  await navigateRequest;
+  assert.equal(context.currentMeetingDetail.current_segments[0].translation, undefined);
+  assert.equal(context.uiData.detail.transcript[0].translation, undefined);
+  assert.equal(context.segmentTranslationRequests.size, 0);
+}
+
+// 同会议的全文/单句翻译互斥，避免交错请求把会议语言写回旧目标；不同会议仍可独立处理。
+{
+  const calls = [],
+    messages = [];
+  const meeting = {
+    id: 'a',
+    current_segments: [
+      { id: 'first', meeting_id: 'a', text: 'first', version: 'live', revision: 0 },
+      { id: 'second', meeting_id: 'a', text: 'second', version: 'live', revision: 0 },
+    ],
+  };
+  const buttons = meeting.current_segments.map((segment) => ({
+    closest: () => ({ dataset: { segmentId: segment.id } }),
+    setAttribute() {},
+  }));
+  const fullButton = {};
+  const context = {
+    currentMeetingDetail: meeting,
+    uiData: {
+      detail: {
+        transcript: meeting.current_segments.map((item) => ({ ...item, segmentId: item.id })),
+        translationTarget: 'ja',
+      },
+    },
+    segmentTranslationRequests: new Map(),
+    transcriptTranslationRequests: new Set(),
+    liveTranslationRequests: new Map(),
+    translationWaiters: new Map(),
+    latestTranscriptSegments: (value) => ({ segments: value.current_segments }),
+    document: {
+      querySelectorAll: (selector) =>
+        selector.includes('data-segment-tool')
+          ? buttons
+          : selector.includes('data-detail-translation')
+            ? [fullButton]
+            : [],
+    },
+    CSS: { escape: (value) => value },
+    renderMeetingDetail() {},
+    showTranslationProgress() {},
+    generateSegmentTranslation: (snapshot, target) =>
+      new Promise((resolve) => calls.push({ snapshot, target, resolve })),
+    applyCorrectionMeeting() {},
+    window: { brevia: { translation: {}, meeting: { get: async () => meeting } } },
+    showToast: (value) => messages.push(value),
+    t: (key) => key,
+    userFacingError: (value) => value,
+  };
+  runInNewContext(
+    [
+      'detailSegmentFor',
+      'isMeetingTranslationPending',
+      'isSegmentTranslationPending',
+      'notifyTranslationSettled',
+      'releaseTranscriptTranslation',
+      'syncDetailTranslationPending',
+      'applySegmentTranslation',
+    ]
+      .map(summaryFn)
+      .join('\n') +
+      '\n' +
+      ['translateTranscriptSegment', 'translateLatestTranscript', 'mapWithConcurrency']
+        .map((name) => 'async ' + summaryFn(name))
+        .join('\n'),
+    context,
+  );
+  const single = context.translateTranscriptSegment('a', 'first', 'ja');
+  assert.equal(fullButton.disabled, true);
+  await context.translateLatestTranscript('en');
+  assert.equal(calls.length, 1, '单句日文请求未完成时不能开始全文英文请求');
+  assert.equal(context.uiData.detail.translationTarget, 'ja');
+  calls[0].resolve({ meeting_id: 'a', segment_id: 'first', translation: '日文' });
+  await single;
+  assert.equal(fullButton.disabled, false);
+  const full = context.translateLatestTranscript('en');
+  assert.equal(calls.length, 3);
+  assert.ok(buttons.every((button) => button.disabled));
+  assert.equal(context.uiData.detail.translationTarget, 'en');
+  await context.translateTranscriptSegment('a', 'first', 'ja');
+  await context.translateLatestTranscript('ko');
+  assert.equal(calls.length, 3, '全文在途时不能插入单句或重复全文请求');
+  context.currentMeetingDetail = { id: 'b', current_segments: [{ id: 'first', text: 'b source' }] };
+  context.uiData.detail = { transcript: [{ segmentId: 'first', text: 'b source' }] };
+  const other = context.translateTranscriptSegment('b', 'first', 'zh');
+  assert.equal(calls.length, 4, '其他会议不受该会议的请求闸影响');
+  context.currentMeetingDetail = meeting;
+  context.uiData.detail = {
+    transcript: meeting.current_segments.map((item) => ({ ...item, segmentId: item.id })),
+  };
+  context.syncDetailTranslationPending('a');
+  assert.ok(context.uiData.detail.transcript.every((entry) => entry.translationPending));
+  assert.equal(context.uiData.detail.translationPending, true, '返回会议时恢复全文忙碌状态');
+  calls[1].resolve({});
+  calls[2].resolve({});
+  await full;
+  assert.equal(context.uiData.detail.translationPending, false);
+  assert.ok(buttons.every((button) => !button.disabled));
+  calls[3].resolve({ meeting_id: 'b', segment_id: 'first', translation: 'other meeting' });
+  await other;
+  assert.equal(meeting.current_segments[0].translation, '日文');
+  assert.equal(context.transcriptTranslationRequests.size, 0);
+  assert.equal(context.segmentTranslationRequests.size, 0);
+  // 后端刷新失败也必须解锁，允许用户重试。
+  context.window.brevia.meeting.get = async () => {
+    throw Error('offline');
+  };
+  const failed = context.translateLatestTranscript('en');
+  calls[4].resolve({});
+  calls[5].resolve({});
+  await failed;
+  assert.equal(context.uiData.detail.translationPending, false);
+  assert.equal(context.transcriptTranslationRequests.size, 0);
+  assert.deepEqual(messages, ['翻译失败: offline']);
+}
+
+// 精修与实时收尾翻译共用同会议请求闸；等待结束后使用新的语言和当前分段。
+{
+  const calls = [],
+    messages = [],
+    applied = [];
+  const segment = (text, revision = 0) => ({
+    id: 'line',
+    meeting_id: 'a',
+    text,
+    revision,
+    version: revision ? 'postprocess' : 'live',
+  });
+  let stored = { id: 'a', target_language: 'en', current_segments: [segment('old')] };
+  let reads = 0,
+    failRead = false;
+  const context = {
+    currentMeetingDetail: stored,
+    meetingActive: false,
+    breviaClient: { state: { meeting: { id: 'a' } } },
+    liveConfig: { target_language: 'en' },
+    uiData: { detail: { transcript: [{ segmentId: 'line' }] } },
+    segmentTranslationRequests: new Map(),
+    transcriptTranslationRequests: new Set(),
+    liveTranslationRequests: new Map(),
+    translationWaiters: new Map(),
+    latestTranscriptSegments: (meeting) => ({ segments: meeting.current_segments }),
+    document: { querySelectorAll: () => [] },
+    CSS: { escape: (value) => value },
+    renderMeetingDetail() {},
+    showTranslationProgress() {},
+    generateSegmentTranslation: (snapshot, target) =>
+      new Promise((resolve) => calls.push({ snapshot, target, resolve })),
+    applyCorrectionMeeting: (meeting) => applied.push(meeting.id),
+    window: {
+      brevia: {
+        translation: {},
+        meeting: {
+          get: async () => {
+            reads++;
+            if (failRead) throw Error('read failed');
+            return stored;
+          },
+        },
+      },
+    },
+    showToast: (message) => messages.push(message),
+    t: (key) => key,
+    userFacingError: (value) => value,
+  };
+  runInNewContext(
+    [
+      'detailSegmentFor',
+      'isMeetingTranslationPending',
+      'isSegmentTranslationPending',
+      'notifyTranslationSettled',
+      'releaseTranscriptTranslation',
+      'syncDetailTranslationPending',
+      'applySegmentTranslation',
+    ]
+      .map(summaryFn)
+      .join('\n') +
+      '\n' +
+      [
+        'acquireTranscriptTranslation',
+        'translateTranscriptSegment',
+        'translateLatestTranscript',
+        'translateRefinedTranscript',
+        'translateSettledTranscriptSegment',
+        'mapWithConcurrency',
+      ]
+        .map((name) => 'async ' + summaryFn(name))
+        .join('\n'),
+    context,
+  );
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const single = context.translateTranscriptSegment('a', 'line', 'ja');
+  const refined = context.translateRefinedTranscript('a');
+  await flush();
+  assert.equal(reads, 0, '自动精修翻译不能在等闸前读取过期会议');
+  assert.equal(calls.length, 1);
+  stored = { id: 'a', target_language: 'ja', current_segments: [segment('new refined', 2)] };
+  calls[0].resolve({});
+  await single;
+  await flush();
+  assert.equal(calls[1].target, 'ja', '等待单句写回语言后再选择自动翻译目标');
+  assert.equal(calls[1].snapshot.text, 'new refined');
+  assert.equal(calls[1].snapshot.revision, 2, '使用等待期间更新后的精修稿');
+  assert.equal(context.uiData.detail.transcript[0].translationPending, true);
+  await context.translateTranscriptSegment('a', 'line', 'ko');
+  await context.translateLatestTranscript('ko');
+  assert.equal(calls.length, 2, '自动精修翻译在途时也禁用手动单句与全文');
+  calls[1].resolve({});
+  await refined;
+  assert.equal(context.isMeetingTranslationPending('a'), false);
+  assert.deepEqual(applied, ['a']);
+
+  const live1 = context.translateSettledTranscriptSegment(
+    { ...segment('live 1'), segment_id: 'line' },
+    'en',
+  );
+  const live2 = context.translateSettledTranscriptSegment(
+    { ...segment('live 2'), segment_id: 'line2' },
+    'en',
+  );
+  assert.equal(calls.length, 4, '实时同语言字幕继续并行处理');
+  assert.equal(context.liveTranslationRequests.get('a').count, 2);
+  await context.translateLatestTranscript('ko');
+  await context.translateTranscriptSegment('a', 'line', 'ko');
+  assert.equal(calls.length, 4, '录音刚结束但实时翻译仍在途时，回看操作不能抢写语言');
+  const afterLive = context.translateRefinedTranscript('a');
+  const beforeReads = reads;
+  calls[2].resolve({});
+  await live1;
+  await flush();
+  assert.equal(reads, beforeReads, '尚有最后一条实时翻译时不能提前开放自动任务');
+  stored = { id: 'a', target_language: 'en', current_segments: [segment('after live', 3)] };
+  calls[3].resolve({});
+  await live2;
+  await flush();
+  assert.equal(calls[4].snapshot.text, 'after live');
+  assert.equal(calls[4].target, 'en');
+  calls[4].resolve({});
+  await afterLive;
+
+  const full = context.translateLatestTranscript('en');
+  const queuedLive = context.translateSettledTranscriptSegment(
+    { ...segment('stale event'), segment_id: 'line' },
+    'ja',
+  );
+  const removedLive = context.translateSettledTranscriptSegment(
+    { ...segment('removed'), segment_id: 'removed' },
+    'ja',
+  );
+  assert.equal(calls.length, 6);
+  stored = { id: 'a', target_language: 'zh', current_segments: [segment('latest current', 4)] };
+  calls[5].resolve({});
+  await full;
+  await flush();
+  assert.equal(calls.length, 7, '排队的实时事件按当前稿串行执行');
+  assert.equal(calls[6].target, 'zh', '排队的旧实时事件不能把目标语言改回日文');
+  assert.equal(calls[6].snapshot.text, 'latest current');
+  calls[6].resolve({});
+  await Promise.all([queuedLive, removedLive]);
+  assert.equal(calls.length, 7, '精修后不存在的旧段落不能由实时 fallback 重新创建');
+  assert.equal(context.isMeetingTranslationPending('a'), false);
+  assert.equal(context.translationWaiters.size, 0);
+  failRead = true;
+  await context.translateRefinedTranscript('a');
+  assert.equal(context.isMeetingTranslationPending('a'), false, '重新读会议失败也要释放请求闸');
+  assert.deepEqual(messages, ['翻译失败: read failed']);
+  failRead = false;
+  stored.target_language = null;
+  await context.translateRefinedTranscript('a');
+  assert.equal(context.isMeetingTranslationPending('a'), false);
+  assert.equal(calls.length, 7);
+  // 录制中切换语言时，旧批次会将数据库目标写回旧值；以最新实时选择为准。
+  context.meetingActive = true;
+  stored.target_language = 'en';
+  const english = context.translateSettledTranscriptSegment(
+    { ...segment('old language'), segment_id: 'line' },
+    'en',
+  );
+  context.liveConfig.target_language = 'zh';
+  const chinese = context.translateSettledTranscriptSegment(
+    { ...segment('new language'), segment_id: 'line' },
+    'zh',
+  );
+  calls[7].resolve({});
+  await english;
+  await flush();
+  assert.equal(calls[8].target, 'zh', '旧批次写回 en 后仍使用用户最新选择 zh');
+  assert.equal(calls[8].snapshot.text, 'latest current');
+  const disabled = context.translateSettledTranscriptSegment(
+    { ...segment('disabled'), segment_id: 'line' },
+    'ja',
+  );
+  context.liveConfig.target_language = null;
+  calls[8].resolve({});
+  await Promise.all([chinese, disabled]);
+  assert.equal(calls.length, 9, '等待期间关闭实时翻译后不能自动重新开启');
+  assert.equal(context.isMeetingTranslationPending('a'), false);
+  const refinedHandler = summaryAppSource.slice(
+    summaryAppSource.indexOf("window.brevia.on('refinement.ready',"),
+    summaryAppSource.indexOf("window.brevia.on('summary.started',"),
+  );
+  const settledHandler = summaryAppSource.slice(
+    summaryAppSource.indexOf("window.brevia.on('transcript.settled',"),
+    summaryAppSource.indexOf("window.brevia.on('translation.ready',"),
+  );
+  assert.ok(refinedHandler.includes('await translateRefinedTranscript(meeting_id)'));
+  assert.ok(
+    settledHandler.includes(
+      'await translateSettledTranscriptSegment(payload, liveConfig.target_language)',
+    ),
+  );
+}
+
+// 段落 ID 可在不同会议重用：回看会议的译文事件不能写入正在录制的另一场字幕。
+{
+  let ready,
+    followed = 0;
+  const line = { textContent: 'unchanged' };
+  const liveElement = { querySelector: () => line };
+  const context = {
+    window: {
+      brevia: {
+        on: (_event, handler) => {
+          ready = handler;
+        },
+      },
+    },
+    breviaClient: { state: { meeting: { id: 'live-b' } } },
+    liveSegments: new Map([['same-id', liveElement]]),
+    correctionDraft: null,
+    correctionPanel: { hidden: true },
+    followLiveTranscript: true,
+    floatingCaptionMode: null,
+    scrollLiveToLatest: () => followed++,
+  };
+  const start = summaryAppSource.indexOf("window.brevia.on('translation.ready',");
+  const end = summaryAppSource.indexOf("window.brevia.on('refinement.started',", start);
+  runInNewContext(summaryAppSource.slice(start, end), context);
+  ready({ meeting_id: 'review-a', segment_id: 'same-id', translation: 'wrong' });
+  ready({ segment_id: 'same-id', translation: 'missing meeting' });
+  assert.equal(line.textContent, 'unchanged');
+  assert.equal(followed, 0);
+  ready({ meeting_id: 'live-b', segment_id: 'same-id', translation: 'correct' });
+  assert.equal(line.textContent, 'correct');
+  assert.equal(followed, 1);
 }
 
 // 预览在匹配时停止，既不建立完整结果数组，也不默认提交超过边界的整份文档。
@@ -8860,4 +9832,62 @@ for (const eventFirst of [false, true]) {
   assert.equal(persisted, 1, '停录也必须保存清空后的笔记');
   assert.equal(resumed, 1);
   assert.equal(viewed, 1);
+}
+
+// Windows Agent 入口复用当前 renderer 的 AudioCapture 与会议收尾。
+{
+  const calls = [];
+  let finishStart;
+  const context = {
+    meetingActive: false,
+    breviaClient: {
+      state: { meeting: null },
+      start: (...args) => {
+        calls.push(['start', ...args]);
+        return new Promise((resolve) => {
+          finishStart = resolve;
+        });
+      },
+      pause: async (paused) => {
+        calls.push(['pause', paused]);
+      },
+      capture: { setPaused: async (paused) => calls.push(['rollback', paused]) },
+    },
+    activateMeeting: (meeting) => {
+      context.meetingActive = true;
+      context.breviaClient.state.meeting = meeting;
+      calls.push(['activate', meeting.id]);
+    },
+    meetingPaused: () => false,
+    document: { querySelector: () => ({ dataset: {} }) },
+    renderPauseButton() {},
+    clearInterval() {},
+    startTimer() {},
+    timer: null,
+    stopCurrentRecording: async () => true,
+    t: (value) => value,
+  };
+  runInNewContext('async ' + summaryFn('controlAgentRecording'), context);
+  const starting = context.controlAgentRecording({
+    action: 'start',
+    audio_tracks: ['system'],
+    device_id: 'mic',
+  });
+  assert.equal(context.meetingActive, false, '真正采集就绪前不激活会议');
+  assert.equal(calls[0][2].mic, false);
+  assert.equal(calls[0][2].system, true);
+  finishStart({ id: 'windows-recording' });
+  assert.equal((await starting).confirmed, true);
+  assert.equal(context.meetingActive, true);
+  assert.equal((await context.controlAgentRecording({ action: 'pause' })).state, 'paused');
+  context.breviaClient.pause = async () => {
+    throw Error('save failed');
+  };
+  await assert.rejects(context.controlAgentRecording({ action: 'pause' }), /save failed/);
+  assert.deepEqual(calls.at(-1), ['rollback', false]);
+  assert.equal((await context.controlAgentRecording({ action: 'stop' })).state, 'stopped');
+  await assert.rejects(
+    context.controlAgentRecording({ action: 'stop', meeting_id: 'wrong' }),
+    /操作未完成/,
+  );
 }

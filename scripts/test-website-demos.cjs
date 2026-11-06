@@ -1251,14 +1251,14 @@ app
             "document.querySelector('.language-picker summary').click()",
           );
           await wait(140);
-          await win.webContents.executeJavaScript(
-            "document.querySelectorAll('.faq-item summary')[1].click()",
-          );
           assert.equal(
-            await win.webContents.executeJavaScript(
-              "document.querySelectorAll('.faq-item')[1].open",
-            ),
+            await win.webContents.executeJavaScript(`(() => {
+              const item = document.querySelector('.faq-item:not([open])');
+              item.querySelector('summary').click();
+              return item.open;
+            })()`),
             true,
+            'A collapsed FAQ opens when its summary is activated',
           );
           console.log(`PASS homepage ${locale}/${width}: autoplay, sections, layout, downloads`);
         }
@@ -1389,7 +1389,7 @@ app
       const readmes = [
         'README.md',
         ...readdirSync(join(root, 'docs'))
-          .filter((name) => /^README\..+\.md$/.test(name))
+          .filter((name) => /^README\.[a-z]{2}(?:-[A-Z]{2})?\.md$/.test(name))
           .map((name) => `docs/${name}`),
       ];
       mkdirSync(join(temp, 'docs'), { recursive: true });
@@ -1406,13 +1406,13 @@ app
       assert.equal(release.status, 0, release.stderr);
       for (const file of readmes) {
         const markdown = readFileSync(join(temp, file), 'utf8');
-        assert.ok(markdown.includes('Brevia-9.8.7-arm64.dmg'), file);
+        assert.ok(markdown.includes('Brevia-WebKit-9.8.7-arm64.dmg'), file);
         assert.ok(markdown.includes('Brevia-9.8.7-x64-setup.exe'), file);
         assert.ok(!/Brevia-<version>| · `(?:arm64\.dmg|x64-setup\.exe)`/.test(markdown), file);
       }
       for (const locale of ['zh', 'en']) {
         const html = readFileSync(join(temp, `website/index-${locale}.html`), 'utf8');
-        assert.ok(html.includes('Brevia-9.8.7-arm64.dmg'));
+        assert.ok(html.includes('Brevia-WebKit-9.8.7-arm64.dmg'));
         assert.ok(html.includes('Brevia-9.8.7-x64-setup.exe'));
         assert.ok(html.includes('>v9.8.7<'));
       }

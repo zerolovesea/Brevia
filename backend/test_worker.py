@@ -6003,7 +6003,7 @@ class WorkerTest(unittest.TestCase):
         source.write_bytes(b"test")
         started, release = threading.Event(), threading.Event()
 
-        def convert(_source, destination):
+        def convert(_source, destination, cancellation=None):
             started.set()
             self.assertTrue(release.wait(5))
             with wave.open(str(destination), "wb") as wav:

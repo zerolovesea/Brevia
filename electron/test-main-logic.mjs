@@ -1428,6 +1428,26 @@ assert.deepEqual(processSignals, [
   [-456, 'SIGKILL'],
 ]);
 
+// CLI 并发唤起不能把用户正在使用的窗口抢到前台。
+{
+  let listener,
+    shown = 0;
+  const start = mainSource.indexOf("app.on('second-instance'");
+  const end = mainSource.indexOf('const root =', start);
+  runInNewContext(mainSource.slice(start, end), {
+    app: {
+      on: (_name, fn) => {
+        listener = fn;
+      },
+    },
+    desktop: { showMain: () => shown++ },
+  });
+  listener(null, ['Brevia', '--background']);
+  assert.equal(shown, 0);
+  listener(null, ['Brevia']);
+  assert.equal(shown, 1);
+}
+
 // Only a local top-level application frame may call privileged IPC.
 const ipcHandlers = new Map(),
   ipcRoot = '/brevia-test';
@@ -1458,6 +1478,39 @@ assert.ok((await ipcHandlers.get('summary.config.save')(event)).__brevia_error);
 assert.equal(await ipcHandlers.get('floating-caption.close')(event), 'closed');
 event.sender.mainFrame = {};
 assert.ok((await ipcHandlers.get('floating-caption.close')(event)).__brevia_error);
+
+{
+  const calls = [],
+    handlers = new Map();
+  const context = {
+    handleIpc: (name, fn) => handlers.set(name, fn),
+    agentService: { jobs: new Map([['agent-meeting', { status: 'running' }]]) },
+    worker: { request: async (type, payload) => calls.push(['main', type, payload]) },
+    refinementWorker: {
+      request: async (type, payload) => calls.push(['refinement', type, payload]),
+    },
+  };
+  runInNewContext(
+    mainSource.slice(
+      mainSource.indexOf('function handleTaskControl('),
+      mainSource.indexOf('async function saveProviderConfig('),
+    ),
+    context,
+  );
+  context.handleTaskControl('task.cancel', { parse: (value) => value });
+  await handlers.get('task.cancel')(null, { task: 'meeting.refine', meeting_id: 'agent-meeting' });
+  assert.equal(calls[0][0], 'main');
+  assert.equal(calls[0][1], 'agent.cancel');
+  await handlers.get('task.cancel')(null, { task: 'meeting.refine', meeting_id: 'normal-meeting' });
+  assert.equal(calls[1][0], 'refinement');
+  assert.equal(calls[1][1], 'task.cancel');
+  for (const channel of ['task.cancel', 'task.pause', 'task.resume']) {
+    context.handleTaskControl(channel, { parse: (value) => value });
+    const payload = { task: 'summary.generate', meeting_id: 'agent-meeting' };
+    await handlers.get(channel)(null, payload);
+    assert.deepEqual(calls.at(-1), ['main', channel, payload]);
+  }
+}
 
 {
   const source = mainSource.slice(
@@ -1523,9 +1576,9 @@ console.log('Electron behavior tests passed');
 
 {
   const source = await readFile(new URL('../scripts/release-offline.cjs', import.meta.url), 'utf8');
-  for (const [platform, target] of [
-    ['darwin', 'mac:electron'],
-    ['win32', 'win'],
+  for (const [platform, expected] of [
+    ['darwin', ['dist:mac']],
+    ['win32', ['pack:backend', 'package:win']],
   ]) {
     const calls = [];
     runInNewContext(source, {
@@ -1539,10 +1592,9 @@ console.log('Electron behavior tests passed');
     });
     assert.deepEqual(
       calls.map((call) => call.args[1]),
-      ['pack:backend', `package:${target}`],
+      expected,
     );
     assert.equal(calls[0].options.env.APPLE_ID, undefined);
-    if (platform === 'darwin') assert.ok(calls[1].args.includes('--config.mac.notarize=false'));
   }
   assert.throws(
     () => runInNewContext(source, { process: { platform: 'linux' }, require: () => ({}) }),

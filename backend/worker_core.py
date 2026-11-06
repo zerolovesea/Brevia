@@ -20,6 +20,7 @@ from .config import (
 )
 from .llm_client import complete
 from .storage import Store
+from .prompt_preferences import PromptPreferences
 from .voice_profiles import VoiceProfileService
 from .worker_common import SCHEMA_VERSION, TaskRegistry, WorkerState
 from .worker_llama_sidecar import inference_worker, native_macos
@@ -71,6 +72,7 @@ class WorkerCore:
         # 命令分发表延迟构建并缓存（见 _command_handlers）。
         self._handlers = None
         self.store = Store(root)
+        self.prompts = PromptPreferences(self.store.root)
         if os.environ.get("BREVIA_RECOVER_INTERRUPTED", "1") == "1":
             self.store.recover_interrupted_meetings()
         runtime_settings(self.store.root)
@@ -181,6 +183,10 @@ class WorkerCore:
         if self._handlers is None:
             self._handlers = {
                 "app.initialize": self.initialize,
+                "prompts.get": lambda _: self.prompts.get(),
+                "prompts.save": self.prompts.save,
+                "agent.run": self.agent_run,
+                "agent.cancel": self.agent_cancel,
                 "app.maintain": self.maintain,
                 "meeting.start": self.start,
                 "meeting.import": self.import_audio,

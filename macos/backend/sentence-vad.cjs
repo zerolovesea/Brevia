@@ -204,6 +204,16 @@ class SentenceVAD {
   encoded(parts) {
     return parts.map(({ audio, ...part }) => ({ ...part, pcm: audio.toString('base64') }));
   }
+  preview() {
+    const start =
+      this.pending?.start_ms ??
+      (this.speechStart === null ? null : this.origin + this.speechStart / 16);
+    if (start === null || this.origin + this.samples / 16 - start < 2000) return null;
+    const end = Math.min(this.origin + this.samples / 16, start + 3000),
+      audio = this.history(Math.round(start * 16), Math.round(end * 16));
+    if (audio.length < 64000) return null;
+    return { start_ms: end - audio.length / 32, end_ms: end, pcm: audio.toString('base64') };
+  }
   async accept(pcm, startMs) {
     const completed = [];
     if (Math.abs(startMs - (this.origin + this.samples / 16)) > 2) {

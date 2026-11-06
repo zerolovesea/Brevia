@@ -296,6 +296,10 @@ class TaskRegistry:
             if key in self._controls:
                 raise UserFacingError("error.tasks.running", "Task is already running")
             control = TaskControl()
+            parent = self._controls.get(("agent.run", meeting_id))
+            if parent is not None:
+                # 文件流程可能在取消后才登记下一阶段，必须继承同一个取消事件。
+                control.cancelled = parent.cancelled
             self._controls[key] = control
             return control
 
@@ -305,6 +309,10 @@ class TaskRegistry:
         with self._lock:
             if control is None or self._controls.get(key) is control:
                 self._controls.pop(key, None)
+
+    def get(self, task, meeting_id):
+        with self._lock:
+            return self._controls.get((task, meeting_id))
 
     def set_paused(self, task, meeting_id, paused):
         """设置任务的暂停状态并返回控制事件。"""

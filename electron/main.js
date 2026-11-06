@@ -45,6 +45,8 @@ const {
   sendGroupSummary,
 } = require('./markdown-workflow');
 const { MobileServer } = require('./mobile-server');
+const { AgentService } = require('./agent-service.cjs');
+const { createRecordingController } = require('./agent-recording.cjs');
 const { DesktopController } = require('./desktop-controller');
 const {
   createLineBuffer,
@@ -127,8 +129,8 @@ if (benchmarkRefinement) {
 if (process.platform === 'darwin')
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
-app.on('second-instance', () => {
-  desktop.showMain();
+app.on('second-instance', (_, argv) => {
+  if (!argv.includes('--background')) desktop.showMain();
 });
 
 const root = path.join(__dirname, '..');
@@ -137,6 +139,9 @@ const { configuredSummaryProvider } = require(
   path.join(packagedRoot, 'frontend', 'summary-providers.js'),
 );
 const { translate } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
+const { defaultRefinedModelId } = require(
+  path.join(packagedRoot, 'frontend', 'model-selection.js'),
+);
 const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
   electron: { app, BrowserWindow, Menu, Tray, nativeImage, screen, globalShortcut },
@@ -153,6 +158,7 @@ const workerLineLimit = 64 * 1024 * 1024;
 // 兼容 UTF-8 笔记与 JSON 转义后的最大文本，并保留命令元数据空间。
 const maximumCommandBytes = 32 * 1024 * 1024;
 const dataTaskCommands = new Set([
+  'agent.run',
   'meeting.start',
   'meeting.resume',
   'meeting.import',
@@ -171,6 +177,7 @@ const dataTaskCommands = new Set([
   'models.download',
 ]);
 const workerRequestTimeouts = new Map([
+  ['agent.run', 600000],
   ['meeting.audio', 15000],
   ['meeting.get', 15000],
   ['models.download', 15000],
@@ -310,6 +317,7 @@ const workerResponse = z.discriminatedUnion('ok', [
 const workerEvent = z
   .object({
     type: z.enum([
+      'agent.progress',
       'app.maintenance',
       'meeting.imported',
       'meeting.reconfigured',
@@ -698,6 +706,8 @@ class WorkerClient {
           this.armTimeout(requestId);
         }
         if (
+          (pending.type === 'agent.run' &&
+            /^(agent|refinement|translation)\./.test(message.type)) ||
           (pending.type === 'mobile.translate' && message.type === 'translation.ready') ||
           (pending.type === 'meeting.refine' && message.type.startsWith('refinement.')) ||
           (pending.type === 'summary.generate' && message.type.startsWith('summary.')) ||
@@ -784,6 +794,7 @@ class WorkerClient {
   }
 
   sendEvent(type, payload) {
+    agentService?.progress(type, payload);
     BrowserWindow.getAllWindows().forEach((window) =>
       window.webContents.send('brevia:event', { type, payload }),
     );
@@ -908,6 +919,7 @@ class WorkerClient {
 
 const worker = new WorkerClient();
 let mobileServer;
+let agentService;
 let mobileApproval;
 // 精修会长时间占用 ONNX 线程；独立进程保证会议列表和详情查询不会被它饿死。
 const refinementWorker = new WorkerClient({ refinement: true });
@@ -1096,6 +1108,12 @@ function handleRefinement(payload) {
       cluster_threshold: z.number().min(0).max(2).optional(),
     })
     .parse(payload);
+  if (agentService?.jobs.get(value.meeting_id)?.status === 'running')
+    return Promise.reject(
+      Object.assign(new Error('This meeting is being processed by an Agent task'), {
+        code: 'error.tasks.running',
+      }),
+    );
   if (refinementWorker.active) {
     if (refinementWorker.active.meeting_id === value.meeting_id)
       return refinementWorker.active.promise;
@@ -1166,6 +1184,15 @@ async function runRefinementBenchmark() {
 function handleTaskControl(channel, schema) {
   handleIpc(channel, (_, payload) => {
     const value = schema.parse(payload);
+    if (
+      value.task === 'meeting.refine' &&
+      agentService?.jobs.get(value.meeting_id)?.status === 'running'
+    ) {
+      // Agent 精修在主 Worker；取消要结束整个文件流程，不能继续导出半份结果。
+      if (channel === 'task.cancel')
+        return worker.request('agent.cancel', { meeting_id: value.meeting_id });
+      return worker.request(channel, value);
+    }
     return (value.task === 'meeting.refine' ? refinementWorker : worker).request(channel, value);
   });
 }
@@ -1326,6 +1353,30 @@ async function buildSelectedBundle(meetingId, prepared) {
 }
 
 function registerIpc() {
+  const agentSettings = () => {
+    const cli = app.isPackaged
+      ? nativeBackend
+        ? path.resolve(process.resourcesPath, '../MacOS/brevia')
+        : path.join(path.dirname(process.execPath), 'brevia.cmd')
+      : path.join(root, 'scripts/brevia.cjs');
+    const mcp = nativeBackend
+      ? { command: cli, args: ['mcp'] }
+      : {
+          command: process.execPath,
+          args: [
+            app.isPackaged ? path.join(process.resourcesPath, 'control/brevia.cjs') : cli,
+            'mcp',
+          ],
+          env: { ELECTRON_RUN_AS_NODE: '1' },
+        };
+    mcp.env = { ...mcp.env, BREVIA_DATA_DIR: dataDir() };
+    return { ...agentService.getSettings(), cli_path: cli, mcp };
+  };
+  handleIpc('agent.settings.get', agentSettings);
+  handleIpc('agent.settings.save', async (_, payload) => {
+    await agentService.saveSettings(payload);
+    return agentSettings();
+  });
   handleIpc('desktop.preferences.get', () => desktop.preferences);
   handleIpc('desktop.preferences.save', (_, payload) => desktop.save(payload));
   handleIpc('desktop.shortcuts.edit', (_, payload) => {
@@ -1384,7 +1435,26 @@ function registerIpc() {
         .object({
           requestId: z.string().uuid(),
           error: z.string().max(2000).optional(),
-          result: z.boolean().optional(),
+          result: z
+            .union([
+              z.boolean(),
+              z
+                .object({
+                  meeting_id: z.string().uuid(),
+                  state: z.enum(['recording', 'paused', 'stopped']),
+                  confirmed: z.literal(true),
+                })
+                .strict(),
+              z.object({ model_required: z.array(z.string().min(1)).max(8) }).strict(),
+              z
+                .array(
+                  z
+                    .object({ deviceId: z.string().max(1024), label: z.string().max(1024) })
+                    .strict(),
+                )
+                .max(256),
+            ])
+            .optional(),
         })
         .parse(payload),
     );
@@ -1594,14 +1664,18 @@ function registerIpc() {
   handleIpc('meeting.start', async (_, payload) => {
     if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
       throw new Error('请先在手机结束录音并完成补传');
-    const value = meetingStart.parse(payload);
+    const { agent_control: agentControl, ...value } = meetingStart
+      .extend({ agent_control: z.boolean().optional() })
+      .parse(payload);
     let result;
     try {
       result = await worker.request('meeting.start', { ...value, require_models: !nativeAudio });
     } catch (error) {
       const models = requiredModels(error);
       if (!models) throw error;
-      worker.sendEvent('model.required', { models, task: 'meeting.start', payload: value });
+      // Agent 的失败请求不能进入自动下载后重启录音的 UI 队列。
+      if (!agentControl)
+        worker.sendEvent('model.required', { models, task: 'meeting.start', payload: value });
       return { model_required: models };
     }
     worker.active = { meeting_id: result.id, started_at: Date.now() };
@@ -1788,6 +1862,18 @@ function registerIpc() {
   );
   handle('storage.cleanup', z.object({}), 'storage.cleanup');
   handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
+  handle('prompts.get', z.object({}).strict(), 'prompts.get');
+  handle(
+    'prompts.save',
+    z
+      .object({
+        summary: z.string().max(4000),
+        ai_note: z.string().max(4000),
+        translation: z.string().max(4000),
+      })
+      .strict(),
+    'prompts.save',
+  );
   handle(
     'settings.advanced.save',
     z.object({ settings: z.record(z.string(), z.unknown()) }),
@@ -2639,7 +2725,7 @@ function createWindow() {
     // 旧用户目录保存的缩放会覆盖 webPreferences，加载后重新应用默认比例。
     window.webContents.setZoomFactor(windowScale);
     pageReady = true;
-    window.show();
+    if (!process.argv.includes('--background')) window.show();
     if (revealed) {
       clearTimeout(reloadRevealTimer);
       reloadRevealTimer = setTimeout(() => {
@@ -2845,8 +2931,22 @@ app.on('host-disconnected', () => {
   for (const client of [worker, refinementWorker]) stopProcess(client.process);
 });
 app.whenReady().then(async () => {
+  let agentRecording;
   if (process.platform === 'win32') Menu.setApplicationMenu(null);
   try {
+    agentService = new AgentService({
+      root: dataDir(),
+      request: (type, payload) => worker.request(type, payload),
+      status: () => ({ version: app.getVersion(), active: worker.active, native: !!nativeBackend }),
+      devices: async () => ({
+        computer: nativeAudio
+          ? await nativeAudio.query('devices')
+          : await desktop.action('agent-devices'),
+        mobile: mobileServer.status(),
+      }),
+      recording: async (payload) => agentRecording(payload),
+    });
+    await agentService.listen();
     await migrateDataDir();
     await applyPendingMove(dataDir());
   } catch (error) {
@@ -2986,6 +3086,32 @@ app.whenReady().then(async () => {
   );
   worker.start();
   registerIpc();
+  agentRecording = createRecordingController({
+    worker,
+    mobileServer,
+    nativeAudio,
+    desktop,
+    parseStart: async (payload) => {
+      const models = await worker.request('models.list', {});
+      const modelId =
+        payload.refined_model_id ||
+        defaultRefinedModelId({
+          catalog: models,
+          language: payload.language || 'auto',
+          installed: new Set(
+            models.filter((model) => model.status === 'ready').map((model) => model.id),
+          ),
+        });
+      if (!modelId) throw new Error('No transcription model supports the requested language');
+      return meetingStart.parse({
+        ...payload,
+        title: payload.title || 'Brevia Agent',
+        refined_model_id: modelId,
+      });
+    },
+    parseAudio: (payload) => audio.parse(payload),
+    resetCaptions: resetFloatingCaptionState,
+  });
   if (benchmarkRefinement) {
     try {
       await initializeWorker();
@@ -2998,7 +3124,11 @@ app.whenReady().then(async () => {
     }
     return;
   }
-  void initializeWorker().catch((error) => reportMainError(error));
+  void initializeWorker()
+    .then(() => {
+      agentService.ready = true;
+    })
+    .catch((error) => reportMainError(error));
   await desktop.load();
   createWindow();
   app.on('activate', () => {
@@ -3117,4 +3247,7 @@ app.on('window-all-closed', () => {
   if (!installingUpdate) app.quit();
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  void agentService?.close();
+});

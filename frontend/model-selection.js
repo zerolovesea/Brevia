@@ -169,7 +169,7 @@
     return `${words.download} ${formatSize(model.size_bytes || 0)}`;
   }
 
-  window.BreviaModelSelection = {
+  const api = {
     DEFAULT_REFINED_PRIORITY,
     LOCALES,
     MULTILINGUAL_MODEL_KINDS,
@@ -183,4 +183,6 @@
     selectableRefinedModels,
     visibleModels,
   };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else window.BreviaModelSelection = api;
 })();

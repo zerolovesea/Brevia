@@ -93,21 +93,65 @@ function createLLMHandlers(worker) {
             top_k: payload.top_k ?? 40,
             top_p: payload.top_p ?? 0.95,
             stop_tokens: payload.stop_tokens,
+            require_complete: payload.require_complete,
           },
           { signal },
         );
       });
     queues.set(channel, task);
-    const result = await task;
+    // 排队中的调用也能立即取消；队列仍等待原任务，不能让后来的请求越过在飞推理。
+    const pending = signal
+      ? new Promise((resolve, reject) => {
+          const finish = (callback, value) => {
+            signal.removeEventListener('abort', aborted);
+            callback(value);
+          };
+          const aborted = () => finish(reject, signal.reason);
+          task.then(
+            (value) => finish(resolve, value),
+            (error) => finish(reject, error),
+          );
+          if (signal.aborted) aborted();
+          else signal.addEventListener('abort', aborted, { once: true });
+        })
+      : task;
+    const result = await pending.catch((error) => {
+      if (
+        payload.require_complete &&
+        error.message.startsWith('Translation exceeded output token limit')
+      )
+        throw failure('translation_truncated', error.message);
+      throw error;
+    });
     return String(result.text || '')
       .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
       .replace(/^[\s\S]*<\/think>/i, '')
       .trim();
   }
   worker.llmComplete = generate;
+  worker.translateText = async (text, targetLanguage, signal, { complete = false } = {}) => {
+    const prompt = `Translate the following text into ${languages[targetLanguage] || targetLanguage}. Output only the translation, with no explanations.\n\n${text}`;
+    const request = worker.prompts?.apply('translation', prompt) ?? prompt;
+    return (
+      await generate(
+        {
+          provider: 'built-in',
+          model: 'hy-mt2-1.8b-q4km',
+          max_tokens: complete ? 2048 : 512,
+          require_complete: complete,
+          context_size: request === prompt ? 4096 : 16384,
+          temperature: 0.3,
+          stop_tokens: ['<|im_end|>', '<|endoftext|>'],
+        },
+        request,
+        { signal: signal, channel: 'translation', chat: true },
+      )
+    ).trim();
+  };
 
   async function response(payload, prompt, signal) {
-    const request = prompt + '\n\nPut every Markdown heading and list item on its own line.';
+    let request = prompt + '\n\nPut every Markdown heading and list item on its own line.';
+    request = worker.prompts?.apply('summary', request) ?? request;
     return (
       clean(await generate(payload, request, { signal })) ||
       clean(await generate(payload, request, { signal }))
@@ -264,20 +308,11 @@ function createLLMHandlers(worker) {
           }
           if (!segment) throw failure('error.segment_not_found', 'Transcript segment not found');
           await control.wait();
-          const translation = (
-            await generate(
-              {
-                provider: 'built-in',
-                model: 'hy-mt2-1.8b-q4km',
-                max_tokens: 512,
-                context_size: 4096,
-                temperature: 0.3,
-                stop_tokens: ['<|im_end|>', '<|endoftext|>'],
-              },
-              `Translate the following text into ${languages[payload.target_language] || payload.target_language}. Output only the translation, with no explanations.\n\n${segment.text}`,
-              { signal: control.signal, channel: 'translation', chat: true },
-            )
-          ).trim();
+          const translation = await worker.translateText(
+            segment.text,
+            payload.target_language,
+            control.signal,
+          );
           await control.wait();
           if (
             !worker.store.saveTranslation(meeting.id, segment.id, translation, {

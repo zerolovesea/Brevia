@@ -7,6 +7,8 @@ const { Configuration } = require('./config.cjs');
 const { ModelManager } = require('./models.cjs');
 const { TaskRegistry } = require('./tasks.cjs');
 const { EngineClient } = require('./engine.cjs');
+const { PromptPreferences } = require('./prompts.cjs');
+const { createAgentHandlers } = require('./worker-agent.cjs');
 const { attachRecording } = require('./worker-session.cjs');
 const { createMobileHandlers } = require('./worker-mobile.cjs');
 const { createLLMHandlers } = require('./worker-llm.cjs');
@@ -38,6 +40,7 @@ class Worker {
     this.session = null;
     this.commandTimes = [];
     this.config = new Configuration(root, path.join(this.resources, 'backend/settings.json'));
+    this.prompts = new PromptPreferences(root);
     this.settings = this.config.value;
     this.store = new Store(root, {
       modelsDir: process.env.BREVIA_MODELS_DIR,
@@ -61,7 +64,7 @@ class Worker {
     this.tasks = new TaskRegistry();
     this.engines = new Set();
     this.channels = new Map();
-    this.newEngine = (runtime) => {
+    this.newEngine = (runtime, { reusable = false } = {}) => {
       const engine = engineFactory
         ? engineFactory(runtime)
         : new EngineClient(
@@ -70,14 +73,31 @@ class Worker {
               runtime === 'mlx-audio' ? 'brevia-mlx' : 'brevia-inference',
             ),
           );
+      if (!reusable) {
+        // 超时关闭的客户端可在下次请求重启，必须重新纳入退出清理。
+        const request = engine.request.bind(engine);
+        engine.request = (...args) => {
+          this.engines.add(engine);
+          return request(...args);
+        };
+        const close = engine.close.bind(engine);
+        engine.close = (...args) => {
+          const result = close(...args);
+          this.engines.delete(engine);
+          return result;
+        };
+      }
       this.engines.add(engine);
       return engine;
     };
     this.engineFactory = (runtime, channel = runtime) => {
-      if (!this.channels.has(channel)) this.channels.set(channel, this.newEngine(runtime));
+      if (!this.channels.has(channel))
+        this.channels.set(channel, this.newEngine(runtime, { reusable: true }));
       return this.channels.get(channel);
     };
     this.handlers = {
+      'prompts.get': () => this.prompts.get(),
+      'prompts.save': (p) => this.prompts.save(p),
       ...this.baseHandlers(),
       ...attachRecording(this),
       ...createMobileHandlers(this),
@@ -86,6 +106,7 @@ class Worker {
       ...createExportHandlers(this),
       ...createRefinementHandlers(this),
       ...createSpeakerHandlers(this),
+      ...createAgentHandlers(this),
     };
   }
   emit(type, payload) {

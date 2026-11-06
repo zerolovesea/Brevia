@@ -21,6 +21,7 @@ from .worker_speakers import SpeakerCommandMixin
 from .worker_transcripts import TranscriptCommandMixin
 from .worker_ai_note import AiNoteWorkerMixin
 from .worker_mobile import MobileWorkerMixin
+from .worker_agent import AgentWorkerMixin
 
 
 MAXIMUM_COMMAND_BYTES = 32 * 1024 * 1024
@@ -39,6 +40,7 @@ class Worker(
     LlamaSidecarMixin,
     AiNoteWorkerMixin,
     MobileWorkerMixin,
+    AgentWorkerMixin,
 ):
     """从聚焦的 worker 服务组合而成的协议外观。"""
 
@@ -149,6 +151,7 @@ def main(protocol=None):
             translation_executor.submit(respond, command)
         elif command.get("type") in {
             "meeting.refine",
+            "agent.run",
             "meeting.import",
             "speaker-profile.list",
             "speaker-profile.samples",

@@ -1758,8 +1758,8 @@ try {
           await new Promise(requestAnimationFrame);
           const barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
           if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
-          if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle');
-          if(bar.querySelectorAll('button').length!==5||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
+          if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle '+JSON.stringify({appearance,connected:row.isConnected,focused:document.activeElement?.outerHTML,hasFocus:document.hasFocus(),opacity:getComputedStyle(bar).opacity,bar:barRect,row:rowRect,copy:after}));
+          if(bar.querySelectorAll('button').length!==7||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
           const preview=[...document.querySelectorAll('.summary-participant-preview-person > span')];
           if(preview.length!==3||preview.some(name=>!name.textContent.trim()||!name.getBoundingClientRect().width))errors.push(code+': initial participant names hidden');
           const section=document.querySelector('.summary-participants'),toggle=section.querySelector('[data-summary-participants-toggle]'),body=document.querySelector('.summary-body');
@@ -2079,9 +2079,15 @@ try {
     const segment = rows.find(row => row.start_ms > 0) || rows[0];
     const source = {...segment,segment_id:segment.id,current_segment_id:segment.id,seekable:true};
     const claim = {id:'check-claim',kind:'decision',section:'',text:'开发团队周四交付测试版本',original_text:'周四可以交付测试版本',edited:true,sources:[source],source_chars:source.text.length,status:'supported'};
-    const cause = {...claim,id:'check-cause',kind:'cause',section:'测试版交付条件',text:'设计稿已经完成',edited:false};
+    const cause = {...claim,id:'check-cause',kind:'cause',section:'测试版交付条件',text:'设计稿已经完成',line:'- 设计稿已经完成',edited:false};
     const orphan = {...cause,id:'check-orphan',text:'旧版验收口径需要复核',status:'changed',sources:[{...source,text:'这版验收先沿用原来的测试范围。',current_segment_id:null}]};
-    applyBackendDetail({...meeting,summary:{data:{markdown:'# 试点评审',claims:[claim,cause,orphan]}}});
+    delete orphan.line;
+    const acceptance = {...cause,id:'check-acceptance',section:'内部验收安排',text:'产品与研发共同核对验收范围',line:'- 产品与研发共同核对验收范围'};
+    const release = {...cause,id:'check-release',section:'小范围发布的前提',text:'验收通过后开始小范围发布',line:'- 验收通过后开始小范围发布'};
+    const newline=String.fromCharCode(10);
+    const markdown=['# 试点评审','## 交付准备',cause.line,...Array(6).fill('开发团队确认设计稿已完成，周四交付测试版本。保留会议原话，便于后续核对交付范围与负责人。'),'## 内部验收',acceptance.line,...Array(6).fill('产品和研发共同核对测试范围，记录未解决的问题；在完成内部验收后，确认是否进入下一步发布。'),'## 发布计划',release.line,...Array(6).fill('先进行小范围验证，再根据反馈调整发布安排。每个结论保留来源，原话发生变化时重新核对。')].join(newline+newline);
+    applyBackendDetail({...meeting,summary:{data:{markdown,claims:[claim,cause,acceptance,release,orphan]}}});
+    uiData.detail.refinedMode='timestamps';renderMeetingDetail();
     await showView('detail');
     openReviewDocument('summary');
     const find = key => document.querySelector('[data-evidence-id="'+key+'"]');
@@ -2105,6 +2111,71 @@ try {
     editor.querySelector('button[type="button"]').click();
   })()`);
   await captureCorrection('evidence-review');
+  // 原因图是三个阅读页共用的连续侧栏；章节联动使用真实滚动容器。
+  await correctionEvaluate(`(async()=>{
+    const settle=async()=>{
+      document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    };
+    for(const scope of ['notes','transcript','summary']) {
+      document.querySelector('[data-detail-tab="'+scope+'"]').click();await settle();
+      const reading=document.querySelector('.final-transcript'),rail=reading.querySelector('.detail-cause-rail');
+      const panel=reading.querySelector('[data-detail-panel="'+scope+'"]');
+      const a=panel.getBoundingClientRect(),b=rail.getBoundingClientRect();
+      if(getComputedStyle(reading).display!=='grid'||!rail.checkVisibility()||b.left<a.right-1||Math.abs(a.top-b.top)>1)throw Error(scope+' cause rail not beside document: '+JSON.stringify({panel:a,rail:b}));
+      if(rail.querySelectorAll('brevia-cause-tree').length!==1||rail.querySelectorAll('.cause-tree-spine').length!==1)throw Error('disconnected cause trees');
+    }
+    const body=document.querySelector('.summary-body');
+    const chapter=body.querySelector('[data-summary-section="2"]');
+    body.scrollTop=chapter.offsetTop;chapter.scrollIntoView({block:'start'});await settle();
+    if(!document.querySelector('[data-cause-section="2"].is-reading'))throw Error('summary scrolling does not follow chapter');
+    document.querySelector('[data-summary-section-link="1"]').click();await settle();
+    if(document.activeElement?.dataset.summarySection!=='1'||!document.querySelector('[data-cause-section="1"].is-reading'))throw Error('cause chapter does not focus summary');
+    const find=()=>document.querySelector('[data-evidence-id="check-cause"]');
+    find().querySelector('summary').click();await settle();
+    find().querySelector('[data-locate-evidence]').click();await settle();
+    if(detailActiveTab!=='transcript'||!find().open)throw Error('cause quote lost on transcript navigation');
+    const back=document.querySelector('.transcript-body [data-evidence-back="check-cause"]');
+    if(!back)throw Error('cause reverse link missing');back.click();await settle();
+    if(detailActiveTab!=='transcript'||!find().open)throw Error('cause backlink unnecessarily switches document');
+    const rail=document.querySelector('.detail-cause-scroll');rail.scrollTop=30;
+    renderMeetingDetail();await settle();
+    if(!find().open||Math.abs(document.querySelector('.detail-cause-scroll').scrollTop-30)>1)throw Error('same meeting refresh lost cause state');
+    const source=document.querySelector('.transcript-body [data-segment-tool="play"]')?.closest('[data-segment-id]');
+    if(!source?.querySelector('[data-segment-tool="play"]')||!source.querySelector('[data-segment-tool="translate"]'))throw Error('single-segment controls missing');
+    document.querySelector('[data-detail-tab="summary"]').click();await settle();
+    document.querySelector('.detail-cause-scroll').scrollTop=30;renderMeetingDetail();await settle();
+    if(Math.abs(document.querySelector('.detail-cause-scroll').scrollTop-30)>1)throw Error('summary refresh reset independent cause scroll');
+  })()`);
+  await correctionEvaluate(`(async()=>{
+    document.querySelector('[data-detail-tab="transcript"]').click();
+    const button=document.querySelector('.transcript-body [data-segment-tool="play"]');
+    button.scrollIntoView({block:'center'});button.focus();
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  })()`);
+  await captureCorrection('cause-rail-transcript');
+  await correctionEvaluate(
+    `document.querySelector('[data-detail-tab="summary"]').click();document.querySelector('.summary-body').scrollTop=0;document.querySelector('.detail-cause-scroll').scrollTop=0;`,
+  );
+  await captureCorrection('cause-rail-summary');
+  await correctionEvaluate(`applyTheme('dark');`);
+  await captureCorrection('cause-rail-dark');
+  await correctionEvaluate(`applyTheme('light');`);
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 880,
+    height: 800,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await correctionEvaluate(`(async()=>{
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
+    const panel=document.querySelector('[data-detail-panel="summary"]').getBoundingClientRect();
+    const rail=document.querySelector('.detail-cause-rail').getBoundingClientRect();
+    if(rail.top<panel.bottom-1||rail.height<120||panel.height<150||document.body.scrollWidth>innerWidth+1)throw Error('narrow cause rail blocks reading: '+JSON.stringify({panel,rail,width:innerWidth,scrollWidth:document.body.scrollWidth,container:document.querySelector('.detail-layout').getBoundingClientRect(),rows:getComputedStyle(document.querySelector('.has-cause-rail')).gridTemplateRows}));
+  })()`);
+  await captureCorrection('cause-rail-narrow');
+  await client.send('Emulation.clearDeviceMetricsOverride');
   // 三个内容页共享导航和操作栏；坐标比较防止入口再次漂移。
   const unifiedGeometry = [];
   await correctionEvaluate(`(async()=>{
@@ -3651,6 +3722,98 @@ try {
     fullscreenInspector.close();
   }
 
+  const agentSettingsFlow = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      const pause=()=>new Promise(resolve=>setTimeout(resolve,25));
+      const wait=async(predicate)=>{const deadline=Date.now()+5000;while(!predicate()){if(Date.now()>deadline)throw Error('settings save timed out');await pause();}};
+      const originalPrompts=await window.brevia.prompts.get();
+      const originalAgent=await window.brevia.agent.settings.get();
+      await showView('settings');await openModal('agent-settings');
+      if(settingsModal.querySelectorAll('[role=switch]').length!==4)errors.push('agent permissions missing');
+      if(!settingsModal.querySelector('[data-agent-copy=mcp]')||!settingsModal.querySelector('[data-agent-copy=cli]'))errors.push('agent integration copy missing');
+      const savedTheme=theme;
+      applyTheme('dark');
+      const checkedToggle=settingsModal.querySelector('[role=switch][aria-checked=true]');
+      if(checkedToggle&&getComputedStyle(checkedToggle).backgroundColor===getComputedStyle(checkedToggle.querySelector('span')).backgroundColor)errors.push('dark toggle thumb blends into the checked track');
+      applyTheme(savedTheme);
+      settingsModal.querySelector('[data-agent-permission=record]').click();
+      await wait(()=>!agentSettingsBusy);
+      if((await window.brevia.agent.settings.get()).permissions.record===originalAgent.permissions.record)errors.push('record permission not persisted');
+      if(settingsModal.querySelector('[data-agent-permission=record]').getAttribute('aria-checked')!==String(!originalAgent.permissions.record))errors.push('permission control is stale');
+      await window.brevia.agent.settings.save({enabled:originalAgent.enabled,permissions:originalAgent.permissions});
+      await openModal('prompts');
+      const field=settingsModal.querySelector('[name=summary]');
+      field.value='Keep decisions and next steps. <verbatim>';
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+      if(settingsModal.querySelector('.save-state')?.dataset.saveState!=='dirty')errors.push('prompt edit still appears saved');
+      await openModal('agent-settings');await openModal('prompts');
+      if(settingsModal.querySelector('[name=summary]').value!=='Keep decisions and next steps. <verbatim>')errors.push('navigation lost prompt draft');
+      settingsModal.querySelector('form').requestSubmit();await wait(()=>!promptSaving);
+      if((await window.brevia.prompts.get()).summary!=='Keep decisions and next steps. <verbatim>')errors.push('prompt was not persisted');
+      settingsModal.querySelector('[data-reset-prompts]').click();
+      if([...settingsModal.querySelectorAll('textarea')].some(field=>field.value))errors.push('restore defaults left prompt content');
+      if(!(await window.brevia.prompts.get()).summary)errors.push('restore defaults saved without explicit submit');
+      settingsModal.querySelector('form').requestSubmit();await wait(()=>!promptSaving);
+      if(Object.values(await window.brevia.prompts.get()).some(Boolean))errors.push('blank overrides did not restore defaults');
+      await window.brevia.prompts.save(originalPrompts);promptSettingsDraft=originalPrompts;promptSaveState='saved';
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    !agentSettingsFlow.exceptionDetails,
+    'Agent and prompt settings flow threw: ' + JSON.stringify(agentSettingsFlow.exceptionDetails),
+  );
+  check(
+    !agentSettingsFlow.result?.value?.length,
+    'Agent and prompt settings: ' + JSON.stringify(agentSettingsFlow.result?.value),
+  );
+  if (process.env.BREVIA_SETTINGS_CAPTURE_DIR) {
+    const output = path.resolve(process.env.BREVIA_SETTINGS_CAPTURE_DIR);
+    mkdirSync(output, { recursive: true });
+    for (const [appearance, width, language] of [
+      ['light', 1280, 'zh'],
+      ['dark', 1280, 'en'],
+      ['light', 760, 'ru'],
+    ]) {
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width,
+        height: 850,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      for (const kind of ['agent-settings', 'prompts']) {
+        const layout = await client.send('Runtime.evaluate', {
+          expression: `(async()=>{applyLanguage(${JSON.stringify(language)});applyTheme(${JSON.stringify(appearance)});await showView('settings');await openModal(${JSON.stringify(kind)});await new Promise(r=>setTimeout(r,260));const panel=settingsModal.querySelector('.modal-body');return {overflow:document.body.scrollWidth>innerWidth+1,contentOverflow:panel.scrollWidth>panel.clientWidth+1,visible:settingsModal.checkVisibility()};})()`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        check(
+          !layout.exceptionDetails &&
+            layout.result?.value?.visible &&
+            !layout.result.value.overflow &&
+            !layout.result.value.contentOverflow,
+          `settings capture layout ${kind}/${width}: ` + JSON.stringify(layout),
+        );
+        const shot = await client.send('Page.captureScreenshot', {
+          format: 'png',
+          captureBeyondViewport: false,
+        });
+        writeFileSync(
+          path.join(output, `${kind}-${appearance}-${width}-${language}.png`),
+          Buffer.from(shot.data, 'base64'),
+        );
+      }
+    }
+    await client.send('Emulation.clearDeviceMetricsOverride');
+    await client.send('Runtime.evaluate', {
+      expression: "applyLanguage('zh');applyTheme('light');",
+      returnByValue: true,
+    });
+  }
+
   const designStates = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -3669,7 +3832,7 @@ try {
       if(shell.classList.contains('is-library-hidden'))libraryToggle.click();
       await showView('settings');
       const navigation=document.querySelector('#settings-view .settings-navigation');
-      if(navigation.querySelectorAll('[data-settings-page]').length!==8) errors.push('general navigation');
+      if(navigation.querySelectorAll('[data-settings-page]').length!==10) errors.push('general navigation');
       const search=navigation.querySelector('[data-settings-search]');
       search.value=t('模型库');search.dispatchEvent(new Event('input',{bubbles:true}));
       const matches=[...navigation.querySelectorAll('[data-settings-page]')].filter(button=>button.checkVisibility());
@@ -4853,7 +5016,7 @@ try {
       ],
       [
         'desktop-devices-empty',
-        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');const confirm=window.confirm;try{let approved=false;window.confirm=question=>{if(!question.includes(t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').split('{name}')[1]))throw Error('解除信任缺少后果提示');return approved;};const first=document.querySelector('#mobile-devices button');await first.onclick();if(!(await window.brevia.mobile.status()).devices.length)throw Error('取消确认仍解除了信任');approved=true;const count=(await window.brevia.mobile.status()).devices.length;for(let index=0;index<count;index++)await document.querySelector('#mobile-devices button').onclick();}finally{window.confirm=confirm;}if((await window.brevia.mobile.status()).devices.length||!document.querySelector('.mobile-device-empty')||document.querySelector('#mobile-dialog').dataset.mobilePageState!=='paired')throw Error('撤销信任后未保留设备管理');settingsModal.querySelector('.modal-body').scrollTop=0;})()`,
+        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');const wait=async(predicate)=>{const deadline=Date.now()+6000;while(!await predicate()){if(Date.now()>deadline)throw Error('撤销信任确认超时');await new Promise(r=>setTimeout(r,25));}};const first=document.querySelector('#mobile-devices button');await first.onclick();if(activeModal!=='confirmation'||!settingsModal.textContent.includes(t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').split('{name}')[1]))throw Error('解除信任缺少后果提示');settingsModal.querySelector('[data-cancel-confirmation]').click();await wait(()=>activeModal==='device-connection');if(!(await window.brevia.mobile.status()).devices.length)throw Error('取消确认仍解除了信任');let count=(await window.brevia.mobile.status()).devices.length;while(count){await document.querySelector('#mobile-devices button').onclick();settingsModal.querySelector('[data-confirm-action]').click();await wait(async()=>activeModal==='device-connection'&&(await window.brevia.mobile.status()).devices.length<count);count=(await window.brevia.mobile.status()).devices.length;}if(!document.querySelector('.mobile-device-empty')||document.querySelector('#mobile-dialog').dataset.mobilePageState!=='paired')throw Error('撤销信任后未保留设备管理');settingsModal.querySelector('.modal-body').scrollTop=0;})()`,
       ],
       [
         'desktop-devices-service-off',

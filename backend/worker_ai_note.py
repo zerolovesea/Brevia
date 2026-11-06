@@ -697,14 +697,18 @@ class AiNoteWorkerMixin:
 
     def _ai_note_complete(self, session, prompt):
         """把补全路由到内置 ``ai-note`` sidecar 或共享 HTTP 客户端。"""
+        request = self.prompts.apply("ai_note", prompt)
         payload = session.connection
         if (payload.get("provider") or "").lower() in {"built-in", "builtin"}:
             return self.llama_generate_realtime(
-                payload["model"], prompt, cancellation=session.cancellation
+                payload["model"],
+                request,
+                cancellation=session.cancellation,
+                **({"context_size": 16384} if request != prompt else {}),
             )
         return self.llm_complete(
             {**payload, "timeout": int(REALTIME_TIMEOUT_SECONDS)},
-            prompt,
+            request,
         )
 
     def _parse_suggestions(self, raw):

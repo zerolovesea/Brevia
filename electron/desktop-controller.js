@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { readFile } = require('node:fs/promises');
 const { randomUUID } = require('node:crypto');
+const { setTimeout: delay } = require('node:timers/promises');
 const { z } = require('zod');
 const { writeAtomicFile } = require('./main-logic');
 
@@ -412,6 +413,13 @@ class DesktopController {
   }
 
   async action(action, payload = {}) {
+    if (action === 'agent-devices') {
+      const deadline = Date.now() + 30000;
+      while (!this.state?.ready) {
+        if (Date.now() >= deadline) throw new Error('Brevia device controls did not become ready');
+        await delay(100);
+      }
+    }
     if (payload.meetingId && payload.meetingId !== this.state?.meetingId)
       throw new Error(this.text('error.desktop.session_changed', this.state?.locale));
     const meetingId = this.state?.meetingId || null;
@@ -434,7 +442,10 @@ class DesktopController {
                 this.pending.delete(requestId);
                 reject(new Error(this.text('error.desktop.action_pending', this.state?.locale)));
               },
-              action === 'stop' ? 610000 : 190000,
+              action === 'stop' ||
+                (action === 'agent-recording' && payload.recording?.action === 'stop')
+                ? 610000
+                : 190000,
             );
       this.pending.set(requestId, {
         resolve: (value) => {

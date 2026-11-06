@@ -82,6 +82,8 @@ function attachRecording(worker) {
       queued: 0,
       preprocessingQueued: 0,
       subtitleExpiryMs: 0,
+      previewed: new Set(),
+      previews: new Map(),
       overloaded: false,
       recognition: null,
       mixer:
@@ -141,17 +143,48 @@ function attachRecording(worker) {
     if (worker.active !== id) throw new Error('Meeting is not active');
   };
   function draft(session, track, extra = '') {
+    const settled = session.subtitles.draft(track),
+      value = settled.text || extra ? settled : session.previews.get(track) || settled;
     worker.emit('transcript.draft', {
       meeting_id: session.meeting.id,
       segment_id: 'draft-' + track,
       track,
       speaker: track === 'mic' ? 'local-user' : 'spk-1',
-      ...session.subtitles.draft(track),
-      ...(extra ? { text: session.subtitles.draft(track).text + extra } : {}),
+      ...value,
+      ...(extra ? { text: settled.text + extra } : {}),
+    });
+  }
+  function queuePreview(session, track, segment, recognition) {
+    session.previewed.add(track);
+    // 首段草稿不切断 VAD，也不写会议；正式整句识别仍保留完整上下文。
+    session.decode = session.decode.then(async () => {
+      const update = (text) => {
+        session.previews.set(track, {
+          start_ms: segment.start_ms,
+          end_ms: segment.end_ms,
+          text: cleanText(text),
+        });
+        draft(session, track);
+      };
+      try {
+        const result = await recognition.recognizer.request(
+          'asr.decode',
+          { pcm: segment.pcm, sample_rate: 16000 },
+          { onEvent: (message) => update(message.text || message.payload?.text) },
+        );
+        update(result.text);
+      } catch (error) {
+        worker.emit('worker.warning', {
+          meeting_id: session.meeting.id,
+          code: 'sentence_transcription_failed',
+          message: error.message,
+        });
+      }
     });
   }
   function queueSentence(session, track, segment, recognition) {
     if (session.overloaded) return;
+    session.previewed.add(track);
     if (session.queued >= 64) {
       session.overloaded = true;
       worker.emit('worker.warning', {
@@ -190,6 +223,7 @@ function attachRecording(worker) {
           },
         );
         const text = cleanText(result.text);
+        session.previews.delete(track);
         if (!text) return;
         if (result.words?.length)
           event.word_timestamps = result.words.map((word) => ({
@@ -236,6 +270,10 @@ function attachRecording(worker) {
     }
     for (const part of await vad.accept(floatPCM(samples), startMs))
       queueSentence(session, track, part, recognition);
+    if (!session.previewed.has(track) && !session.queued) {
+      const preview = vad.preview();
+      if (preview) queuePreview(session, track, preview, recognition);
+    }
   }
   worker.recordAudio = async (payload) => {
     worker.requireActive(payload.meeting_id);
@@ -342,6 +380,7 @@ function attachRecording(worker) {
       session.recognition.vads.clear();
     }
     await session.decode;
+    session.previews.clear();
     session.subtitles.flush();
     for (const track of ['mic', 'system', 'mix']) draft(session, track);
   };

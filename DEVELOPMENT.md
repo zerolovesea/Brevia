@@ -58,7 +58,7 @@ npm run test:mac:webkit
 
 `npm run test:backend` 和 `npm run test:mac:webkit` 验证新业务后端与原生应用，不需要 Python。完整兼容回归 `npm test` 还包括旧 Electron 端到端和 Python 静态检查，需要旧开发环境；旧后端单测可单独运行 `npm run test:backend:legacy`。原生检查使用临时会议库，验证真实 WKWebView、打包后的控制层与新业务后端、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地已下载的真实模型验证各引擎。
 
-正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。当前正式 Release 工作流仍生成 Electron 版；macOS WebKit 实现不会自动发布或更改线上资产。
+正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 工作流只构建和公证 macOS WebKit 版，Windows 继续使用 Electron。旧 Electron 版的 macOS 用户需下载安装一次新 DMG，之后通过原生更新通道升级。
 
 ## 协作与检查
 
@@ -105,6 +105,8 @@ Swift 使用与移动端 CI 一致的 Xcode 自带的 `swift-format`（`xcrun sw
 纯格式调整与功能修改分开提交。不要夹带字段重命名、依赖升级或逻辑重构，也不要覆盖其他人的未提交改动。
 
 提交前运行上述范围内的格式与静态检查。桌面/后端修改运行 `npm test`；手机修改在 `mobile` 下运行 `flutter test`；发布脚本修改运行 `ruby mobile/scripts/test-release.rb`。网站演示修改运行 `node_modules/.bin/electron scripts/test-website-demos.cjs`（需要桌面环境）。格式检查由 CI 执行，不在发布流程里自动重写源码。
+
+依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`。Electron 虽列在开发依赖，仍是 Windows 成品的运行时，不能只依据生产依赖审计判断安全。2026-11-06 已更新 Zod、Electron、Undici 与 fast-uri 的安全版本；生产依赖无已知公告，全量审计剩余的中危记录来自构建器同一条 [minimatch 公告](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249)及其影响链。该问题要求不可信 glob 模式和 `optimizationLevel >= 2`，当前打包模式来自仓库，调用仅采用默认优化级别。上游构建器仍依赖旧主版本，暂不跨主版本强制覆盖；更新构建器或接入外部打包模式时重新核对。
 
 ## 正式发布
 
@@ -164,16 +166,106 @@ npm run build         # tailwind.css → styles.css，构建后 styles.css 应�
 
 先提交版本号、更新日志和 release note，确认待发布提交已通过检查，再由维护者创建并推送 `v<version>` 标签。[Release 工作流](.github/workflows/release.yml)在标签推送时构建并发布 macOS 和 Windows 安装包；也支持手动触发。签名和发布凭据由维护者配置，普通贡献者无需持有。
 
+macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.2 与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
+
+工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 的冻结后端、签名与安装器验证流程保持不变。
+
 本机仅构建安装包时运行：
 
 ```bash
 npm run release:offline
 ```
 
-`pack:backend` 现在会在打包开始时就校验出厂模型清单，模型下架不同步会立刻失败，而不是等到用户机器上。
+`release:offline` 在 macOS 生成原生 DMG，不运行 Python 或 Electron 打包；Windows 仍冻结后端并生成安装器。此入口不提交 Apple 公证。Windows 的 `pack:backend` 会在打包开始时校验出厂模型清单，模型下架不同步会立刻失败。
 
 ### 6. 发布后
 
-- [ ] 确认 GitHub Release 里的 `Brevia-<version>-arm64.dmg` 与 `Brevia-<version>-x64-setup.exe` 存在。
+- [ ] 确认 GitHub Release 里的 `Brevia-WebKit-<version>-arm64.dmg`、签名原生更新包和 `latest-webkit.json` 与 `Brevia-<version>-x64-setup.exe` 存在。
 - [ ] 确认 CI 已更新官网与各语言 README 的下载链接（`scripts/update-release-links.mjs`）。
 - [ ] 在应用内「更新日志」里确认新版本被标为当前版本。
+
+## 本机 Agent 接口
+
+macOS 原生应用和 Windows Electron 应用提供同一套本地认证接口；CLI 和 stdio MCP 只连接应用已运行的业务控制器，不直接打开数据库或创建第二套 Worker。两端支持本地推理、电脑录音和已连接手机录音，沿用各平台业务引擎与授权检查。
+
+macOS 安装版入口为 `/Applications/Brevia.app/Contents/MacOS/brevia`，随包携带 Node。Windows 入口为安装目录的 `brevia.cmd`（默认 `C:\Program Files\Brevia\brevia.cmd`），使用同目录 `Brevia.exe` 的 Node 模式；两端都无需安装系统 Node。源码入口为 `npm run brevia --`。以下示例用 `brevia` 表示入口，可自行添加 shell alias；Windows 参数里的绝对路径使用 `C:/Users/me/...` 或 JSON 转义反斜杠。Skill 位于仓库 `skills/brevia/SKILL.md`，macOS 包内为 `Contents/Resources/skills/brevia/SKILL.md`，Windows 为 `resources/skills/brevia/SKILL.md`。
+
+Windows 打包在 `package:win` 中先 bundle CLI，再把命令、脚本和 Skill 放入安装包。`runAsNode` fuse 保持启用；CLI 自动启动应用时移除继承的 `ELECTRON_RUN_AS_NODE`，避免把 GUI 误当脚本执行。CI 用安装包自身的 `Brevia.exe` 验证 CLI/MCP 与 `status --no-start`，不借用构建机 Node。
+
+```sh
+brevia status --no-start
+brevia models.list
+brevia devices.list
+brevia meeting.search '{"query":"发布"}'
+brevia meeting.get '{"meeting_id":"会议 UUID"}'
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/input.mp4","language":"zh","model_id":"qwen3-asr-0.6b-int8","output_path":"/Users/me/transcript.srt"}'
+brevia inference.run '{"operation":"translate","input_path":"/Users/me/input.mov","language":"en","target_language":"zh","output_path":"/Users/me/translated.vtt"}'
+brevia inference.run '{"operation":"translate","input_path":"/Users/me/subtitles.srt","target_language":"en","output_path":"/Users/me/translated.srt"}'
+brevia inference.run '{"operation":"translate","text":"会议改到明天。","target_language":"en","output_path":"/Users/me/translation.txt"}'
+brevia task.get '{"task_id":"返回的任务 UUID"}'
+brevia task.cancel '{"task_id":"返回的任务 UUID"}'
+brevia inference.run '{"operation":"diarize","input_path":"/Users/me/meeting.wav","language":"zh","output_path":"/Users/me/speakers.json"}'
+brevia speaker-profile.list
+brevia inference.run '{"operation":"voice-match","input_path":"/Users/me/voice.wav","profile_id":"声纹 UUID","output_path":"/Users/me/match.json"}'
+brevia recording.control '{"action":"start","target":"computer","request_id":"meeting-2026-11-06-start","title":"项目会议","language":"zh","audio_tracks":["mic"]}'
+brevia recording.control '{"action":"pause","target":"computer","request_id":"meeting-2026-11-06-pause"}'
+brevia recording.control '{"action":"resume","target":"computer","request_id":"meeting-2026-11-06-resume"}'
+brevia recording.control '{"action":"stop","target":"computer","request_id":"meeting-2026-11-06-stop"}'
+```
+
+手机录音把 `target` 换成 `devices.list` 返回的手机 ID。设备必须已信任、在线且可录音；应用保留原有权限检查、录音界面、状态栏和胶囊提示。`confirmed: true` 只在电脑采集器 ack 或手机报告实际状态后返回，手机停止确认不等于补传完成。`request_id` 在当前应用会话内去重；重试同一个动作必须复用原 ID 与完全相同的参数，改动作使用新 ID。应用重启后先查状态再决定是否发起新动作。
+
+推理立即返回 `task_id`，用 `task.get` 轮询 `queued/running/completed/failed/cancelled`、进度与结果。完成后 `result.output_path` 是实际写入路径。任务记录保留至应用退出，已完成记录至少保留一小时；当前最多四个运行或排队任务、128 个任务记录；推理串行复用业务引擎，排队阶段不预加载模型。应用退出或崩溃后任务 ID 不再有效，已导入会议和已完成结果仍保留，可在应用中继续处理。
+
+输入、输出均使用绝对路径，输出目录须存在。默认保留源文件，拒绝覆盖任何已有目标（包括软链）；TXT、Markdown（`md`）、SRT、VTT、JSON 可由后缀推断，也可用 `format` 指定。音视频先导入并转写，再逐段本地翻译；字幕文件翻译保留时间戳。纯文本没有时间戳，不能导出为 SRT/VTT。`diarize` 复用精修管线输出说话人及字幕；`voice-match` 使用已注册声纹，仅导出 JSON。缺模型报 `model_not_installed`，解码失败报 `decode_failed`，不会下载模型或静默切到云服务。系统解码器不支持的媒体会明确失败。
+
+CLI 默认自动后台启动安装版并等待就绪。`--no-start` 禁止启动，`status --no-start` 可用来只检查是否运行。`BREVIA_APP` 可指定应用可执行文件绝对路径，`BREVIA_DATA_DIR` 必须与应用使用的数据目录一致。原生宿主单实例锁及控制服务数据锁共同避免并发启动；启动失败返回 `app_not_found`、`launch_failed` 或 `startup_timeout`，不会另起无界重试。
+
+### 设置中的 Agent 管理
+
+在 **设置 → Agent 与 MCP** 可以启用或关闭本地接口，分别控制读取、推理、录音权限，查看服务状态，并复制当前安装位置对应的 CLI 路径和 MCP 配置。默认启用全部三类权限；设置保存在数据目录 `.agent/settings.json`。页面不会显示或复制认证令牌。
+
+关闭总开关或权限立即阻止对应的新请求；已接受的运行/排队任务与录音继续，已完成文件保留。已认证的推理令牌始终可以取消任务，录音令牌始终可以停止录音，关闭后不能开始、暂停或恢复录音；也可在应用中结束。关闭接口后仍持有单实例数据锁，CLI/MCP 不能自行重新启用。权限只能从主窗口设置 IPC 修改，本地控制 API 不暴露自授权方法。配置文件损坏时接口保持禁用，应用设置页仍可保存配置恢复。
+
+### 设置中的提示词
+
+在 **设置 → 提示词** 分别编辑会议纪要、实时 AI 笔记和翻译的额外指令，点击“保存”后生效。“恢复默认”只清空三类草稿，仍需点击“保存”确认；保存失败时保留草稿。留空或只含空白时沿用原有规则。每项最多 4000 个 UTF-16 代码单元，与网页输入框的字符上限一致（例如一个常见 emoji 占两个）。
+
+这些设置原子写入数据目录的独立 `prompts.json`，不改动现有会议字段；读取损坏配置时明确报错。macOS 与 Windows 的纪要、实时 AI 笔记、应用字幕翻译及 Agent 翻译共用同一来源。额外要求追加到基础提示词，原有 JSON 格式、来源标记和目标语言等约束继续保留。
+
+### 认证和权限
+
+控制接口为 Unix 上 `/tmp/brevia-agent-<uid>-<数据目录哈希>/control.sock` 的 HTTP `POST /v1`（Windows 使用命名管道），请求体为 `{"method":"app.status","params":{}}`，Header 为 `Authorization: Bearer <token>`。服务不监听业务 TCP 端口，不接受浏览器 Origin；Unix 目录权限 0700、凭据文件与 socket 权限 0600，凭据存于数据目录 `.agent/credentials.json`，每次启动轮换。Windows 用原生 DACL 将凭据目录限制为当前用户 SID，命名管道请求仍必须通过令牌认证。短 socket 路径支持较长的数据目录，socket 目录拒绝软链并核对所有者。数据锁恢复使用临时 loopback 端口互斥，不承载业务。
+
+三类独立凭据：`read` 可查询应用、模型、设备、会议和任务；`infer` 可提交/取消推理及查询任务；`record` 仅允许录音控制。`brevia token read|infer|record` 返回对应凭据，勿把输出写进日志或仓库。默认 CLI 从当前用户私有凭据文件选择所需权限；交给受限 Agent 时用 `BREVIA_AGENT_TOKEN` 指定单枚令牌，服务端不会回退到更高权限。此机制隔离凭据权限，不用于沙箱化已经能读取同一操作系统用户文件的进程。
+
+MCP 客户端配置：
+
+```json
+{
+  "mcpServers": {
+    "brevia": {
+      "command": "/Applications/Brevia.app/Contents/MacOS/brevia",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Windows MCP 客户端可直接调用随包运行时，避免依赖 shell 对 JSON 的转义：
+
+```json
+{
+  "mcpServers": {
+    "brevia": {
+      "command": "C:\\Program Files\\Brevia\\Brevia.exe",
+      "args": ["C:\\Program Files\\Brevia\\resources\\control\\brevia.cjs", "mcp"],
+      "env": {"ELECTRON_RUN_AS_NODE": "1"}
+    }
+  }
+}
+```
+
+自定义安装目录时同步修改这两个路径；自动启动优先使用 CLI 所在安装包的应用。
+
+工具名将 CLI 方法的点换成下划线，如 `inference_run`、`task_get`、`recording_control`。stdio 使用 JSON-RPC 换行消息，stdout 只输出协议内容；`mcp --no-start` 禁止工具调用自动启动应用。应用协议与 MCP 工具参数由同一 schema 生成。运行 `npm run test:agent` 检查认证、权限、自动启动、任务、文件导出和录音确认回归。

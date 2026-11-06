@@ -18,4 +18,5 @@ xcrun clang++ -std=c++17 -fobjc-arc -framework Foundation macos/inference/test-n
 node --test macos/backend/test-*.cjs
 codesign --verify --deep --strict "$bundle"
 node macos/test-packaged-control.cjs "$bundle"
+node macos/test-agent-app.cjs "$bundle"
 node macos/host/smoke.cjs "$bundle"

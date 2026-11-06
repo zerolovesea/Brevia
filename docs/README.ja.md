@@ -162,3 +162,5 @@ Brevia は [ISC License](../LICENSE) の下でリリースされています。�
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR、VAD、句読点、話者処理を支えるローカルランタイム。[Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) でライセンスされています。
 - [`backend/models.json`](../backend/models.json) で宣言されているダウンロード可能な成果物のモデル作者とメンテナに感謝します——Qwen3-ASR、FunASR、Parakeet (NeMo)、Pyannote、3D-Speaker、Silero、Tencent Hy-MT2 など。
 - Electron、ONNX Runtime、Python、オープンソースの音声コミュニティが、このローカルファーストのワークフローを可能にしています。
+
+macOS ネイティブ版と Windows 版は、認証付きのローカル Agent（JSON CLI / stdio MCP）に対応しています。バックグラウンド自動起動、メディアの文字起こし・翻訳と書き出し、会議検索、PC・スマートフォンの録音操作が可能です。**設定 → Agent と MCP** では読み取り・推論・録音の権限を管理し、MCP 設定をコピーできます。**設定 → プロンプト** では、議事録・リアルタイム AI ノート・翻訳の追加指示を編集できます。使用例と各プラットフォームの導入方法は[ローカル Agent API](../DEVELOPMENT.md#本机-agent-接口)を参照してください。

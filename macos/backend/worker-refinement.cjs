@@ -228,18 +228,19 @@ function createRefinementHandlers(worker) {
           }
         }
       } catch {}
-    const turns = [];
+    const turns = [],
+      engine = worker.newEngine('sherpa-onnx');
     let degraded = false;
-    for (let start = 0; start < duration; start += chunk) {
-      await control.wait();
-      const end = Math.min(duration, start + chunk),
-        windowStart = Math.max(0, start - settings.refinement.diarization_overlap_ms),
-        windowEnd = Math.min(duration, end + settings.refinement.diarization_overlap_ms),
-        regions = speech.filter((s) => s.end_ms > windowStart && s.start_ms < windowEnd);
-      if (!regions.length) continue;
-      progress(meeting.id, '分析说话人', start, duration);
-      const engine = worker.newEngine('sherpa-onnx');
-      try {
+    // 原生引擎按模型路径缓存分段与声纹权重，所有窗口共用一次加载。
+    try {
+      for (let start = 0; start < duration; start += chunk) {
+        await control.wait();
+        const end = Math.min(duration, start + chunk),
+          windowStart = Math.max(0, start - settings.refinement.diarization_overlap_ms),
+          windowEnd = Math.min(duration, end + settings.refinement.diarization_overlap_ms),
+          regions = speech.filter((s) => s.end_ms > windowStart && s.start_ms < windowEnd);
+        if (!regions.length) continue;
+        progress(meeting.id, '分析说话人', start, duration);
         let pieces = [];
         const pcm = readWindow(file, windowStart, windowEnd),
           masked = Buffer.from(pcm);
@@ -333,9 +334,9 @@ function createRefinementHandlers(worker) {
             }
             turns.push(turn);
           }
-      } finally {
-        engine.close();
       }
+    } finally {
+      engine.close();
     }
     if (key && !degraded && duration > chunk) {
       const temporary = cache + '.' + randomUUID() + '.tmp';
@@ -455,7 +456,11 @@ function createRefinementHandlers(worker) {
           300,
       segmentation =
         meeting.speaker_segmentation_model_id || settings.diarization.segmentation_model_id,
-      required = merge || tracks.includes('system') || (imported && !flatImport);
+      required =
+        payload.force_diarization === true ||
+        merge ||
+        tracks.includes('system') ||
+        (imported && !flatImport);
     const missing = worker.models.missing([
       modelId,
       meeting.vad_model_id || 'silero-vad',

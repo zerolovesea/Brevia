@@ -224,6 +224,29 @@
         'settings': '设置',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent 与 MCP',
+        '提示词': '提示词',
+        '本机访问': '本机访问',
+        '允许本机 Agent 访问': '允许本机 Agent 访问',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。',
+        '读取应用与会议': '读取应用与会议',
+        '查询应用、模型、设备与会议内容。': '查询应用、模型、设备与会议内容。',
+        '运行本地推理': '运行本地推理',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。',
+        '控制录音': '控制录音',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。',
+        '服务已停用': '服务已停用',
+        '就绪': '就绪',
+        '接入': '接入',
+        '复制 MCP 配置': '复制 MCP 配置',
+        '复制路径': '复制路径',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          '最多 4000 字；补充要求不会替换应用的基础规则。',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          '补充语气、结构或术语要求；留空使用默认规则。',
         '移除后，此词条将不再生效。': '移除后，此词条将不再生效。',
         '工作区词典': '工作区词典',
         '识别错写': '识别错写',
@@ -1073,6 +1096,29 @@
         'settings': 'Settings',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent & MCP',
+        '提示词': 'Prompts',
+        '本机访问': 'Local access',
+        '允许本机 Agent 访问': 'Allow local Agent access',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          'Call Brevia through an authenticated local interface. Turning this off blocks new requests; existing tasks and recordings can continue or be cancelled or stopped.',
+        '读取应用与会议': 'Read app and meetings',
+        '查询应用、模型、设备与会议内容。': 'Query the app, models, devices and meeting content.',
+        '运行本地推理': 'Run local inference',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'Turning this off blocks new inference requests. Existing tasks can continue or be cancelled.',
+        '控制录音': 'Control recording',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'Turning this off blocks start, pause and resume requests. Current recordings can still be stopped.',
+        '服务已停用': 'Service disabled',
+        '就绪': 'Ready',
+        '接入': 'Integration',
+        '复制 MCP 配置': 'Copy MCP configuration',
+        '复制路径': 'Copy path',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          'Up to 4,000 characters. Additional instructions do not replace the app’s base rules.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          'Add tone, structure or terminology requirements. Leave blank to use defaults.',
         '移除后，此词条将不再生效。': 'Removing this entry disables its rules.',
         '工作区词典': 'Workspace vocabulary',
         '识别错写': 'Misheard term',
@@ -2124,6 +2170,30 @@
         'settings': 'Configuración',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent y MCP',
+        '提示词': 'Instrucciones',
+        '本机访问': 'Acceso local',
+        '允许本机 Agent 访问': 'Permitir acceso de Agent local',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          'Usa Brevia mediante una interfaz local autenticada. Al desactivar, se bloquean nuevas solicitudes; las tareas y grabaciones iniciadas pueden continuar, cancelarse o detenerse.',
+        '读取应用与会议': 'Leer aplicación y reuniones',
+        '查询应用、模型、设备与会议内容。':
+          'Consulta la aplicación, los modelos, los dispositivos y el contenido de las reuniones.',
+        '运行本地推理': 'Ejecutar inferencia local',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'Al desactivar, se bloquean nuevas solicitudes de inferencia. Las tareas iniciadas pueden continuar o cancelarse.',
+        '控制录音': 'Controlar grabación',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'Al desactivar, se bloquean las solicitudes de inicio, pausa y reanudación. Las grabaciones actuales aún se pueden detener.',
+        '服务已停用': 'Servicio desactivado',
+        '就绪': 'Listo',
+        '接入': 'Integración',
+        '复制 MCP 配置': 'Copiar configuración MCP',
+        '复制路径': 'Copiar ruta',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          'Hasta 4000 caracteres. Las instrucciones adicionales no sustituyen las reglas base de la aplicación.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          'Añade requisitos de tono, estructura o terminología. Deja en blanco para usar los valores predeterminados.',
         '移除后，此词条将不再生效。': 'Al eliminar la entrada se desactivarán sus reglas.',
         '工作区词典': 'Vocabulario del espacio',
         '识别错写': 'Término mal reconocido',
@@ -3182,6 +3252,29 @@
         'settings': '設定',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent と MCP',
+        '提示词': 'プロンプト',
+        '本机访问': 'ローカルアクセス',
+        '允许本机 Agent 访问': 'ローカル Agent のアクセスを許可',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          '認証済みのローカルインターフェースから Brevia を呼び出します。オフにすると新しいリクエストを受け付けません。開始済みのタスクと録音は続行、キャンセル、停止できます。',
+        '读取应用与会议': 'アプリと会議の読み取り',
+        '查询应用、模型、设备与会议内容。': 'アプリ、モデル、デバイス、会議の内容を照会します。',
+        '运行本地推理': 'ローカル推論を実行',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'オフにすると新しい推論リクエストを受け付けません。開始済みのタスクは続行またはキャンセルできます。',
+        '控制录音': '録音の操作',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'オフにすると開始、一時停止、再開のリクエストを受け付けません。現在の録音は引き続き停止できます。',
+        '服务已停用': 'サービスは無効です',
+        '就绪': '準備完了',
+        '接入': '接続設定',
+        '复制 MCP 配置': 'MCP 設定をコピー',
+        '复制路径': 'パスをコピー',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          '最大 4000 文字。追加の指示でアプリの基本ルールが置き換わることはありません。',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          '口調、構成、用語の要望を追加します。空欄では既定のルールを使用します。',
         '移除后，此词条将不再生效。': '削除するとこの用語のルールは無効になります。',
         '工作区词典': 'ワークスペース用語集',
         '识别错写': '誤認識された語',
@@ -4238,6 +4331,29 @@
         'settings': '설정',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent 및 MCP',
+        '提示词': '프롬프트',
+        '本机访问': '로컬 접근',
+        '允许本机 Agent 访问': '로컬 Agent 접근 허용',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          '인증된 로컬 인터페이스를 통해 Brevia를 호출합니다. 끄면 새 요청을 차단하며, 이미 시작한 작업과 녹음은 계속하거나 취소 또는 종료할 수 있습니다.',
+        '读取应用与会议': '앱 및 회의 읽기',
+        '查询应用、模型、设备与会议内容。': '앱, 모델, 기기 및 회의 내용을 조회합니다.',
+        '运行本地推理': '로컬 추론 실행',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          '끄면 새 추론 요청을 차단합니다. 이미 시작한 작업은 계속하거나 취소할 수 있습니다.',
+        '控制录音': '녹음 제어',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          '끄면 시작, 일시 정지 및 재개 요청을 차단합니다. 현재 녹음은 계속 종료할 수 있습니다.',
+        '服务已停用': '서비스 비활성화',
+        '就绪': '준비 완료',
+        '接入': '연동',
+        '复制 MCP 配置': 'MCP 설정 복사',
+        '复制路径': '경로 복사',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          '최대 4,000자. 추가 지침은 앱의 기본 규칙을 대체하지 않습니다.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          '어조, 구성 또는 용어에 대한 요구 사항을 추가하세요. 비워 두면 기본 규칙을 사용합니다.',
         '移除后，此词条将不再生效。': '삭제하면 이 용어의 규칙이 해제됩니다.',
         '工作区词典': '작업공간 용어집',
         '识别错写': '잘못 인식한 용어',
@@ -5276,6 +5392,30 @@
         'settings': 'Paramètres',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent et MCP',
+        '提示词': 'Consignes',
+        '本机访问': 'Accès local',
+        '允许本机 Agent 访问': 'Autoriser l’accès local des agents',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          'Appeler Brevia via une interface locale authentifiée. La désactivation bloque les nouvelles requêtes ; les tâches et enregistrements en cours peuvent continuer, être annulés ou arrêtés.',
+        '读取应用与会议': 'Lire l’application et les réunions',
+        '查询应用、模型、设备与会议内容。':
+          'Consulter l’application, les modèles, les appareils et le contenu des réunions.',
+        '运行本地推理': 'Exécuter l’inférence locale',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'La désactivation bloque les nouvelles requêtes d’inférence. Les tâches en cours peuvent continuer ou être annulées.',
+        '控制录音': 'Contrôler l’enregistrement',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'La désactivation bloque les demandes de démarrage, de pause et de reprise. Les enregistrements en cours peuvent toujours être arrêtés.',
+        '服务已停用': 'Service désactivé',
+        '就绪': 'Prêt',
+        '接入': 'Intégration',
+        '复制 MCP 配置': 'Copier la configuration MCP',
+        '复制路径': 'Copier le chemin',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          '4 000 caractères maximum. Les consignes supplémentaires ne remplacent pas les règles de base de l’application.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          'Ajoutez des exigences de ton, de structure ou de terminologie. Laissez vide pour utiliser les règles par défaut.',
         '移除后，此词条将不再生效。': 'Supprimer cette entrée désactive ses règles.',
         '工作区词典': 'Lexique de l’espace',
         '识别错写': 'Terme mal reconnu',
@@ -6351,6 +6491,29 @@
         'settings': 'Einstellungen',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent und MCP',
+        '提示词': 'Prompts',
+        '本机访问': 'Lokaler Zugriff',
+        '允许本机 Agent 访问': 'Lokalen Agent-Zugriff erlauben',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          'Brevia über eine authentifizierte lokale Schnittstelle aufrufen. Deaktivieren blockiert neue Anfragen; laufende Aufgaben und Aufnahmen können fortgesetzt, abgebrochen oder beendet werden.',
+        '读取应用与会议': 'App und Meetings lesen',
+        '查询应用、模型、设备与会议内容。': 'App, Modelle, Geräte und Meeting-Inhalte abfragen.',
+        '运行本地推理': 'Lokale Inferenz ausführen',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'Deaktivieren blockiert neue Inferenzanfragen. Laufende Aufgaben können fortgesetzt oder abgebrochen werden.',
+        '控制录音': 'Aufnahme steuern',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'Deaktivieren blockiert Anfragen zum Starten, Pausieren und Fortsetzen. Laufende Aufnahmen können weiterhin beendet werden.',
+        '服务已停用': 'Dienst deaktiviert',
+        '就绪': 'Bereit',
+        '接入': 'Einrichtung',
+        '复制 MCP 配置': 'MCP-Konfiguration kopieren',
+        '复制路径': 'Pfad kopieren',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          'Bis zu 4.000 Zeichen. Zusätzliche Anweisungen ersetzen nicht die Grundregeln der App.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          'Anforderungen an Ton, Struktur oder Begriffe ergänzen. Leer lassen, um die Standardregeln zu verwenden.',
         '移除后，此词条将不再生效。':
           'Mit dem Entfernen werden die Regeln dieses Eintrags deaktiviert.',
         '工作区词典': 'Arbeitsbereichswörterbuch',
@@ -7435,6 +7598,30 @@
         'settings': 'Настройки',
       },
       'labels': {
+        'Agent 与 MCP': 'Agent и MCP',
+        '提示词': 'Инструкции',
+        '本机访问': 'Локальный доступ',
+        '允许本机 Agent 访问': 'Разрешить локальный доступ Agent',
+        '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。':
+          'Вызов Brevia через локальный интерфейс с аутентификацией. Отключение блокирует новые запросы; текущие задачи и записи можно продолжить, отменить или остановить.',
+        '读取应用与会议': 'Чтение приложения и встреч',
+        '查询应用、模型、设备与会议内容。':
+          'Получение данных приложения, моделей, устройств и содержимого встреч.',
+        '运行本地推理': 'Локальная обработка',
+        '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。':
+          'Отключение блокирует новые запросы обработки. Начатые задачи можно продолжить или отменить.',
+        '控制录音': 'Управление записью',
+        '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。':
+          'Отключение блокирует запуск, паузу и продолжение. Текущую запись по-прежнему можно остановить.',
+        '服务已停用': 'Сервис отключён',
+        '就绪': 'Готово',
+        '接入': 'Подключение',
+        '复制 MCP 配置': 'Скопировать настройки MCP',
+        '复制路径': 'Скопировать путь',
+        '最多 4000 字；补充要求不会替换应用的基础规则。':
+          'До 4000 символов. Дополнительные инструкции не заменяют базовые правила приложения.',
+        '补充语气、结构或术语要求；留空使用默认规则。':
+          'Добавьте требования к стилю, структуре или терминологии. Оставьте пустым для стандартных правил.',
         '移除后，此词条将不再生效。': 'После удаления правила этой записи перестанут действовать.',
         '工作区词典': 'Словарь пространства',
         '识别错写': 'Ошибка распознавания',

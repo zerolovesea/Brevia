@@ -759,6 +759,8 @@ function configureSettingsPage(kind) {
       'advanced-settings',
       'speaker-profiles',
       'device-connection',
+      'agent-settings',
+      'prompts',
       'whats-new',
     ].includes(kind);
   settingsModal.classList.toggle('settings-page', page);
@@ -3258,6 +3260,87 @@ function refreshModelConfigModels() {
 
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 let mobileConnectionContent;
+let agentSettings;
+let agentSettingsBusy = false;
+let agentSettingsError = '';
+let promptSettingsDraft;
+let promptSaveState = 'saved';
+let promptSaving = false;
+function renderAgentSettings() {
+  const value = agentSettings;
+  const row = (key, label, hint, enabled) =>
+    `<div class="preference-row"><span class="preference-copy" title="${escapeHtml(t(hint))}">${escapeHtml(t(label))}</span><div class="preference-control"><button type="button" class="preference-toggle" data-agent-permission="${key}" role="switch" aria-checked="${Boolean(enabled)}" aria-label="${escapeHtml(t(label))}" title="${escapeHtml(t(hint))}"${agentSettingsBusy ? ' disabled' : ''}><span></span></button></div></div>`;
+  const status = !value.enabled ? t('服务已停用') : value.status?.ready ? t('就绪') : t('准备中');
+  return `<div class="preferences-content">
+    <section class="preferences-section"><header class="preferences-section-heading"><h3>${t('本机访问')}</h3><span class="save-state" data-agent-status role="status">${escapeHtml(status)}</span></header>
+    ${row('enabled', '允许本机 Agent 访问', '通过经过认证的本地接口调用 Brevia。关闭后不再接受新请求；已开始的任务和录音仍可继续、取消或结束。', value.enabled)}
+    ${row('read', '读取应用与会议', '查询应用、模型、设备与会议内容。', value.permissions.read)}
+    ${row('infer', '运行本地推理', '关闭后不再接受新的推理请求；已开始的任务可以继续或取消。', value.permissions.infer)}
+    ${row('record', '控制录音', '关闭后不再接受开始、暂停或恢复请求；当前录音仍可结束。', value.permissions.record)}</section>
+    <section class="preferences-section"><header class="preferences-section-heading"><h3>${t('接入')}</h3></header>
+    <div class="preference-row"><span class="preference-copy">MCP</span><div class="preference-control"><button type="button" class="secondary" data-agent-copy="mcp">${t('复制 MCP 配置')}</button></div></div>
+    <div class="preference-row"><span class="preference-copy">CLI<small title="${escapeHtml(value.cli_path)}">${escapeHtml(value.cli_path)}</small></span><div class="preference-control"><button type="button" class="secondary" data-agent-copy="cli">${t('复制路径')}</button></div></div></section>
+    <p class="settings-inline-error" data-agent-error role="status"${agentSettingsError || value.status?.error ? '' : ' hidden'}>${escapeHtml(agentSettingsError || value.status?.error || '')}</p>
+  </div>`;
+}
+function renderPromptSettings() {
+  const fields = [
+    ['summary', '会议纪要'],
+    ['ai_note', 'AI 笔记'],
+    ['translation', '翻译'],
+  ];
+  return `<form class="preferences-content preferences-form prompt-settings-form">
+    ${fields.map(([key, label]) => `<section class="preferences-section"><header class="preferences-section-heading"><h3><label for="prompt-${key}">${t(label)}</label></h3></header><textarea id="prompt-${key}" name="${key}" rows="4" maxlength="4000" title="${escapeHtml(t('最多 4000 字；补充要求不会替换应用的基础规则。'))}" placeholder="${escapeHtml(t('补充语气、结构或术语要求；留空使用默认规则。'))}"${promptSaving ? ' disabled' : ''}>${escapeHtml(promptSettingsDraft[key] || '')}</textarea></section>`).join('')}
+    <footer class="preferences-form-footer modal-form-actions">${renderSaveState(promptSaveState)}<button type="button" class="secondary" data-reset-prompts${promptSaving ? ' disabled' : ''}>${t('恢复默认')}</button><button type="submit" class="modal-action"${promptSaving ? ' disabled' : ''}>${t(promptSaveState === 'failed' ? '重试' : '保存')}</button></footer>
+  </form>`;
+}
+async function saveAgentPermission(button) {
+  if (agentSettingsBusy) return;
+  const key = button.dataset.agentPermission;
+  const next = { enabled: agentSettings.enabled, permissions: { ...agentSettings.permissions } };
+  if (key === 'enabled') next.enabled = !next.enabled;
+  else next.permissions[key] = !next.permissions[key];
+  agentSettingsBusy = true;
+  agentSettingsError = '';
+  settingsModal.querySelectorAll('[data-agent-permission]').forEach((control) => {
+    control.disabled = true;
+  });
+  try {
+    agentSettings = await window.brevia.agent.settings.save(next);
+  } catch (error) {
+    // 保存响应失败时回读真实权限，避免显示过期的授权状态。
+    agentSettings = await window.brevia.agent.settings.get().catch(() => agentSettings);
+    agentSettingsError = userFacingError(error.detail || error.message);
+  } finally {
+    agentSettingsBusy = false;
+    if (activeModal === 'agent-settings' && !settingsModal.hidden) {
+      renderModal('agent-settings');
+      settingsModal
+        .querySelector(`[data-agent-permission="${key}"]`)
+        ?.focus({ preventScroll: true });
+    }
+  }
+}
+async function savePromptSettings(form) {
+  if (promptSaving || !form.reportValidity()) return;
+  promptSaving = true;
+  promptSaveState = 'saving';
+  const controls = [...form.elements];
+  controls.forEach((control) => {
+    control.disabled = true;
+  });
+  form.querySelector('.save-state').outerHTML = renderSaveState(promptSaveState);
+  try {
+    promptSettingsDraft = await window.brevia.prompts.save({ ...promptSettingsDraft });
+    promptSaveState = 'saved';
+  } catch (error) {
+    promptSaveState = 'failed';
+    showToast(error.detail || error.message, undefined, 'error');
+  } finally {
+    promptSaving = false;
+    if (activeModal === 'prompts' && !settingsModal.hidden) renderModal('prompts');
+  }
+}
 function renderModal(kind) {
   const body = settingsModal.querySelector('.modal-body');
   const storageScrollTop =
@@ -3270,6 +3353,14 @@ function renderModal(kind) {
   document.body.append(settingsFolders);
   configureSettingsPage(kind);
   settingsModal.classList.toggle('summary-model-modal', kind === 'summary-model');
+  if (kind === 'agent-settings' || kind === 'prompts') {
+    settingsModal.querySelector('.modal-title h2').textContent = t(
+      kind === 'prompts' ? '提示词' : 'Agent 与 MCP',
+    );
+    settingsModal.querySelector('.modal-title p').textContent = '';
+    replaceModalBody(kind, kind === 'prompts' ? renderPromptSettings() : renderAgentSettings());
+    return;
+  }
   if (kind === 'device-connection') {
     mobileConnectionContent ||= document.getElementById('mobile-dialog');
     const body = settingsModal.querySelector('.modal-body');
@@ -3674,13 +3765,17 @@ function openConfirmation(title, detail, action, anchor, subject) {
   modalRequestRevision += 1;
   clearTimeout(modalDismissTimer);
   closeMeetingMenus(true);
-  if (activeModal === 'storage' && settingsModal.classList.contains('settings-page')) {
+  if (
+    ['storage', 'device-connection'].includes(activeModal) &&
+    settingsModal.classList.contains('settings-page')
+  ) {
     // 移动真实页面节点保留目录、滚动位置与操作；确认时只让背景不可交互。
     const page = document.createElement('div');
     page.className = settingsModal.className;
     page.inert = true;
     storageConfirmationPage = {
       page,
+      kind: activeModal,
       returnFocus: anchor || document.activeElement,
       scrollTop: settingsModal.querySelector('.modal-body').scrollTop,
     };
@@ -3737,6 +3832,23 @@ async function openModal(kind) {
     settingsModal.querySelector('.modal-body').dataset.contentKind === kind &&
     !settingsModal.classList.contains('modal-leave');
   if (same) return;
+  if (kind === 'agent-settings' || kind === 'prompts') {
+    try {
+      const value =
+        kind === 'agent-settings'
+          ? await window.brevia.agent.settings.get()
+          : await window.brevia.prompts.get();
+      if (revision !== modalRequestRevision) return;
+      if (kind === 'agent-settings') {
+        agentSettings = value;
+        agentSettingsError = '';
+      } else promptSettingsDraft ??= value;
+    } catch (error) {
+      if (revision === modalRequestRevision)
+        showToast(error.detail || error.message, undefined, 'error');
+      return;
+    }
+  }
   window.clearInterval(permissionPollTimer);
   clearTimeout(modalDismissTimer);
   if (kind === 'export' || kind === 'share') {
@@ -3833,13 +3945,13 @@ function closeModal() {
   }
   if (storageConfirmationPage) {
     clearTimeout(modalDismissTimer);
-    const { page, returnFocus, scrollTop } = storageConfirmationPage;
+    const { page, kind, returnFocus, scrollTop } = storageConfirmationPage;
     storageConfirmationPage = undefined;
     confirmationAction = undefined;
     settingsModal.className = page.className;
     settingsModal.replaceChildren(...page.childNodes);
     page.remove();
-    activeModal = 'storage';
+    activeModal = kind;
     document.querySelector('.app-shell').inert = false;
     settingsModal.querySelector('.modal-body').scrollTop = scrollTop;
     if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
@@ -4963,6 +5075,33 @@ settingsModal.addEventListener('toggle', (event) => {
     closeModal();
 });
 settingsModal.addEventListener('click', async (event) => {
+  const agentPermission = event.target.closest('[data-agent-permission]');
+  if (agentPermission) {
+    await saveAgentPermission(agentPermission);
+    return;
+  }
+  const agentCopy = event.target.closest('[data-agent-copy]');
+  if (agentCopy) {
+    try {
+      const text =
+        agentCopy.dataset.agentCopy === 'mcp'
+          ? JSON.stringify({ mcpServers: { brevia: agentSettings.mcp } }, null, 2)
+          : agentSettings.cli_path;
+      await window.brevia.share.copyText({ text });
+      showToast(t('已复制到剪贴板'), undefined, 'success');
+    } catch (error) {
+      showToast(error.detail || error.message, undefined, 'error');
+    }
+    return;
+  }
+  if (event.target.closest('[data-reset-prompts]')) {
+    if (promptSaving) return;
+    promptSettingsDraft = { summary: '', ai_note: '', translation: '' };
+    promptSaveState = 'dirty';
+    renderModal('prompts');
+    settingsModal.querySelector('[data-reset-prompts]').focus({ preventScroll: true });
+    return;
+  }
   if (event.target.closest('[data-update-log-dismiss]')) {
     closeModal();
     return;
@@ -5525,6 +5664,11 @@ settingsModal.addEventListener('click', async (event) => {
   }
 });
 settingsModal.addEventListener('input', (event) => {
+  if (event.target.matches('.prompt-settings-form textarea')) {
+    promptSettingsDraft[event.target.name] = event.target.value;
+    promptSaveState = 'dirty';
+    return;
+  }
   const advancedForm = event.target.closest('.advanced-settings-form');
   if (advancedForm) validateAdvancedSettings(advancedForm);
   if (event.target.matches('[data-speaker-search]')) {
@@ -5702,6 +5846,11 @@ function completeSettingsSave(form) {
   if (status) status.outerHTML = renderSaveState('saved');
 }
 settingsModal.addEventListener('submit', async (event) => {
+  if (event.target.matches('.prompt-settings-form')) {
+    event.preventDefault();
+    await savePromptSettings(event.target);
+    return;
+  }
   if (event.target.matches('.advanced-settings-form')) {
     event.preventDefault();
     validateAdvancedSettings(event.target);
@@ -8818,12 +8967,14 @@ function syncPlaybackTranscript() {
   });
 }
 progress.addEventListener('input', () => {
+  clearSegmentPlayback();
   followPlaybackTranscript = true;
   renderPlayerTime();
   playerAudio.currentTime = Number(progress.value);
   syncPlaybackTranscript();
 });
 playButton.addEventListener('click', async () => {
+  clearSegmentPlayback();
   if (!playerAudio.src) {
     showToast(t('这场会议没有可播放的录音'));
     return;
@@ -8869,6 +9020,7 @@ document.querySelector('#playback-floating-caption-toggle')?.addEventListener('c
   }
 });
 function seekMiniPlayback(clientX) {
+  clearSegmentPlayback();
   followPlaybackTranscript = true;
   const bounds = miniPlaybackSeek.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
@@ -8888,6 +9040,7 @@ miniPlaybackSeek.addEventListener('pointermove', (event) => {
 miniPlaybackSeek.addEventListener('keydown', (event) => {
   if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
   event.preventDefault();
+  clearSegmentPlayback();
   playerAudio.currentTime = Math.max(
     0,
     Math.min(
@@ -8901,6 +9054,7 @@ miniPlaybackSeek.addEventListener('keydown', (event) => {
   renderMiniPlayback();
 });
 miniPlaybackToggle.addEventListener('click', async () => {
+  clearSegmentPlayback();
   if (playerAudio.paused) await playerAudio.play();
   else playerAudio.pause();
 });
@@ -8948,6 +9102,7 @@ document.addEventListener('fullscreenchange', updatePlayerDisplayControls);
 updatePlayerDisplayControls();
 document.querySelectorAll('.player .skip').forEach((button, index) =>
   button.addEventListener('click', () => {
+    clearSegmentPlayback();
     playerAudio.currentTime = Math.max(
       0,
       Math.min(playerAudio.duration || 0, playerAudio.currentTime + (index ? 15 : -15)),
@@ -9171,6 +9326,321 @@ function segmentInfoFor(meetingId, segmentId) {
         speaker: segment.speaker_name || segment.speaker,
       }
     : null;
+}
+function detailSegmentFor(meetingId, segmentId, original = false) {
+  if (currentMeetingDetail?.id !== meetingId) return;
+  for (const key of original
+    ? ['original_segments', 'current_segments', 'segments']
+    : ['current_segments', 'segments']) {
+    const segment = currentMeetingDetail[key]?.find((item) => item.id === segmentId);
+    if (segment) return segment;
+  }
+}
+let segmentPlayback;
+let segmentPlaybackTimer;
+function syncSegmentPlaybackButtons() {
+  document.querySelectorAll('[data-segment-tool="play"]').forEach((button) => {
+    const playing = Boolean(
+      segmentPlayback &&
+        segmentPlayback.meetingId === currentMeetingDetail?.id &&
+        button.closest('[data-segment-id]')?.dataset.segmentId === segmentPlayback.segmentId,
+    );
+    if (button.getAttribute('aria-pressed') === String(playing)) return;
+    button.setAttribute('aria-pressed', String(playing));
+    button.title = t(playing ? '暂停播放' : '播放此段');
+    button.setAttribute('aria-label', button.title);
+    button.innerHTML = interfaceIcon(playing ? 'pause' : 'play');
+  });
+}
+function clearSegmentPlayback(pause = false) {
+  clearTimeout(segmentPlaybackTimer);
+  segmentPlayback = undefined;
+  if (pause) playerAudio.pause();
+  syncSegmentPlaybackButtons();
+}
+/** timeupdate 频率不足以守住短句边界；按播放速度补充定时检查。 */
+function checkSegmentPlayback() {
+  clearTimeout(segmentPlaybackTimer);
+  const clip = segmentPlayback;
+  if (!clip) return;
+  if (clip.meetingId !== currentMeetingDetail?.id || clip.src !== playerAudio.src) {
+    clearSegmentPlayback();
+    return;
+  }
+  if (playerAudio.currentTime >= clip.end) {
+    clearSegmentPlayback(true);
+    playerAudio.currentTime = clip.end;
+    progress.value = clip.end;
+    renderPlayerTime();
+    return;
+  }
+  syncSegmentPlaybackButtons();
+  if (!playerAudio.paused) {
+    const remaining = ((clip.end - playerAudio.currentTime) * 1000) / playerAudio.playbackRate;
+    segmentPlaybackTimer = setTimeout(checkSegmentPlayback, Math.max(16, Math.min(120, remaining)));
+  }
+}
+async function playTranscriptSegment(meetingId, segmentId) {
+  if (segmentPlayback?.meetingId === meetingId && segmentPlayback.segmentId === segmentId) {
+    clearSegmentPlayback(true);
+    return;
+  }
+  const segment = detailSegmentFor(
+    meetingId,
+    segmentId,
+    uiData.detail.hasRefined && uiData.detail.transcriptVersion === 'original',
+  );
+  if (!segment) return;
+  if (!playerAudio.getAttribute('src')) {
+    showToast(t('这场会议没有可播放的录音'));
+    return;
+  }
+  const start = Math.max(0, Number(segment.start_ms) / 1000);
+  const end = Math.min(
+    Number(segment.end_ms) / 1000,
+    Number.isFinite(playerAudio.duration) ? playerAudio.duration : Infinity,
+  );
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+  clearSegmentPlayback(true);
+  const clip = { meetingId, segmentId, start, end, src: playerAudio.src, initialSeek: true };
+  segmentPlayback = clip;
+  playerAudio.currentTime = start;
+  progress.value = start;
+  followPlaybackTranscript = true;
+  renderPlayerTime();
+  syncPlaybackTranscript();
+  syncSegmentPlaybackButtons();
+  try {
+    await playerAudio.play();
+    if (segmentPlayback === clip) checkSegmentPlayback();
+  } catch (error) {
+    if (segmentPlayback !== clip) return;
+    clearSegmentPlayback();
+    showToast(userFacingError(error.message), undefined, 'error');
+  }
+}
+playerAudio.addEventListener('timeupdate', checkSegmentPlayback);
+playerAudio.addEventListener('ratechange', checkSegmentPlayback);
+playerAudio.addEventListener('pause', () => {
+  if (playerAudio.paused) clearSegmentPlayback();
+});
+playerAudio.addEventListener('ended', () => clearSegmentPlayback());
+playerAudio.addEventListener('emptied', () => {
+  if (!playerAudio.getAttribute('src') || segmentPlayback?.src !== playerAudio.src)
+    clearSegmentPlayback();
+});
+playerAudio.addEventListener('seeking', () => {
+  // 点击片段自身的定位不取消边界；后续拖动、时间戳定位恢复普通播放。
+  if (
+    segmentPlayback?.initialSeek &&
+    Math.abs(playerAudio.currentTime - segmentPlayback.start) < 0.05
+  )
+    return;
+  clearSegmentPlayback();
+});
+playerAudio.addEventListener('seeked', () => {
+  if (segmentPlayback) segmentPlayback.initialSeek = false;
+});
+const segmentTranslationRequests = new Map();
+const transcriptTranslationRequests = new Set();
+const liveTranslationRequests = new Map();
+const translationWaiters = new Map();
+function isMeetingTranslationPending(meetingId) {
+  return (
+    transcriptTranslationRequests.has(meetingId) ||
+    liveTranslationRequests.has(meetingId) ||
+    [...segmentTranslationRequests.values()].some((item) => item.meeting_id === meetingId)
+  );
+}
+function isSegmentTranslationPending(meetingId, segmentId) {
+  return (
+    transcriptTranslationRequests.has(meetingId) ||
+    liveTranslationRequests.has(meetingId) ||
+    segmentTranslationRequests.has(JSON.stringify([meetingId, segmentId]))
+  );
+}
+function notifyTranslationSettled(meetingId) {
+  const waiters = translationWaiters.get(meetingId);
+  translationWaiters.delete(meetingId);
+  waiters?.forEach((resolve) => resolve());
+}
+/** 后台翻译等待同会议任务完成；获闸后再读取原文及目标语言。 */
+async function acquireTranscriptTranslation(meetingId) {
+  while (isMeetingTranslationPending(meetingId)) {
+    await new Promise((resolve) => {
+      const waiters = translationWaiters.get(meetingId) || [];
+      waiters.push(resolve);
+      translationWaiters.set(meetingId, waiters);
+    });
+  }
+  transcriptTranslationRequests.add(meetingId);
+  syncDetailTranslationPending(meetingId);
+}
+function releaseTranscriptTranslation(meetingId) {
+  transcriptTranslationRequests.delete(meetingId);
+  syncDetailTranslationPending(meetingId);
+  notifyTranslationSettled(meetingId);
+}
+function syncDetailTranslationPending(meetingId) {
+  if (currentMeetingDetail?.id !== meetingId) return;
+  uiData.detail.translationPending = isMeetingTranslationPending(meetingId);
+  for (const key of ['transcript', 'originalTranscript', 'refinedTranscript']) {
+    uiData.detail[key]?.forEach((item) => {
+      item.translationPending = isSegmentTranslationPending(meetingId, item.segmentId);
+    });
+  }
+  document
+    .querySelectorAll('.final-transcript [data-segment-tool="translate"]')
+    .forEach((button) => {
+      const segmentId = button.closest('[data-segment-id]')?.dataset.segmentId;
+      const pending = isSegmentTranslationPending(meetingId, segmentId);
+      button.disabled = pending;
+      button.setAttribute('aria-busy', String(pending));
+      button.title = t(pending ? '正在翻译字幕' : '翻译');
+      button.setAttribute('aria-label', button.title);
+    });
+  document
+    .querySelectorAll('[data-detail-translation-toggle], [data-detail-translation]')
+    .forEach((button) => {
+      button.disabled = uiData.detail.translationPending;
+    });
+}
+/** 只合并仍匹配原文版本的译文，保留当前编辑器、滚动位置及另一场会议。 */
+function applySegmentTranslation(meetingId, snapshot, result) {
+  const current = detailSegmentFor(meetingId, snapshot.id);
+  const sameSource = (segment) =>
+    segment?.text === snapshot.text &&
+    segment?.version === snapshot.version &&
+    segment?.revision === snapshot.revision;
+  if (
+    !sameSource(current) ||
+    result?.cancelled ||
+    result?.meeting_id !== meetingId ||
+    result?.segment_id !== snapshot.id ||
+    typeof result.translation !== 'string'
+  )
+    return;
+  for (const key of ['segments', 'current_segments', 'original_segments']) {
+    currentMeetingDetail[key]
+      ?.filter((item) => item.id === snapshot.id && sameSource(item))
+      .forEach((item) => {
+        item.translation = result.translation;
+      });
+  }
+  if (currentMeetingDetail.correction?.stale_translations) {
+    currentMeetingDetail.correction.stale_translations =
+      currentMeetingDetail.correction.stale_translations.filter((id) => id !== snapshot.id);
+  }
+  for (const key of ['transcript', 'originalTranscript', 'refinedTranscript']) {
+    uiData.detail[key]
+      ?.filter((item) => item.segmentId === snapshot.id && sameSource(item))
+      .forEach((item) => {
+        item.translation = result.translation;
+        item.translationStale = false;
+      });
+  }
+  document
+    .querySelectorAll(
+      `.final-transcript [data-segment-id="${CSS.escape(snapshot.id)}"] .segment-copy`,
+    )
+    .forEach((copy) => {
+      if (
+        copy.querySelector('textarea') ||
+        copy.querySelector('p:not(.translation)')?.textContent !== snapshot.text
+      )
+        return;
+      let line = copy.querySelector('.translation');
+      if (!line) {
+        line = document.createElement('p');
+        copy.append(line);
+      }
+      line.className = 'translation';
+      line.textContent = result.translation;
+    });
+}
+async function translateTranscriptSegment(meetingId, segmentId, targetLanguage) {
+  const segment = detailSegmentFor(meetingId, segmentId);
+  const key = JSON.stringify([meetingId, segmentId]);
+  if (
+    !segment ||
+    !targetLanguage ||
+    !window.brevia?.translation ||
+    transcriptTranslationRequests.has(meetingId) ||
+    liveTranslationRequests.has(meetingId) ||
+    segmentTranslationRequests.has(key)
+  )
+    return;
+  const snapshot = { ...segment, meeting_id: meetingId };
+  segmentTranslationRequests.set(key, snapshot);
+  syncDetailTranslationPending(meetingId);
+  try {
+    const result = await generateSegmentTranslation(snapshot, targetLanguage);
+    applySegmentTranslation(meetingId, snapshot, result);
+  } catch (error) {
+    if (currentMeetingDetail?.id === meetingId)
+      showToast(`${t('翻译失败')}: ${userFacingError(error.message)}`, undefined, 'error');
+  } finally {
+    segmentTranslationRequests.delete(key);
+    syncDetailTranslationPending(meetingId);
+    notifyTranslationSettled(meetingId);
+  }
+}
+const segmentTranslationMenu = document.createElement('div');
+let segmentTranslationAnchor;
+segmentTranslationMenu.className = 'meeting-popover meeting-menu segment-translation-menu';
+segmentTranslationMenu.setAttribute('popover', 'auto');
+segmentTranslationMenu.setAttribute('role', 'menu');
+document.body.append(segmentTranslationMenu);
+segmentTranslationMenu.addEventListener('toggle', () => {
+  if (!segmentTranslationMenu.matches(':popover-open'))
+    segmentTranslationAnchor?.closest('.segment')?.classList.remove('has-segment-menu');
+});
+function openSegmentTranslation(meetingId, segmentId, anchor) {
+  if (isSegmentTranslationPending(meetingId, segmentId)) return;
+  closeMeetingPopovers();
+  if (uiData.detail.translationTarget) {
+    void translateTranscriptSegment(meetingId, segmentId, uiData.detail.translationTarget);
+    return;
+  }
+  segmentTranslationMenu.setAttribute('aria-label', t('翻译'));
+  segmentTranslationAnchor = anchor;
+  segmentTranslationMenu.innerHTML = BreviaI18n.languageOptions(locale, t)
+    .slice(1)
+    .map(
+      ([code, name]) =>
+        `<button type="button" role="menuitem" data-segment-language="${escapeHtml(code)}">${escapeHtml(name)}</button>`,
+    )
+    .join('');
+  segmentTranslationMenu.onclick = (event) => {
+    const choice = event.target.closest('[data-segment-language]');
+    if (
+      !choice ||
+      currentMeetingDetail?.id !== meetingId ||
+      isSegmentTranslationPending(meetingId, segmentId)
+    )
+      return;
+    closeMeetingPopovers();
+    anchor.focus({ preventScroll: true });
+    uiData.detail.translationTarget = choice.dataset.segmentLanguage;
+    void translateTranscriptSegment(meetingId, segmentId, choice.dataset.segmentLanguage);
+  };
+  segmentTranslationMenu.onkeydown = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = [...segmentTranslationMenu.querySelectorAll('button')];
+    const index = buttons.indexOf(document.activeElement);
+    buttons[
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? buttons.length - 1
+          : (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length
+    ]?.focus();
+  };
+  anchor.closest('.segment')?.classList.add('has-segment-menu');
+  segmentTranslationMenu.showPopover();
+  positionFloating(segmentTranslationMenu, anchor, ['bottom-end', 'top-end']);
+  focusForKeyboard(segmentTranslationMenu.querySelector('button'));
 }
 segmentContextMenu.addEventListener('keydown', (event) => {
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -9705,6 +10175,7 @@ document.addEventListener(
       event.stopImmediatePropagation();
       const anchor =
         segmentSpeakerDraft?.anchor ||
+        (segmentTranslationMenu.matches(':popover-open') ? segmentTranslationAnchor : null) ||
         document.querySelector('[data-summary-participants-toggle][aria-expanded="true"]');
       closeMeetingPopovers();
       if (anchor?.isConnected) anchor.focus({ preventScroll: true });
@@ -9736,7 +10207,12 @@ document.addEventListener('click', (event) => {
   if (!meetingId || !row) return;
   const segmentId = row.dataset.segmentId;
   const info = segmentInfoFor(meetingId, segmentId);
-  if (button.dataset.segmentTool === 'speaker') {
+  if (button.dataset.segmentTool === 'play') {
+    closeMeetingPopovers();
+    void playTranscriptSegment(meetingId, segmentId);
+  } else if (button.dataset.segmentTool === 'translate') {
+    openSegmentTranslation(meetingId, segmentId, button);
+  } else if (button.dataset.segmentTool === 'speaker') {
     void openSegmentSpeakerPicker(meetingId, segmentId, button);
   } else if (button.dataset.segmentTool === 'profile') {
     closeMeetingPopovers();
@@ -9897,7 +10373,17 @@ async function generateSegmentTranslation(payload, targetLanguage) {
 /** 将当前最新字幕翻译为指定语言；精修和手工编辑版本优先。 */
 async function translateLatestTranscript(targetLanguage, meeting = currentMeetingDetail) {
   const segments = meeting && latestTranscriptSegments(meeting).segments;
-  if (!meeting || !targetLanguage || !segments?.length || !window.brevia?.translation) return;
+  if (
+    !meeting ||
+    !targetLanguage ||
+    !segments?.length ||
+    !window.brevia?.translation ||
+    isMeetingTranslationPending(meeting.id)
+  )
+    return;
+  // 全文请求会写回会议的目标语言，不能与同会议的单句请求交错。
+  transcriptTranslationRequests.add(meeting.id);
+  syncDetailTranslationPending(meeting.id);
   if (meeting.id === currentMeetingDetail?.id) {
     uiData.detail.translationTarget = targetLanguage;
     uiData.detail.translationPending = true;
@@ -9918,11 +10404,71 @@ async function translateLatestTranscript(targetLanguage, meeting = currentMeetin
     const refreshed = await window.brevia.meeting.get({ meeting_id: meeting.id });
     applyCorrectionMeeting(refreshed);
   } catch (error) {
-    if (meeting.id === currentMeetingDetail?.id) {
-      uiData.detail.translationPending = false;
-      renderMeetingDetail();
-    }
     showToast(`${t('翻译失败')}: ${error.message}`, undefined, 'error');
+  } finally {
+    releaseTranscriptTranslation(meeting.id);
+  }
+}
+/** 精修完成后等待旧译文落盘，再按最新目标语言翻译当前稿。 */
+async function translateRefinedTranscript(meetingId) {
+  await acquireTranscriptTranslation(meetingId);
+  try {
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    if (!meeting.target_language) return;
+    const results = await mapWithConcurrency(
+      latestTranscriptSegments(meeting).segments,
+      4,
+      (segment) =>
+        generateSegmentTranslation({ ...segment, meeting_id: meetingId }, meeting.target_language),
+    );
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) showToast(`${t('翻译失败')}: ${failure.reason.message}`, undefined, 'error');
+    const refreshed = await window.brevia.meeting.get({ meeting_id: meetingId });
+    applyCorrectionMeeting(refreshed);
+  } catch (error) {
+    showToast(`${t('翻译失败')}: ${error.message}`, undefined, 'error');
+  } finally {
+    releaseTranscriptTranslation(meetingId);
+  }
+}
+/** 实时同语言字幕可并行；遇到回看或精修翻译则等待，并重新读取当前稿。 */
+async function translateSettledTranscriptSegment(payload, targetLanguage) {
+  const meetingId = payload.meeting_id;
+  if (!meetingId || !targetLanguage) return;
+  const active = liveTranslationRequests.get(meetingId);
+  const conflicting =
+    transcriptTranslationRequests.has(meetingId) ||
+    [...segmentTranslationRequests.values()].some((item) => item.meeting_id === meetingId) ||
+    (active && active.targetLanguage !== targetLanguage);
+  if (conflicting) {
+    await acquireTranscriptTranslation(meetingId);
+    try {
+      const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+      const segment = latestTranscriptSegments(meeting).segments.find(
+        (item) => item.id === (payload.segment_id || payload.id),
+      );
+      const currentTarget =
+        meetingActive && breviaClient?.state.meeting?.id === meetingId
+          ? liveConfig.target_language
+          : meeting.target_language;
+      // 精修改写了分段时，不用旧事件的 fallback 原文重新创建过期字幕。
+      if (segment && currentTarget)
+        await generateSegmentTranslation({ ...segment, meeting_id: meetingId }, currentTarget);
+    } finally {
+      releaseTranscriptTranslation(meetingId);
+    }
+    return;
+  }
+  const batch = active || { targetLanguage, count: 0 };
+  batch.count++;
+  liveTranslationRequests.set(meetingId, batch);
+  syncDetailTranslationPending(meetingId);
+  try {
+    await generateSegmentTranslation(payload, targetLanguage);
+  } finally {
+    if (--batch.count === 0) liveTranslationRequests.delete(meetingId);
+    syncDetailTranslationPending(meetingId);
+    notifyTranslationSettled(meetingId);
   }
 }
 /** 保存字幕编辑态下的逐句修正：只提交真正改动的段落，写入后端用户版本。@returns {Promise<void>} */
@@ -10612,6 +11158,28 @@ if (window.brevia) {
     if (meeting?.tags?.includes('手机录音') && !meeting.tags.includes('手机麦克风'))
       adoptMobileMeeting(meeting);
   });
+  window.brevia.on('agent.recording', ({ meeting, target, state, inputs }) => {
+    if (target !== 'computer') {
+      if (state !== 'stopped') adoptMobileMeeting(meeting);
+      return;
+    }
+    if (state === 'stopped') {
+      void finishCurrentRecording(meeting).catch((error) =>
+        showToast(error.message, undefined, 'error'),
+      );
+      return;
+    }
+    if (breviaClient.state.meeting?.id !== meeting.id) {
+      breviaClient.adoptNativeRecording(meeting, inputs);
+      activateMeeting(meeting, meeting);
+    }
+    const paused = state === 'paused';
+    document.querySelector('#pause').dataset.paused = String(paused);
+    renderPauseButton();
+    if (paused) clearInterval(timer);
+    else startTimer();
+    publishDesktopRecording();
+  });
   window.brevia.on('meeting.reconfigured', ({ meeting }) => {
     syncBackendMeeting(meeting);
     if (!meeting || meeting.id !== breviaClient?.state.meeting?.id) return;
@@ -10663,7 +11231,7 @@ if (window.brevia) {
       );
       renderSpeakerProfileCard();
       renderMeetingList();
-      if (activeModal === 'storage' || storageConfirmationPage) {
+      if (activeModal === 'storage' || storageConfirmationPage?.kind === 'storage') {
         updateStorageUsage();
         void refreshSettingsFolderRows();
       }
@@ -10749,12 +11317,13 @@ if (window.brevia) {
       });
     }
     try {
-      await generateSegmentTranslation(payload, liveConfig.target_language);
+      await translateSettledTranscriptSegment(payload, liveConfig.target_language);
     } catch (error) {
       showToast(`${t('翻译失败')}: ${error.message}`, undefined, 'error');
     }
   });
   window.brevia.on('translation.ready', (payload) => {
+    if (!payload.meeting_id || payload.meeting_id !== breviaClient.state.meeting?.id) return;
     const element = liveSegments.get(payload.segment_id);
     if (!element) return;
     const shouldFollow =
@@ -10801,18 +11370,7 @@ if (window.brevia) {
       uiData.detail.refineState = 'idle';
       applyBackendDetail(meeting);
     }
-    if (!meeting.target_language) return;
-    const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
-    const revision = Math.max(...refined.map((segment) => segment.revision), -1);
-    const results = await mapWithConcurrency(
-      refined.filter((item) => item.revision === revision),
-      4,
-      (segment) => generateSegmentTranslation(segment, meeting.target_language),
-    );
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure) showToast(`${t('翻译失败')}: ${failure.reason.message}`, undefined, 'error');
-    if (meeting.id === breviaClient.state.selectedMeetingId)
-      applyBackendDetail(await window.brevia.meeting.get({ meeting_id: meeting.id }));
+    await translateRefinedTranscript(meeting_id);
   });
   window.brevia.on('summary.started', ({ meeting_id, completed, total, stage }) =>
     showSummaryProgress(completed, total, stage, meeting_id),
@@ -11323,6 +11881,47 @@ document.addEventListener('click', (event) => {
       !desktopPreferences[toggle.dataset.desktopToggle],
     );
 });
+async function controlAgentRecording(recording) {
+  const { action, meeting_id: meetingId } = recording;
+  if (action === 'start') {
+    const tracks = recording.audio_tracks || ['mic'];
+    const meeting = await breviaClient.start(
+      { ...recording, agent_control: true },
+      { mic: tracks.includes('mic'), system: tracks.includes('system') },
+      recording.device_id,
+    );
+    if (meeting?.model_required) return meeting;
+    activateMeeting(meeting, recording);
+    return { meeting_id: meeting.id, state: 'recording', confirmed: true };
+  }
+  const activeId = breviaClient.state.meeting?.id;
+  if (!meetingActive || !activeId || (meetingId && meetingId !== activeId))
+    throw new Error(t('操作未完成，请在主窗口查看'));
+  if (action === 'stop') {
+    if (!(await stopCurrentRecording({ currentTarget: document.querySelector('#end-meeting') })))
+      throw new Error(desktopSaveError || t('录音仍在保存，请稍后重试退出'));
+    return { meeting_id: activeId, state: 'stopped', confirmed: true };
+  }
+  const paused = action === 'pause',
+    wasPaused = meetingPaused();
+  if (paused !== wasPaused) {
+    try {
+      await breviaClient.pause(paused);
+    } catch (error) {
+      try {
+        await breviaClient.capture?.setPaused(wasPaused);
+      } catch (cleanupError) {
+        console.error('Audio pause rollback failed', cleanupError);
+      }
+      throw error;
+    }
+    document.querySelector('#pause').dataset.paused = String(paused);
+    renderPauseButton();
+    if (paused) clearInterval(timer);
+    else startTimer();
+  }
+  return { meeting_id: activeId, state: paused ? 'paused' : 'recording', confirmed: true };
+}
 if (window.brevia?.desktop) {
   void window.brevia.desktop
     .preferences()
@@ -11334,9 +11933,11 @@ if (window.brevia?.desktop) {
     .catch((error) => showToast(error.message, undefined, 'error'));
   window.brevia.on(
     'desktop.action',
-    async ({ action, requestId, suggestionId, tab, meetingId, background }) => {
+    async ({ action, requestId, suggestionId, tab, meetingId, background, recording }) => {
       let error, result;
       try {
+        if (action === 'agent-recording') result = await controlAgentRecording(recording);
+        if (action === 'agent-devices') result = await breviaClient.listMicrophones();
         if (
           ['pause', 'stop', 'mark', 'accept', 'ignore'].includes(action) &&
           (!meetingActive || meetingId !== breviaClient?.state.meeting?.id)
@@ -11400,7 +12001,7 @@ if (window.brevia?.desktop) {
         await window.brevia.desktop.complete({
           requestId,
           ...(error ? { error } : {}),
-          ...(typeof result === 'boolean' ? { result } : {}),
+          ...(result !== undefined ? { result } : {}),
         });
       }
     },

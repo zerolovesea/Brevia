@@ -31,6 +31,7 @@ ipcRenderer.on('brevia:event', (_, event) => {
 
 contextBridge.exposeInMainWorld('brevia', {
   platform: process.platform,
+  agent: { settings: { get: invoke('agent.settings.get'), save: invoke('agent.settings.save') } },
   mobile: {
     startCapture: invoke('mobile.start-capture'),
     pauseCapture: invoke('mobile.pause-capture'),
@@ -50,6 +51,7 @@ contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
   maintain: invoke('app.maintain'),
   appInfo: { version: invoke('app.version') },
+  prompts: { get: invoke('prompts.get'), save: invoke('prompts.save') },
   desktop: {
     preferences: invoke('desktop.preferences.get'),
     editShortcuts: invoke('desktop.shortcuts.edit'),

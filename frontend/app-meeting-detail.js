@@ -29,6 +29,19 @@ function renderSegmentData(segment, editable, speakerNames) {
       currentMeetingDetail?.correction?.stale_translations?.includes(segment.id),
     ),
     translation: segment.translation,
+    translationPending: isSegmentTranslationPending(currentMeetingDetail?.id, segment.id),
+    // 旧分段只供回看；翻译接口始终处理当前稿，避免把已精修的旧段重新写入。
+    translationAvailable: (
+      currentMeetingDetail?.current_segments ||
+      currentMeetingDetail?.segments ||
+      []
+    ).some(
+      (current) =>
+        current.id === segment.id &&
+        current.text === segment.text &&
+        current.version === segment.version &&
+        current.revision === segment.revision,
+    ),
     // 逐句编辑按段落 id 定位：保存时以该 id 写入用户版本，覆盖自动识别结果。
     segmentId: segment.id,
   };
@@ -144,7 +157,7 @@ function applyBackendDetail(meeting) {
     modelCatalog.find((model) => model.id === uiData.detail.refinedModelApplied)?.name || '';
   uiData.detail.refinedModelOptions = refinedModelOptions(uiData.detail.language);
   uiData.detail.numSpeakers = meeting.num_speakers || null;
-  uiData.detail.translationPending = false;
+  uiData.detail.translationPending = isMeetingTranslationPending(meeting.id);
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
   const summary = meeting.summary?.data;

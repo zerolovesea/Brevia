@@ -136,7 +136,8 @@
     try {
       await action();
     } catch (error) {
-      const detail = t(error.detail || error.message || '连接失败，请重试');
+      messageKey = error.detail || error.message || '连接失败，请重试';
+      const detail = t(messageKey);
       dialog.querySelector('#mobile-dialog-status').textContent = detail;
       pairDialog.querySelector('#mobile-pair-error').textContent = detail;
     }
@@ -410,21 +411,24 @@
         revoke.type = 'button';
         revoke.textContent = t('取消信任');
         revoke.setAttribute('aria-label', `${t('取消信任')} · ${device.name}`);
-        revoke.onclick = () => {
-          if (
-            !window.confirm(
-              t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').replace(
-                '{name}',
-                () => device.name,
-              ),
-            )
-          )
-            return;
-          revoke.disabled = true;
-          return run(async () => render(await api.revoke({ id: device.id }))).finally(() => {
-            revoke.disabled = false;
-          });
-        };
+        revoke.onclick = () =>
+          openConfirmation(
+            t('取消信任'),
+            t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').replace(
+              '{name}',
+              () => device.name,
+            ),
+            () => {
+              revoke.disabled = true;
+              return run(async () => {
+                await render(await api.revoke({ id: device.id }));
+                message('');
+              }).finally(() => {
+                revoke.disabled = false;
+              });
+            },
+            revoke,
+          );
         // 配对记录只有设备名，不能据此推断系统或机型。
         row.insertAdjacentHTML(
           'afterbegin',

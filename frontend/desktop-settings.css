@@ -424,6 +424,7 @@ body .settings-page {
   background: var(--color-text);
 }
 .preference-toggle[aria-checked="true"] span {
+  background: var(--color-surface);
   transform: translateX(14px);
 }
 .preferences-destination {
@@ -612,6 +613,26 @@ body .settings-page {
 }
 .preferences-form-footer .save-state {
   margin-right: auto;
+}
+.prompt-settings-form textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--desktop-input-border);
+  border-radius: 7px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.settings-inline-error {
+  color: var(--color-danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 /* 权限和参数沿用同一组内边距，行末的状态与输入框对齐。 */
 .preferences-section.permission-settings-section,

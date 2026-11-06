@@ -11,7 +11,7 @@ const updates = [
 ];
 
 for (const [file, baseUrl] of updates) {
-  const macUrl = `${baseUrl}/Brevia-${version}-arm64.dmg`;
+  const macUrl = `${baseUrl}/Brevia-WebKit-${version}-arm64.dmg`;
   const windowsUrl = `${baseUrl}/Brevia-${version}-x64-setup.exe`;
   let html = readFileSync(file, 'utf8')
     .replace(/href="[^"]*Brevia-[^"]*-arm64\.dmg"/, `href="${macUrl}"`)
@@ -26,14 +26,14 @@ for (const [file, baseUrl] of updates) {
 const readmes = [
   'README.md',
   ...readdirSync('docs')
-    .filter((name) => /^README\..+\.md$/.test(name))
+    .filter((name) => /^README\.[a-z]{2}(?:-[A-Z]{2})?\.md$/.test(name))
     .map((name) => `docs/${name}`),
 ];
 for (const file of readmes) {
   const markdown = readFileSync(file, 'utf8').replace(
-    /https:\/\/(?:github\.com\/zerolovesea\/Brevia\/releases\/download\/v[\d.]+|modelscope\.cn\/models\/zyaztec\/brevia-release\/resolve\/master)\/Brevia-[\d.]+-(arm64\.dmg|x64-setup\.exe)/g,
+    /https:\/\/(?:github\.com\/zerolovesea\/Brevia\/releases\/download\/v[\d.]+|modelscope\.cn\/models\/zyaztec\/brevia-release\/resolve\/master)\/Brevia-(?:WebKit-)?[\d.]+-(arm64\.dmg|x64-setup\.exe)/g,
     (url, suffix) =>
-      `${url.slice(0, url.lastIndexOf('/Brevia-')).replace(/\/v[\d.]+$/, `/${tag}`)}/Brevia-${version}-${suffix}`,
+      `${url.slice(0, url.lastIndexOf('/Brevia-')).replace(/\/v[\d.]+$/, `/${tag}`)}/Brevia-${suffix === 'arm64.dmg' ? 'WebKit-' : ''}${version}-${suffix}`,
   );
   writeFileSync(file, markdown);
 }

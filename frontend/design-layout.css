@@ -64,87 +64,6 @@ body,
 .workspace-dialog .modal-body {
   padding-bottom: 0;
 }
-.workspace-edit-popover {
-  background: transparent;
-}
-.workspace-edit-popover .modal-panel {
-  position: fixed;
-  width: 280px;
-  max-width: calc(100vw - 16px);
-  max-height: calc(100dvh - 16px);
-  margin: 0;
-  padding: 20px;
-  overflow-y: auto;
-  border: 1px solid var(--color-line);
-  border-radius: 10px;
-  box-shadow: 0 6px 24px #00000012;
-}
-.workspace-edit-popover .modal-head {
-  display: none;
-}
-.workspace-edit-popover .modal-body {
-  padding: 0;
-}
-.workspace-edit-popover .workspace-form {
-  gap: 16px;
-}
-.workspace-edit-popover .workspace-form label {
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-.workspace-edit-popover .workspace-form :is(input, textarea) {
-  padding: 10px 12px;
-  color: var(--color-text);
-}
-.workspace-edit-popover .workspace-form .modal-form-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 4px;
-}
-.workspace-edit-popover .modal-action {
-  grid-column: 1;
-  grid-row: 1;
-}
-.workspace-edit-popover .modal-form-actions .secondary {
-  grid-column: 2;
-  grid-row: 1;
-}
-.workspace-edit-popover .workspace-form [data-delete-workspace] {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  order: 0;
-  margin: 4px 0 0;
-  justify-self: start;
-  min-height: 32px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-}
-.workspace-edit-popover .workspace-form input[type="text"] {
-  min-height: 44px;
-}
-.workspace-edit-popover .workspace-description summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  cursor: pointer;
-  list-style: none;
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
-.workspace-edit-popover .workspace-description summary .interface-icon {
-  width: 16px;
-  height: 16px;
-}
-.workspace-edit-popover .workspace-description label {
-  margin-top: 12px;
-}
-.workspace-edit-popover .workspace-description textarea {
-  min-height: 72px;
-}
 .workspace-form {
   gap: 24px;
 }
@@ -9586,7 +9505,8 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
 .transcript-scroll .segment:has(.segment-tools) .segment-meta {
   min-height: 28px;
-  padding-inline-end: 140px;
+  /* 28px 按钮 + 2px 间距；另留面板边距与说话人标签的间隔。 */
+  padding-inline-end: calc(var(--segment-tool-count, 5) * 30px + 20px);
 }
 .segment:has(.segment-tools) .segment-speaker {
   min-width: 0;
@@ -9639,14 +9559,9 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   opacity: 1;
   pointer-events: auto;
 }
-@container (min-width: 900px) {
-  #detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
-  .transcript-scroll .segment:has(.segment-tools) .segment-meta {
-    padding-inline-end: 200px;
-  }
-  .segment-tools button span {
-    display: inline;
-  }
+.segment:has(.segment-tools):not(.is-editing):is(:hover, :focus-within, .has-segment-menu)
+  .segment-modified-state {
+  visibility: hidden;
 }
 .segment-speaker-picker form {
   display: flex;
@@ -9719,6 +9634,9 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   .segment-tools {
     opacity: 1;
     pointer-events: auto;
+  }
+  .segment:has(.segment-tools):not(.is-editing) .segment-modified-state {
+    visibility: hidden;
   }
 }
 

@@ -353,3 +353,41 @@ test('Phone retransmission never resurrects a deleted meeting', async (t) => {
   );
   assert.ok(w.store.getMeeting('deleted-mobile').deleted_at);
 });
+
+test('Closed temporary engines unregister while reusable channels remain managed', async (t) => {
+  class CountedEngine extends FakeEngine {
+    close() {
+      this.closeCount = (this.closeCount || 0) + 1;
+      super.close();
+    }
+  }
+  const { w } = await setup(t, { engineFactory: (calls) => new CountedEngine(calls) });
+  const temporary = [];
+  for (let i = 0; i < 100; i++) {
+    const engine = w.newEngine('sherpa-onnx');
+    temporary.push(engine);
+    engine.close();
+  }
+  assert.equal(w.engines.size, 0, 'closed temporary clients must not accumulate');
+  const restarted = w.newEngine('sherpa-onnx');
+  restarted.close();
+  await restarted.request('asr.load', {});
+  assert.ok(w.engines.has(restarted), 'restarted clients must rejoin shutdown tracking');
+  restarted.close();
+  assert.ok(!w.engines.has(restarted));
+  const channel = w.engineFactory('llama', 'assistant');
+  channel.close();
+  assert.equal(w.engineFactory('llama', 'assistant'), channel);
+  assert.ok(w.engines.has(channel), 'reusable channels must remain managed after cancellation');
+  await channel.request('asr.load', {});
+  const active = w.newEngine('sherpa-onnx');
+  assert.equal(w.engines.size, 2);
+  t.after(() => {
+    assert.ok(
+      temporary.every((engine) => engine.closeCount === 1),
+      'shutdown must not close retired clients again',
+    );
+    assert.equal(active.closeCount, 1, 'shutdown must still close live temporary engines');
+    assert.equal(channel.closeCount, 2, 'shutdown must still close reusable channels');
+  });
+});

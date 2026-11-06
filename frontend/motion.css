@@ -93,13 +93,11 @@ html .settings-page.modal-leave,
 html .settings-page:is(.modal-enter, .modal-leave) .modal-panel {
   animation: none;
 }
-html .workspace-edit-popover:is(.modal-enter, .modal-leave) .modal-panel,
 html .storage-confirmation:is(.modal-enter, .modal-leave) .modal-panel {
   /* 定位依赖的 transform 不参与入场，避免锚定浮层偏移。 */
   animation-name: brevia-fade-in;
   animation-duration: var(--motion-menu);
 }
-html .workspace-edit-popover.modal-leave .modal-panel,
 html .storage-confirmation.modal-leave .modal-panel {
   animation-name: brevia-fade-out;
   animation-duration: var(--motion-menu-exit);

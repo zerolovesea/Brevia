@@ -7,6 +7,8 @@ const legacy = process.platform !== 'darwin' || process.argv.includes('--legacy'
 const tests = legacy
   ? [
       'worker',
+      'agent',
+      'prompts',
       'sentence',
       'packaging',
       'mlx',

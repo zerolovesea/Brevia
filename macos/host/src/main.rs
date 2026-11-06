@@ -95,8 +95,10 @@ fn main() {
     let _lock = match instance_lock() {
         Ok(Some(lock)) => lock,
         Ok(None) => {
-            unsafe {
-                brevia_activate_running_peer(false);
+            if !std::env::args().any(|arg| arg == "--background") {
+                unsafe {
+                    brevia_activate_running_peer(false);
+                }
             }
             return;
         }

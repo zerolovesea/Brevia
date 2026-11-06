@@ -10,7 +10,7 @@ from .audio_io import convert_to_pcm_wav, read_mono_wav, read_mono_wav_window, w
 from .asr import SpeakerTracker
 from .config import SETTINGS
 from .transcript import subtitle_time_at_offset
-from .worker_common import UserFacingError
+from .worker_common import TaskCancelled, UserFacingError
 
 
 class VoiceProfileService:
@@ -54,13 +54,15 @@ class VoiceProfileService:
             sample_audio.unlink(missing_ok=True)
             raise
 
-    def verify(self, payload):
+    def verify(self, payload, cancellation=None):
         """对临时选择的录音打分；验证音频不会保存到声纹库。"""
         source = Path(payload["path"])
         if not source.is_file():
             raise UserFacingError("error.audio_not_found", "Audio file not found")
-        samples, sample_rate = self._samples(source)
+        samples, sample_rate = self._samples(source, cancellation=cancellation)
         embedding = SpeakerTracker(self.models).embedding(samples, sample_rate)
+        if cancellation is not None and cancellation.is_set():
+            raise TaskCancelled()
         if embedding is None:
             raise UserFacingError(
                 "error.voice_sample_short", "Voice sample is too short for verification"
@@ -215,11 +217,11 @@ class VoiceProfileService:
         return boundaries
 
     @staticmethod
-    def _samples(source):
+    def _samples(source, cancellation=None):
         """从任意音频文件转换并读取为单声道 PCM16 样本。"""
         with tempfile.TemporaryDirectory() as directory:
             wav = Path(directory) / "voice.wav"
-            convert_to_pcm_wav(source, wav)
+            convert_to_pcm_wav(source, wav, cancellation=cancellation)
             return read_mono_wav(
                 wav, maximum_seconds=SETTINGS["voice_profiles"]["max_total_seconds"]
             )

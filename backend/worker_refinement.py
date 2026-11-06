@@ -321,7 +321,11 @@ class RefinementWorkerMixin:
         # 「准备精修」的绝对大头（实测 60 s 窗口约 24 s，全片可达数分钟），且并行/复用
         # 子进程几乎不缩放（4 物理核上并行仅 ~1.18x）。估计准备时间超出预算时只做 VAD、
         # 全部标成 local-user，让逐字稿先出来；预算内仍正常区分说话人。
-        flat_import = is_imported_audio and self._import_diarization_too_slow(meeting, tracks)
+        flat_import = (
+            not payload.get("force_diarization")
+            and is_imported_audio
+            and self._import_diarization_too_slow(meeting, tracks)
+        )
         # 系统音频（远端）与导入的麦克风必须聚类；实时麦克风只要声纹模型就绪也
         # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
         # 超出预算的导入录音例外：不聚类。

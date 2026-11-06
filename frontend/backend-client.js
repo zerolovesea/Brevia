@@ -212,13 +212,23 @@ class AudioCapture {
   }
 
   async setPaused(paused) {
+    const previous = this.paused;
     this.paused = paused;
-    await Promise.allSettled(
-      [...new Set(this.sources.map(({ context }) => context))].map(async (context) => {
-        if (paused && context.state === 'running') await context.suspend();
-        if (!paused && context.state === 'suspended') await context.resume();
-      }),
-    );
+    const contexts = [...new Set(this.sources.map(({ context }) => context))];
+    const change = async (context, value) => {
+      if (value && context.state === 'running') await context.suspend();
+      if (!value && context.state === 'suspended') await context.resume();
+      if (context.state !== (value ? 'suspended' : 'running'))
+        throw new Error(micMessage('操作未完成，请在主窗口查看'));
+    };
+    const results = await Promise.allSettled(contexts.map((context) => change(context, paused)));
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed) {
+      this.paused = previous;
+      // 所有输入完成后再恢复，避免成功输入迟到覆盖回滚状态。
+      await Promise.allSettled(contexts.map((context) => change(context, previous)));
+      throw failed.reason;
+    }
   }
 
   async connect(track, stream) {
@@ -475,13 +485,17 @@ class NativeAudioCapture {
     this.unsubscribe = [];
   }
 
-  async prepare({ mic, system }, preview = false) {
+  attach() {
     this.unsubscribe.push(
       window.brevia.on('native-audio.level', ({ track, level }) => this.onLevel?.(track, level)),
       window.brevia.on('native-audio.error', ({ message }) =>
         this.onError?.(new Error(micMessage(message))),
       ),
     );
+  }
+
+  async prepare({ mic, system }, preview = false) {
+    this.attach();
     this.preparing = window.brevia.nativeAudio.prepare({
       mic: Boolean(mic),
       system: Boolean(system),
@@ -577,6 +591,20 @@ window.breviaClient = window.brevia
         const result = await window.brevia.initialize();
         this.state.initialized = result;
         return result;
+      },
+      adoptNativeRecording(meeting, inputs) {
+        if (this.state.meeting?.id === meeting.id) return;
+        const capture = new NativeAudioCapture(this.onLevel, (error) =>
+          this.onCaptureError?.(error),
+        );
+        capture.attach();
+        capture.meetingId = meeting.id;
+        // 宿主已取得设备确认，接管已有采集而不再次打开麦克风。
+        capture.preparing = Promise.resolve();
+        this.capture = capture;
+        this.state.meeting = meeting;
+        this.state.selectedMeetingId = meeting.id;
+        this.state.inputs = inputs;
       },
       async start(payload, inputs, micDeviceId) {
         if (this.starting || this.stopping || this.state.meeting)

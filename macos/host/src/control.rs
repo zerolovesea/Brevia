@@ -37,7 +37,7 @@ impl Control {
             .args(
                 std::env::args()
                     .skip(1)
-                    .filter(|arg| arg == "--reset-onboarding"),
+                    .filter(|arg| arg == "--reset-onboarding" || arg == "--background"),
             )
             .env("BREVIA_RESOURCES", &resources)
             .stdin(Stdio::piped())

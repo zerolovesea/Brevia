@@ -116,11 +116,12 @@ class RecordingSessionMixin:
         if not source.is_file():
             raise ValueError("Audio file not found")
         payload["meeting_id"] = payload.get("meeting_id") or str(uuid4())
-        with self.tasks.running("meeting.import", payload["meeting_id"]):
+        with self.tasks.running("meeting.import", payload["meeting_id"]) as control:
             meeting = self.store.create_meeting(payload)
             destination = self.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
             try:
-                convert_to_pcm_wav(source, destination)
+                convert_to_pcm_wav(source, destination, cancellation=control.cancelled)
+                self.wait_task(control)
                 import wave
 
                 with wave.open(str(destination)) as audio:

@@ -180,3 +180,5 @@
 ## 致谢
 
 感谢 [mlx-audio](https://github.com/Blaizzy/mlx-audio)、[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)、[Electron](https://github.com/electron/electron)，以及 Qwen、FunASR、Parakeet、Pyannote、3D-Speaker、Silero、Tencent Hy-MT2 的作者与维护者。
+
+macOS 原生版和 Windows 版支持经过认证的本机 Agent（JSON CLI / stdio MCP）：自动后台启动、文件转写与翻译导出、会议检索及电脑/手机录音控制。在 **设置 → Agent 与 MCP** 管理读取、推理和录音权限并复制 MCP 配置；在 **设置 → 提示词** 编辑纪要、实时 AI 笔记和翻译的额外指令。使用方法与平台安装说明见[本机 Agent 接口](../DEVELOPMENT.md#本机-agent-接口)。

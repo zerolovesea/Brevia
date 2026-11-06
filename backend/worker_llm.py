@@ -205,6 +205,7 @@ class LLMWorkerMixin:
         提供商 ``Built-in`` 通过 llama sidecar 在本地运行；其他提供商通过共享的
         HTTP 客户端接口（``self.llm_complete``）。
         """
+        prompt = self.prompts.apply("summary", prompt)
         if (payload.get("provider") or "").lower() in {"built-in", "builtin"}:
             return self.llama_sidecar_complete(payload, prompt)
         return self.llm_complete(payload, prompt)
@@ -430,6 +431,31 @@ class LLMWorkerMixin:
             blocks = blocks[:MAX_MERGE_INPUT_CHARS] + f"\n\n{marker}"
         return merge_summary_prompt([blocks], title, language, template), truncated
 
+    def translate_text(self, text, target_language, control=None, complete=False):
+        """字幕和 Agent 文件共用本地翻译；文件输出要求正常结束，不能接受截断。"""
+        target = LANGUAGE_NAMES.get(target_language, target_language)
+        prompt = (
+            f"Translate the following text into {target}. "
+            f"Output only the translation, with no explanations.\n\n{text}"
+        )
+        request = self.prompts.apply("translation", prompt)
+        options = {}
+        if control is not None:
+            self.wait_task(control)
+            options["cancellation"] = control.cancelled
+        if complete:
+            options.update(require_complete=True, chat=True)
+        return self.llama_generate(
+            "translation",
+            TRANSLATION_MODEL_ID,
+            request,
+            max_tokens=2048 if complete else 512,
+            context_size=4096 if request == prompt else 16384,
+            temperature=0.3,
+            stop_tokens=["<|im_end|>", "<|endoftext|>"],
+            **options,
+        ).strip()
+
     @managed_task("translation.generate", concurrent=True)
     def translate(self, payload, control=None):
         """翻译当前字幕，并仅回写源文本仍一致的版本。
@@ -469,20 +495,7 @@ class LLMWorkerMixin:
             _, segment = self.store.translation_context(meeting["id"], payload["segment_id"])
         if not segment:
             raise UserFacingError("error.segment_not_found", "Transcript segment not found")
-        target = LANGUAGE_NAMES.get(payload["target_language"], payload["target_language"])
-        prompt = (
-            f"Translate the following text into {target}. "
-            f"Output only the translation, with no explanations.\n\n{segment['text']}"
-        )
-        translation = self.llama_generate(
-            "translation",
-            TRANSLATION_MODEL_ID,
-            prompt,
-            max_tokens=512,
-            context_size=4096,
-            temperature=0.3,
-            stop_tokens=["<|im_end|>", "<|endoftext|>"],
-        ).strip()
+        translation = self.translate_text(segment["text"], payload["target_language"])
         if not self.store.save_translation(
             meeting["id"],
             segment["id"],
