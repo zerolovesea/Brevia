@@ -1,0 +1,31 @@
+name: Windows ASR CPU diagnosis
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        sample: [1, 2]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache/restore@v4
+        with:
+          path: dist/native-smoke-models
+          key: native-models-v1-${{ hashFiles('backend/models.json') }}
+      - run: node scripts/prepare-native-smoke.cjs dist/native-smoke-models
+      - run: node windows/diagnose-asr.cjs dist/native-smoke-models

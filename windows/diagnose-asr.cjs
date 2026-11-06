@@ -9,7 +9,7 @@ const { download, digest } = require('./build.cjs');
 async function main() {
   const root = path.resolve(__dirname, '..');
   const models = path.resolve(process.argv[2]);
-  const engines = path.resolve(process.argv[3]);
+  const engines = process.argv[3] ? path.resolve(process.argv[3]) : null;
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-asr-diagnostic-'));
   const name = 'sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts';
   try {
@@ -25,9 +25,17 @@ async function main() {
     });
     assert.equal(extracted.status, 0, extracted.stderr);
     const binaries = path.join(scratch, name, 'bin');
-    for (const dll of ['sherpa-onnx-c-api.dll', 'onnxruntime.dll']) {
+    // 已与 03c6d6cb 的正式 MSVC 产物逐个核对；独立诊断无需重建整套安装器。
+    for (const [dll, publishedDigest] of Object.entries({
+      'sherpa-onnx-c-api.dll': 'ee2af9f49b8fc5dae135ad20c0b955cbab90d17b79cc1ad0db91e03b24962f68',
+      'onnxruntime.dll': '7f66f939a881baf4f46a2216496798edf4a1429878b646d12674aa62f27d8a25',
+    })) {
       const official = path.join(scratch, name, 'lib', dll);
-      assert.equal(await digest(official), await digest(path.join(engines, dll)), dll);
+      assert.equal(
+        await digest(official),
+        engines ? await digest(path.join(engines, dll)) : publishedDigest,
+        dll,
+      );
     }
     const wav = fs.readFileSync(path.join(root, 'backend/fixtures/example-zh.wav'));
     let format, audio;
