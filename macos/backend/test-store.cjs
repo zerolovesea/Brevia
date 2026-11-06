@@ -18,6 +18,53 @@ function setup(t) {
   });
   return { root, store };
 }
+function readArchive(file) {
+  if (process.platform === 'win32') {
+    const script = `
+      $ErrorActionPreference = 'Stop'
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+      $zip = [IO.Compression.ZipFile]::OpenRead($env:BREVIA_TEST_ARCHIVE)
+      try {
+        $files = [ordered]@{}
+        foreach ($entry in $zip.Entries) {
+          $reader = [IO.StreamReader]::new($entry.Open(), [Text.Encoding]::UTF8)
+          try { $files[$entry.FullName] = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        }
+        [Console]::WriteLine((@{ names = @($files.Keys); files = $files } | ConvertTo-Json -Depth 4 -Compress))
+      } finally { $zip.Dispose() }
+    `;
+    return JSON.parse(
+      execFileSync(
+        path.join(
+          process.env.SystemRoot || 'C:\\Windows',
+          'System32/WindowsPowerShell/v1.0/powershell.exe',
+        ),
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          Buffer.from(script, 'utf16le').toString('base64'),
+        ],
+        { encoding: 'utf8', env: { ...process.env, BREVIA_TEST_ARCHIVE: file } },
+      ),
+    );
+  }
+  const names = execFileSync('/usr/bin/tar', ['-tf', file], { encoding: 'utf8' })
+    .trim()
+    .split(/\r?\n/);
+  return {
+    names,
+    files: Object.fromEntries(
+      names.map((name) => [
+        name,
+        execFileSync('/usr/bin/tar', ['-xOf', file, name.replace(/[\\?*\[\]]/g, '\\$&')], {
+          encoding: 'utf8',
+        }),
+      ]),
+    ),
+  };
+}
 function clean(value) {
   if (Array.isArray(value)) return value.map(clean);
   if (value && typeof value === 'object')
@@ -194,24 +241,10 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
     text: '测试 <script>alert(1)</script> 😀',
   });
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
-  fs.copyFileSync(docx.path, path.join(root, 'archive.docx'));
-  assert.match(
-    execFileSync('tar', ['-xOf', 'archive.docx', 'word/document.xml'], {
-      encoding: 'utf8',
-      cwd: root,
-    }),
-    /&lt;script&gt;/,
-  );
+  assert.match(readArchive(docx.path).files['word/document.xml'], /&lt;script&gt;/);
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });
   assert.equal(bundle.recording_included, false);
-  fs.copyFileSync(bundle.path, path.join(root, 'archive.zip'));
-  assert.match(
-    execFileSync('tar', ['-xOf', 'archive.zip'], {
-      encoding: 'utf8',
-      cwd: root,
-    }),
-    /测试/,
-  );
+  assert.match(Object.values(readArchive(bundle.path).files).join('\n'), /测试/);
   const html = await handlers['meeting.export']({ meeting_id: 'export', format: 'pdf' });
   assert.equal(html.print_pdf, true);
   assert.doesNotMatch(fs.readFileSync(html.path, 'utf8'), /<script>/);
@@ -230,7 +263,7 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
   assert.notEqual(collision.path, docx.path);
 });
 test('Exports accept imported long filenames and produce portable archive names', async (t) => {
-  const { root, store } = setup(t),
+  const { store } = setup(t),
     handlers = createExportHandlers({ store, tasks: new TaskRegistry() }),
     title = 'a'.repeat(251) + '.wav';
   store.createMeeting({
@@ -253,15 +286,13 @@ test('Exports accept imported long filenames and produce portable archive names'
   assert.equal(fs.readFileSync(first.path, 'utf8').split('\n')[0], '# ' + title);
   for (const name of ['CON', 'LPT¹.notes', 'nul\u0000:name. ', '汉😀'.repeat(60)]) {
     store.updateMeeting('portable-export', { title: name });
-    const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' });
-    fs.copyFileSync(archive.path, path.join(root, 'archive.zip'));
-    const filenames = execFileSync('tar', ['-tf', 'archive.zip'], {
-      encoding: 'utf8',
-      cwd: root,
-    })
-      .trim()
-      .split(/\r?\n/);
-    for (const filename of [path.basename(archive.path), ...filenames]) {
+    const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' }),
+      contents = readArchive(archive.path);
+    assert.equal(contents.names.length, 2);
+    for (const body of Object.values(contents.files)) assert.match(body, /Kept transcript/);
+    if (name.startsWith('汉'))
+      assert.ok(contents.names.every((filename) => filename.startsWith('汉😀')));
+    for (const filename of [path.basename(archive.path), ...contents.names]) {
       assert.ok(Buffer.byteLength(filename) <= 255);
       assert.equal(filename, filename.toWellFormed());
       assert.doesNotMatch(filename, /[<>:"/\\|?*\x00-\x1f]/);
