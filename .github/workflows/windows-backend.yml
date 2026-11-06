@@ -142,6 +142,7 @@ jobs:
           path: dist/native-smoke-models
           key: native-models-v1-${{ hashFiles('backend/models.json') }}
       - name: Validate real ASR, VAD, voiceprints and translation
+        id: real-models
         run: |
           $modelPath = 'dist/中文用户 模型'
           Move-Item dist/native-smoke-models $modelPath
@@ -151,3 +152,6 @@ jobs:
           } finally {
             Move-Item $modelPath dist/native-smoke-models
           }
+      - name: Diagnose failed ASR with the official native CLI
+        if: failure() && steps.real-models.outcome == 'failure'
+        run: node windows/diagnose-asr.cjs dist/native-smoke-models dist/native-win/app/resources/engines
