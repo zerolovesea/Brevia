@@ -54,10 +54,27 @@ jobs:
           xcodebuild -version
           xcrun swift --version
           xcodebuild -downloadComponent MetalToolchain
-          cargo install tauri-cli --version 2.12.2 --locked
-      - name: Prepare native Windows bundler
-        if: runner.os == 'Windows'
+      - name: Restore native bundler
+        id: tauri-cli-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri${{ runner.os == 'Windows' && '.exe' || '' }}
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-2.12.2
+      - name: Install native bundler
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
         run: cargo install tauri-cli --version 2.12.2 --locked
+      - name: Verify native bundler
+        shell: bash
+        run: |
+          version=$(cargo tauri --version)
+          printf '%s\n' "$version"
+          test "${version##* }" = '2.12.2'
+      - name: Cache native bundler
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri${{ runner.os == 'Windows' && '.exe' || '' }}
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-2.12.2
       - name: Configure Apple signing and native updates
         if: runner.os == 'macOS'
         shell: bash

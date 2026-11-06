@@ -62,10 +62,37 @@ jobs:
             macos/host/target
             ~/.cargo/registry
           key: native-windows-${{ hashFiles('macos/host/Cargo.lock', 'windows/build.cjs', 'windows/CMakeLists.txt') }}
+      - name: Restore native bundler
+        id: tauri-cli-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri.exe
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-2.12.2
       - name: Install native bundler
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
         run: cargo install tauri-cli --version 2.12.2 --locked
+      - name: Verify native bundler
+        shell: bash
+        run: |
+          version=$(cargo tauri --version)
+          printf '%s\n' "$version"
+          test "${version##* }" = '2.12.2'
+      - name: Cache native bundler
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri.exe
+          key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-2.12.2
       - name: Build complete native Windows installer
         run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-${{ github.sha }}
+          path: |
+            dist/native-win/app/
+            dist/native-win/Brevia-*-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 7
       - name: Test native host
         run: cargo test --release --locked --manifest-path macos/host/Cargo.toml
       - name: Test real WebView2 and PDF export
@@ -90,11 +117,3 @@ jobs:
           } finally {
             Move-Item $modelPath dist/native-smoke-models
           }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-native-${{ github.sha }}
-          path: |
-            dist/native-win/app/
-            dist/native-win/Brevia-*-x64-setup.exe
-          if-no-files-found: error
-          retention-days: 7
