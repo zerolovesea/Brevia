@@ -250,12 +250,12 @@ const writeLog = (level, value) => {
 const stoppingProcessGroups = new Set();
 const stopProcess = (child, graceMs = 5000) => {
   if (!child?.pid) return;
+  // 已退出的进程不要再按 pid 终止：pid 可能已被系统复用。
+  if (child.exitCode !== null || child.signalCode) return;
   if (process.platform === 'win32') {
     execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => {});
     return;
   }
-  // 已退出的进程不要再按 pid 杀进程组：pid 可能已被系统复用，会误杀同组进程。
-  if (child.exitCode !== null || child.signalCode) return;
   // 杀掉整个进程组：worker 会派生 ffmpeg 与 llama sidecar，只 SIGTERM 父进程会留下孤儿进程。
   stoppingProcessGroups.add(child.pid);
   try {

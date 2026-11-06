@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
+import { spawn } from 'node:child_process';
+import { EventEmitter, once } from 'node:events';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -1511,6 +1512,44 @@ assert.deepEqual(processSignals, [
   [-456, 'SIGTERM'],
   [-456, 'SIGKILL'],
 ]);
+
+// 用真实 ChildProcess 的退出状态验证：重复收尾不能向已经回收的 Windows pid 发 taskkill。
+for (const exitCode of [0, 7]) {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      `process.stdin.resume(); process.stdin.on('end', () => process.exitCode = ${exitCode});`,
+    ],
+    { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true },
+  );
+  const exited = once(child, 'exit');
+  const killed = [];
+  const windowsContext = {
+    child,
+    process: { platform: 'win32' },
+    execFile: (file, args) => killed.push([file, [...args]]),
+  };
+  try {
+    await once(child, 'spawn');
+    runInNewContext(
+      mainSource.slice(
+        mainSource.indexOf('const stoppingProcessGroups = '),
+        mainSource.indexOf('let storageMigrationInProgress'),
+      ) + '\nstopProcess(child)',
+      windowsContext,
+    );
+    assert.deepEqual(killed, [['taskkill', ['/pid', String(child.pid), '/t', '/f']]]);
+    child.stdin.end();
+    await exited;
+    assert.equal(child.exitCode, exitCode);
+    runInNewContext('stopProcess(child)', windowsContext);
+    assert.equal(killed.length, 1, 'A completed child must not be targeted again');
+  } finally {
+    if (child.exitCode === null && !child.signalCode) child.kill();
+    await exited;
+  }
+}
 
 // CLI 并发唤起不能把用户正在使用的窗口抢到前台。
 {
