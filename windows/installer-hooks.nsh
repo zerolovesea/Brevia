@@ -99,8 +99,9 @@ Function BreviaRestoreLegacyDirectory
   Call BreviaFindLegacy
   ${If} $BreviaLegacyInvalid = 0
   ${AndIf} $BreviaLegacyDir != ""
-    ; /D 显式指定的新目录仍由用户决定。
-    ${GetOptions} $CMDLINE "/D=" $0
+    ; NSIS 从 $CMDLINE 移除 /D，需读取原始命令行以保留用户指定的新目录。
+    System::Call 'kernel32::GetCommandLineW() w .r0'
+    ${GetOptions} $0 "/D=" $1
     ${If} ${Errors}
       StrCpy $INSTDIR $BreviaLegacyDir
     ${EndIf}
