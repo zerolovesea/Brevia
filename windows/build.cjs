@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { setTimeout: delay } = require('node:timers/promises');
 const root = path.resolve(__dirname, '..');
 const out = path.join(root, 'dist/native-win');
 const sources = path.join(out, 'sources');
@@ -24,10 +25,53 @@ async function download(url, file, sha) {
   if (fs.existsSync(file) && (await digest(file)) === sha) return;
   const temporary = file + '.part';
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(300000) });
-    if (!response.ok || !response.body || new URL(response.url).protocol !== 'https:')
-      throw new Error('Download failed: ' + url);
-    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary));
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const signal = AbortSignal.timeout(300000);
+      try {
+        const response = await fetch(url, { signal });
+        if (new URL(response.url).protocol !== 'https:') {
+          await response.body?.cancel().catch(() => {});
+          throw new Error('Insecure download redirect: ' + url);
+        }
+        if (!response.ok || !response.body) {
+          await response.body?.cancel().catch(() => {});
+          const error = new Error(`Download failed (HTTP ${response.status}): ${url}`);
+          error.status = response.status;
+          throw error;
+        }
+        await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary), {
+          signal,
+        });
+        break;
+      } catch (error) {
+        fs.rmSync(temporary, { force: true });
+        const code = error.cause?.code || error.code;
+        const retryable =
+          [
+            'ECONNRESET',
+            'ETIMEDOUT',
+            'EAI_AGAIN',
+            'ENETUNREACH',
+            'EHOSTUNREACH',
+            'ECONNREFUSED',
+            'UND_ERR_CONNECT_TIMEOUT',
+            'UND_ERR_HEADERS_TIMEOUT',
+            'UND_ERR_BODY_TIMEOUT',
+            'UND_ERR_SOCKET',
+          ].includes(code) ||
+          error.name === 'TimeoutError' ||
+          (error.name === 'AbortError' && signal.aborted) ||
+          [408, 429, 500, 502, 503, 504].includes(error.status);
+        if (!retryable) throw error;
+        if (attempt === 3)
+          throw new Error('Download failed after 3 attempts: ' + url, { cause: error });
+        console.warn(
+          `Retrying download (${attempt}/3): ${url} (${typeof code === 'string' ? code : error.message})`,
+        );
+        await delay(attempt * 1000);
+      }
+    }
+    // 摘要错误不是网络瞬断；不重试，也不替换已有缓存。
     if ((await digest(temporary)) !== sha) throw new Error('Checksum mismatch: ' + url);
     fs.renameSync(temporary, file);
   } finally {

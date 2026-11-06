@@ -38,7 +38,7 @@
     "test:backend:legacy": "node scripts/test-backend.cjs --legacy",
     "brevia": "node scripts/brevia.cjs",
     "test:agent": "node --test electron/test-agent*.cjs macos/backend/test-agent*.cjs",
-    "test:release": "node --test scripts/test-release.cjs",
+    "test:release": "node --test scripts/test-release.cjs windows/test-build.cjs",
     "test:windows:native": "node windows/test-packaged.cjs dist/native-win/app"
   },
   "keywords": [],

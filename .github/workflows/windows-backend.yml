@@ -97,7 +97,7 @@ jobs:
           path: |
             dist/native-win/app/
             macos/host/target/release/Brevia.exe
-          if-no-files-found: error
+          if-no-files-found: warn
           include-hidden-files: true
           retention-days: 7
       - uses: actions/upload-artifact@v4
