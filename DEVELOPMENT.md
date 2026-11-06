@@ -200,7 +200,7 @@ npm run build         # tailwind.css → styles.css，构建后 styles.css 应�
 
 macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.4.1（Swift 6.3）与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
 
-工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 使用 MSVC 构建原生引擎和 Tauri NSIS 安装器，验证随包 CLI/MCP、WebView2、PDF、旧版迁移和更新签名。Windows 更新复用上述 Tauri 密钥；可配置 `WIN_CERTIFICATE_P12_BASE64` 和 `WIN_CERTIFICATE_PASSWORD` 进行 Authenticode 签名，未配置时 Windows 会显示未签名发布者提示。
+工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 使用 MSVC 构建原生引擎和 Tauri NSIS 安装器，验证随包 CLI/MCP、WebView2、PDF、旧版迁移和更新签名，并使用校验过的真实权重执行转写、VAD、声纹、说话人分段及翻译；推理失败阻止发布。Windows 更新复用上述 Tauri 密钥；可配置 `WIN_CERTIFICATE_P12_BASE64` 和 `WIN_CERTIFICATE_PASSWORD` 进行 Authenticode 签名，未配置时 Windows 会显示未签名发布者提示。
 
 本机仅构建安装包时运行：
 

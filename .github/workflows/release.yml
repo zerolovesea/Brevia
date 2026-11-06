@@ -154,6 +154,25 @@ jobs:
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           node windows/test-upgrade.cjs "dist/native-win/Brevia-$version-x64-setup.exe"
+      - name: Restore verified Windows smoke models
+        if: runner.os == 'Windows'
+        id: smoke-models-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dist/native-smoke-models
+          key: native-models-v1-${{ hashFiles('backend/models.json') }}
+      - name: Prepare verified Windows smoke models
+        if: runner.os == 'Windows'
+        run: node scripts/prepare-native-smoke.cjs dist/native-smoke-models
+      - name: Cache verified Windows smoke models
+        if: runner.os == 'Windows' && steps.smoke-models-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist/native-smoke-models
+          key: native-models-v1-${{ hashFiles('backend/models.json') }}
+      - name: Verify real Windows inference before release
+        if: runner.os == 'Windows'
+        run: node macos/inference/smoke.cjs dist/native-smoke-models dist/native-win/app/resources/engines
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS'
         shell: bash
