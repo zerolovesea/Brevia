@@ -194,19 +194,21 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
     text: '测试 <script>alert(1)</script> 😀',
   });
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
+  fs.copyFileSync(docx.path, path.join(root, 'archive.docx'));
   assert.match(
-    execFileSync('tar', ['-xOf', '-', 'word/document.xml'], {
+    execFileSync('tar', ['-xOf', 'archive.docx', 'word/document.xml'], {
       encoding: 'utf8',
-      input: fs.readFileSync(docx.path),
+      cwd: root,
     }),
     /&lt;script&gt;/,
   );
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });
   assert.equal(bundle.recording_included, false);
+  fs.copyFileSync(bundle.path, path.join(root, 'archive.zip'));
   assert.match(
-    execFileSync('tar', ['-xOf', '-'], {
+    execFileSync('tar', ['-xOf', 'archive.zip'], {
       encoding: 'utf8',
-      input: fs.readFileSync(bundle.path),
+      cwd: root,
     }),
     /测试/,
   );
@@ -228,7 +230,7 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
   assert.notEqual(collision.path, docx.path);
 });
 test('Exports accept imported long filenames and produce portable archive names', async (t) => {
-  const { store } = setup(t),
+  const { root, store } = setup(t),
     handlers = createExportHandlers({ store, tasks: new TaskRegistry() }),
     title = 'a'.repeat(251) + '.wav';
   store.createMeeting({
@@ -251,13 +253,14 @@ test('Exports accept imported long filenames and produce portable archive names'
   assert.equal(fs.readFileSync(first.path, 'utf8').split('\n')[0], '# ' + title);
   for (const name of ['CON', 'LPT¹.notes', 'nul\u0000:name. ', '汉😀'.repeat(60)]) {
     store.updateMeeting('portable-export', { title: name });
-    const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' }),
-      filenames = execFileSync('tar', ['-tf', '-'], {
-        encoding: 'utf8',
-        input: fs.readFileSync(archive.path),
-      })
-        .trim()
-        .split(/\r?\n/);
+    const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' });
+    fs.copyFileSync(archive.path, path.join(root, 'archive.zip'));
+    const filenames = execFileSync('tar', ['-tf', 'archive.zip'], {
+      encoding: 'utf8',
+      cwd: root,
+    })
+      .trim()
+      .split(/\r?\n/);
     for (const filename of [path.basename(archive.path), ...filenames]) {
       assert.ok(Buffer.byteLength(filename) <= 255);
       assert.equal(filename, filename.toWellFormed());
