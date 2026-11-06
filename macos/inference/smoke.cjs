@@ -22,7 +22,10 @@ function smokeModelIds() {
 async function main() {
   const root = path.resolve(__dirname, '../..');
   const models = path.resolve(process.argv[2] || '.models');
-  const engines = path.resolve(process.argv[3] || 'dist/native/engines');
+  const engines = path.resolve(
+    process.argv[3] ||
+      (process.platform === 'win32' ? 'dist/native-win/engines' : 'dist/native/engines'),
+  );
   const catalog = JSON.parse(fs.readFileSync(path.join(root, 'backend/models.json')));
   const lookup = (id) => {
     const model = catalog.find((m) => m.id === id);

@@ -4,12 +4,17 @@
 !define BREVIA_LEGACY_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${BREVIA_LEGACY_GUID}"
 !define BREVIA_HOOK_DIR "${__FILEDIR__}"
 !define MUI_CUSTOMFUNCTION_GUIINIT BreviaRestoreLegacyDirectory
+!include StrFunc.nsh
+${StrStr}
+; 官方 v1.4.5 安装器 SHA256 71016acd...3559 中的原始卸载器，不执行自选目录中的任意程序。
+!define BREVIA_LEGACY_UNINSTALL_SHA256 "42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835"
 
 Var BreviaLegacyDir
 Var BreviaLegacyScope
 Var BreviaLegacyView
 Var BreviaLegacyInvalid
 Var BreviaDirectorySuggested
+Var BreviaUninstallerHandle
 
 LangString BreviaCloseFirst 1033 "Save your recording and quit Brevia, then retry. Installation will not close the app for you."
 LangString BreviaCloseFirst 2052 "请先保存录音并退出 Brevia，然后重试。安装程序不会替你关闭应用。"
@@ -104,6 +109,25 @@ Function BreviaRestoreLegacyDirectory
   ClearErrors
 FunctionEnd
 
+Function BreviaVerifyUninstaller
+  ; 同时拒绝写入/替换，直到卸载完成；仅先算摘要再运行仍存在 TOCTOU 竞争。
+  System::Call 'kernel32::CreateFileW(w "$PLUGINSDIR\brevia-old-uninstaller.exe", i 0x80000000, i 1, p 0, i 3, i 0x80, p 0) p .r0'
+  StrCpy $BreviaUninstallerHandle $0
+  ${If} $0 = -1
+    StrCpy $0 1
+    Return
+  ${EndIf}
+  nsExec::ExecToStack /TIMEOUT=30000 '$\"$SYSDIR\certutil.exe$\" -hashfile $\"$PLUGINSDIR\brevia-old-uninstaller.exe$\" SHA256'
+  Pop $0
+  Pop $1
+  ${StrStr} $1 $1 "$\r$\n${BREVIA_LEGACY_UNINSTALL_SHA256}$\r$\n"
+  ${If} $0 != 0
+  ${OrIf} $1 == ""
+    System::Call 'kernel32::CloseHandle(p $BreviaUninstallerHandle)'
+    StrCpy $0 1
+  ${EndIf}
+FunctionEnd
+
 Function BreviaMigrateLegacy
   ${If} $BreviaDirectorySuggested != 1
     Call BreviaRestoreLegacyDirectory
@@ -123,6 +147,11 @@ Function BreviaMigrateLegacy
   ClearErrors
   CopyFiles /SILENT "$BreviaLegacyDir\Uninstall Brevia.exe" "$PLUGINSDIR\brevia-old-uninstaller.exe"
   ${If} ${Errors}
+    SetErrorLevel 1603
+    Abort "$(BreviaMigrationFailed)"
+  ${EndIf}
+  Call BreviaVerifyUninstaller
+  ${If} $0 != 0
     SetErrorLevel 1603
     Abort "$(BreviaMigrationFailed)"
   ${EndIf}
@@ -160,6 +189,7 @@ Function BreviaMigrateLegacy
       StrCpy $0 1
     ${EndIf}
   ${EndIf}
+  System::Call 'kernel32::CloseHandle(p $BreviaUninstallerHandle)'
   ${If} $0 != 0
   ${OrIf} ${FileExists} "$BreviaLegacyDir\Brevia.exe"
   ${OrIf} ${FileExists} "$BreviaLegacyDir\resources\app.asar"

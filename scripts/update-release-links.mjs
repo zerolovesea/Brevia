@@ -30,10 +30,12 @@ const readmes = [
     .map((name) => `docs/${name}`),
 ];
 for (const file of readmes) {
-  const markdown = readFileSync(file, 'utf8').replace(
-    /https:\/\/(?:github\.com\/zerolovesea\/Brevia\/releases\/download\/v[\d.]+|modelscope\.cn\/models\/zyaztec\/brevia-release\/resolve\/master)\/Brevia-(?:WebKit-)?[\d.]+-(arm64\.dmg|x64-setup\.exe)/g,
-    (url, suffix) =>
-      `${url.slice(0, url.lastIndexOf('/Brevia-')).replace(/\/v[\d.]+$/, `/${tag}`)}/Brevia-${suffix === 'arm64.dmg' ? 'WebKit-' : ''}${version}-${suffix}`,
-  );
+  const markdown = readFileSync(file, 'utf8')
+    .replace(/<!-- native-release-pending -->[\s\S]*?<!-- \/native-release-pending -->\n\n/g, '')
+    .replace(
+      /https:\/\/(?:github\.com\/zerolovesea\/Brevia\/releases\/download\/v[\d.]+|modelscope\.cn\/models\/zyaztec\/brevia-release\/resolve\/master)\/Brevia-(?:WebKit-)?[\d.]+-(arm64\.dmg|x64-setup\.exe)/g,
+      (url, suffix) =>
+        `${url.slice(0, url.lastIndexOf('/Brevia-')).replace(/\/v[\d.]+$/, `/${tag}`)}/Brevia-${suffix === 'arm64.dmg' ? 'WebKit-' : ''}${version}-${suffix}`,
+    );
   writeFileSync(file, markdown);
 }

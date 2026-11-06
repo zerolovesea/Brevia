@@ -195,12 +195,21 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
   });
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.match(
-    execFileSync('tar', ['-xOf', docx.path, 'word/document.xml'], { encoding: 'utf8' }),
+    execFileSync('tar', ['-xOf', '-', 'word/document.xml'], {
+      encoding: 'utf8',
+      input: fs.readFileSync(docx.path),
+    }),
     /&lt;script&gt;/,
   );
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });
   assert.equal(bundle.recording_included, false);
-  assert.match(execFileSync('tar', ['-xOf', bundle.path], { encoding: 'utf8' }), /测试/);
+  assert.match(
+    execFileSync('tar', ['-xOf', '-'], {
+      encoding: 'utf8',
+      input: fs.readFileSync(bundle.path),
+    }),
+    /测试/,
+  );
   const html = await handlers['meeting.export']({ meeting_id: 'export', format: 'pdf' });
   assert.equal(html.print_pdf, true);
   assert.doesNotMatch(fs.readFileSync(html.path, 'utf8'), /<script>/);
@@ -243,9 +252,12 @@ test('Exports accept imported long filenames and produce portable archive names'
   for (const name of ['CON', 'LPT¹.notes', 'nul\u0000:name. ', '汉😀'.repeat(60)]) {
     store.updateMeeting('portable-export', { title: name });
     const archive = await handlers['meeting.bundle']({ meeting_id: 'portable-export' }),
-      filenames = execFileSync('tar', ['-tf', archive.path], { encoding: 'utf8' })
+      filenames = execFileSync('tar', ['-tf', '-'], {
+        encoding: 'utf8',
+        input: fs.readFileSync(archive.path),
+      })
         .trim()
-        .split('\n');
+        .split(/\r?\n/);
     for (const filename of [path.basename(archive.path), ...filenames]) {
       assert.ok(Buffer.byteLength(filename) <= 255);
       assert.equal(filename, filename.toWellFormed());

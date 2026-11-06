@@ -11,7 +11,9 @@ on:
       - '.github/workflows/deploy-pages.yml'
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: github-pages
@@ -20,8 +22,12 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
       - name: Assemble static site
         run: |
           mkdir -p site/docs
@@ -31,13 +37,9 @@ jobs:
           sed -i 's#\.\./frontend/#./frontend/#g; s#\.\./docs/assets/#./docs/assets/#g' site/*.html
           printf 'brevia.work\n' > site/CNAME
           touch site/.nojekyll
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
       - name: Publish
-        run: |
-          cd site
-          git init -b gh-pages
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .
-          git commit -m "Deploy website"
-          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
-          git push --force origin gh-pages
+        id: deployment
+        uses: actions/deploy-pages@v4

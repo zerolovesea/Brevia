@@ -7,14 +7,10 @@ const { randomUUID } = require('node:crypto');
 const { PromptPreferences } = require('./prompts.cjs');
 const { Worker } = require('./worker.cjs');
 const defaults = { summary: '', ai_note: '', translation: '' };
-function directory(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-prompts-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  return root;
-}
 test('prompt preferences persist atomically, reset to defaults and reject corrupt or oversized data', (t) => {
-  const root = directory(t),
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-prompts-')),
     preferences = new PromptPreferences(root);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.deepEqual(preferences.get(), defaults);
   assert.equal(preferences.apply('summary', 'Original exact prompt'), 'Original exact prompt');
   const custom = {
@@ -43,7 +39,7 @@ test('prompt preferences persist atomically, reset to defaults and reject corrup
   assert.ok(fs.readdirSync(root).every((name) => !name.endsWith('.tmp')));
 });
 test('all native prompt consumers include saved instructions while retaining their original contracts', async (t) => {
-  const root = directory(t),
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-prompts-')),
     requests = [];
   fs.writeFileSync(path.join(root, 'model.gguf'), 'fixture');
   const worker = new Worker(root, {
@@ -63,7 +59,10 @@ test('all native prompt consumers include saved instructions while retaining the
       close() {},
     }),
   });
-  t.after(() => worker.close());
+  t.after(async () => {
+    await worker.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
   await worker.initialization;
   worker.models.isReady = () => true;
   worker.models.path = () => root;

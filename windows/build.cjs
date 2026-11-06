@@ -100,7 +100,7 @@ async function buildNative() {
     ['sherpa.tar.bz2', sherpa],
   ])
     if (!fs.existsSync(path.join(sources, directory)))
-      run('tar', ['-xf', path.join(sources, archive), '-C', sources]);
+      run('tar', ['-xf', archive], { cwd: sources });
   const decoder = path.join(sources, 'extras/decoders/libopus/miniaudio_libopus.c');
   fs.copyFileSync(
     path.join(sources, 'extras/decoders/libopus/miniaudio_libopus.upstream.c'),

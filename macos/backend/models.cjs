@@ -3,10 +3,13 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
+const { pipeline } = require('node:stream/promises');
+const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
 const tar = require('tar');
 const { TaskControl, TaskCancelled } = require('./tasks.cjs');
+const activeInstallations = new Set();
 
 const CAPABILITIES = {
   llm: ['summary', 'text', ['text']],
@@ -70,20 +73,76 @@ async function checksum(file) {
   for await (const part of fs.createReadStream(file)) hash.update(part);
   return hash.digest('hex');
 }
-async function extract(file, directory) {
+async function extract(file, directory, control) {
+  await control.wait();
   await fsp.mkdir(directory, { recursive: true });
-  await tar.x({
-    file,
+  // System libarchive decodes bzip2 as well as gzip. Only Node's checked extractor
+  // writes files; stdin avoids Windows argv encoding issues in user directory names.
+  const executable =
+      process.platform === 'win32'
+        ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+        : '/usr/bin/tar',
+    child = spawn(executable, ['-cf', '-', '@-'], { windowsHide: true }),
+    input = fs.createReadStream(file);
+  let failure,
+    stderr = '';
+  const stop = (error) => {
+    failure ||= error;
+    input.destroy();
+    child.kill('SIGKILL');
+  };
+  const exited = new Promise((resolve) => {
+    child.once('error', stop);
+    child.once('close', (code, signal) => {
+      if (code !== 0)
+        failure ||= new Error('Model archive decoder failed: ' + (stderr || signal || code));
+      resolve();
+    });
+  });
+  child.stderr.on('data', (data) => {
+    stderr = (stderr + data.toString()).slice(-4096);
+  });
+  const unpack = tar.x({
     cwd: directory,
     strict: true,
     preservePaths: false,
     filter: (name, entry) => {
-      safePath(directory, name.replace(/\/$/, ''));
-      if (!['File', 'Directory', 'OldFile', 'ContiguousFile'].includes(entry.type))
-        throw new Error('Unsupported model archive member');
-      return true;
+      if (failure) return false;
+      try {
+        safePath(directory, name.replace(/\/$/, ''));
+        if (!['File', 'Directory', 'OldFile', 'ContiguousFile'].includes(entry.type))
+          throw new Error('Unsupported model archive member');
+        return true;
+      } catch (error) {
+        stop(error);
+        return false;
+      }
     },
   });
+  unpack.on('error', stop);
+  const unpacked = new Promise((resolve) => unpack.once('close', resolve)),
+    abort = () => stop(control.signal.reason || new TaskCancelled()),
+    feeding = pipeline(input, child.stdin).catch(stop);
+  control.signal.addEventListener('abort', abort, { once: true });
+  if (control.cancelled) abort();
+  try {
+    for await (const chunk of child.stdout) {
+      await control.wait();
+      if (failure) break;
+      const ready = unpack.write(chunk);
+      if (failure) break;
+      if (!ready) await once(unpack, 'drain', { signal: control.signal });
+    }
+  } catch (error) {
+    stop(error);
+  } finally {
+    // end() closes partial entries too; don't abort the parser with open output files.
+    unpack.end();
+    await Promise.all([feeding, exited, unpacked]);
+    control.signal.removeEventListener('abort', abort);
+  }
+  await control.wait();
+  if (failure) throw failure;
 }
 function modelDirectoryName(model) {
   return model.id + '-' + model.revision.replaceAll('/', '-');
@@ -218,6 +277,30 @@ class ModelManager {
     for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const directory = path.join(this.root, entry.name);
+      if (/^\.download-[A-Za-z0-9]{6}$/.test(entry.name)) {
+        let owner;
+        try {
+          owner = JSON.parse(
+            fs.readFileSync(path.join(directory, '.brevia-download.json'), 'utf8'),
+          );
+        } catch {
+          continue;
+        }
+        if (typeof owner.id !== 'string' || !Number.isSafeInteger(owner.pid) || owner.pid < 1)
+          continue;
+        if (activeInstallations.has(directory)) continue;
+        if (owner.pid !== process.pid)
+          try {
+            process.kill(owner.pid, 0);
+            continue;
+          } catch (error) {
+            if (error.code !== 'ESRCH') continue;
+          }
+        freed += size(directory);
+        fs.rmSync(directory, { recursive: true });
+        removed.push(entry.name);
+        continue;
+      }
       let marker;
       try {
         marker = JSON.parse(fs.readFileSync(path.join(directory, '.brevia.json'), 'utf8'));
@@ -342,10 +425,16 @@ class ModelManager {
     const disk = fs.statfsSync(this.root);
     if (disk.bavail * disk.bsize < model.size_bytes * 2) throw new Error('Insufficient disk space');
     const temp = await fsp.mkdtemp(path.join(this.root, '.download-'));
+    activeInstallations.add(temp);
     let source = path.join(temp, 'model'),
       digest = null;
-    await fsp.mkdir(source);
     try {
+      await fsp.writeFile(
+        path.join(temp, '.brevia-download.json'),
+        JSON.stringify({ id, pid: process.pid }),
+        { flag: 'wx', mode: 0o600 },
+      );
+      await fsp.mkdir(source);
       const downloads = (china ? model.china_downloads : null) || model.downloads;
       if (downloads) {
         let received = 0;
@@ -367,7 +456,7 @@ class ModelManager {
             throw new Error('Model download checksum mismatch');
           if (item.extract) {
             const directory = path.join(temp, 'extract-' + received);
-            await extract(destination, directory);
+            await extract(destination, directory, control);
             await fsp.cp(safePath(directory, item.directory), source, { recursive: true });
           }
           received += (await fsp.stat(destination)).size;
@@ -387,7 +476,7 @@ class ModelManager {
         }
         if (model.directory) {
           const directory = path.join(temp, 'extract');
-          await extract(archive, directory);
+          await extract(archive, directory, control);
           source = safePath(directory, model.directory);
         } else await fsp.rename(archive, safePath(source, model.files[0]));
       }
@@ -412,6 +501,7 @@ class ModelManager {
       }
       return target;
     } finally {
+      activeInstallations.delete(temp);
       await fsp.rm(temp, { recursive: true, force: true });
     }
   }

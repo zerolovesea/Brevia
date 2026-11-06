@@ -1,17 +1,26 @@
 // 清理本地构建产物，回收空间。
 //
-//   npm run clean        -> backend/build + backend/runtime（PyInstaller 中间目录与产物）
-//   npm run clean:dist   -> dist（electron-builder 输出，注意可能含 release.sh 下载的发布件）
+//   npm run clean        -> 原生编译缓存及历史 PyInstaller 中间目录
+//   npm run clean:dist   -> dist（包括已构建的应用、安装包与下载缓存）
 //
-// 不动 backend/bundled-models：那是下载好的随包模型，体积大且重下慢，属于"资产"而不是
-// "中间产物"；要一致性请跑 `npm run pack:backend`（它自带 prune）。
+// 普通清理保留模型、下载归档与成品；下次 npm start 自动重建。
 import { rm, stat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TARGETS = {
-  build: ['backend/build', 'backend/runtime'],
+  build: [
+    'backend/build',
+    'backend/runtime',
+    'macos/host/target',
+    'macos/inference/.build',
+    'dist/native/inference-sources/ogg-build',
+    'dist/native/inference-sources/opus-build',
+    'dist/native/inference-sources/opusfile-build',
+    'dist/native/inference-sources/llama-native-build',
+    'dist/native-win/build',
+  ],
   dist: ['dist'],
 };
 
@@ -50,5 +59,5 @@ for (const name of names) {
     console.log(`removed ${relative}${size ? ` (${(size / 1024 / 1024).toFixed(1)} MB)` : ''}`);
   }
 }
-const hint = names.includes('build') ? '; run `npm run pack:backend` before packaging' : '';
+const hint = names.includes('build') ? '; npm start will rebuild the required components' : '';
 console.log(`cleaned ${(freed / 1024 / 1024).toFixed(1)} MB${hint}.`);

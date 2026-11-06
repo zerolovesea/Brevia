@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
-const { download } = require('./build.cjs');
+const { download, digest } = require('./build.cjs');
 
 const legacyGuid = 'cd5ecd10-b94d-5d23-8c47-11b57b4f71d8';
 const uninstallRoot = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
@@ -78,6 +78,22 @@ async function main() {
     createdProfile = true;
     const sentinel = path.join(profile, 'upgrade-preserved.txt');
     fs.writeFileSync(sentinel, 'user meetings and models must survive migration');
+
+    // 即使 HKLM 登记可信，自定义目录中的卸载器仍可能被普通用户替换。
+    const oldUninstaller = path.join(directory, 'Uninstall Brevia.exe');
+    assert.equal(
+      await digest(oldUninstaller),
+      '42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835',
+    );
+    const originalUninstaller = fs.readFileSync(oldUninstaller);
+    try {
+      fs.appendFileSync(oldUninstaller, 'tampered');
+      install(installer, ['/S'], 1603);
+      assert.ok(fs.existsSync(path.join(directory, 'resources/app.asar')));
+      assert.ok(legacyEntries().length);
+    } finally {
+      fs.writeFileSync(oldUninstaller, originalUninstaller);
+    }
 
     // 不传 /D：原自定义目录应被自动保留；旧卸载器不能在写入新 resources 后运行。
     install(installer, ['/S']);

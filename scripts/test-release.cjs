@@ -37,6 +37,7 @@ test('release links migrate Electron filenames and can update native filenames a
         assert.ok(content.includes(`Brevia-WebKit-${version}-arm64.dmg`), file);
         assert.ok(content.includes(`Brevia-${version}-x64-setup.exe`), file);
         assert.ok(!content.includes(`Brevia-${version}-arm64.dmg`), file);
+        assert.ok(!content.includes('native-release-pending'), file);
       }
     }
   } finally {

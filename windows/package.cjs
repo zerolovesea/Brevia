@@ -29,14 +29,16 @@ async function main() {
     archive,
     '7df0bc9375723f4a86b3aa1b7cc73342423d9677a8df4538aca31a049e309c29',
   );
-  run('tar', [
-    '-xf',
-    archive,
-    '-C',
-    out,
-    `node-v${nodeVersion}-win-x64/node.exe`,
-    `node-v${nodeVersion}-win-x64/LICENSE`,
-  ]);
+  run(
+    'tar',
+    [
+      '-xf',
+      path.basename(archive),
+      `node-v${nodeVersion}-win-x64/node.exe`,
+      `node-v${nodeVersion}-win-x64/LICENSE`,
+    ],
+    { cwd: out },
+  );
   fs.copyFileSync(
     path.join(out, `node-v${nodeVersion}-win-x64/node.exe`),
     path.join(control, 'node.exe'),

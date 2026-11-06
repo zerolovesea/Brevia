@@ -165,7 +165,7 @@ async function proxy() {
     assert.ok(!rejected || rejected.__brevia_error, 'reject playback outside meeting directory');
     if (process.platform === 'win32') {
       const image = await evaluateWebView(`(async () => {
-        const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aU1kAAAAASUVORK5CYII='), c => c.charCodeAt(0)).buffer;
+        const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='), c => c.charCodeAt(0)).buffer;
         const saved = await window.brevia.meeting.noteImage.save({meeting_id:${JSON.stringify(meeting.id)},mime_type:'image/png',bytes});
         const node = new Image();
         await new Promise((resolve, reject) => { node.onload=resolve; node.onerror=()=>reject(new Error('Note image did not load')); node.src=sanitizeUrl(saved.url); });
