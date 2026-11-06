@@ -27,6 +27,9 @@ function registry(hive, key, name, view) {
   );
 }
 function install(executable, args, expected = 0) {
+  console.log(
+    `Windows upgrade: ${path.basename(executable)} ${args.join(' ')} (expect ${expected})`,
+  );
   const result = spawnSync(executable, args, {
     stdio: 'inherit',
     timeout: 600000,
@@ -36,6 +39,7 @@ function install(executable, args, expected = 0) {
     windowsVerbatimArguments: true,
   });
   if (result.error) throw result.error;
+  console.log(`Windows upgrade: installer exited with ${result.status}`);
   assert.equal(result.status, expected, `${path.basename(executable)} ${args.join(' ')}`);
 }
 function legacyEntries() {
@@ -52,16 +56,53 @@ function closeApp(child, executable) {
   // 新建的隔离资料默认关闭即退出；走真实窗口关闭/flush 链路，不用 TerminateProcess。
   const script = `
     $ErrorActionPreference = 'Stop'
+    Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class BreviaTestWindow {
+  delegate bool Callback(IntPtr window, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Callback callback, IntPtr data);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int size);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder text, int size);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll", SetLastError=true)] static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
+  public static IntPtr Find(uint process, bool log) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((window, data) => {
+      uint owner; GetWindowThreadProcessId(window, out owner);
+      if (owner != process) return true;
+      var title = new StringBuilder(256); GetWindowText(window, title, title.Capacity);
+      var kind = new StringBuilder(256); GetClassName(window, kind, kind.Capacity);
+      bool visible = IsWindowVisible(window);
+      if (log) Console.WriteLine("Test window: hwnd=" + window + " title=" + title + " class=" + kind + " visible=" + visible);
+      if (visible && title.ToString() == "Brevia" && kind.ToString() == "Tauri Window") found = window;
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  public static void Close(IntPtr window) {
+    Console.WriteLine("Closing Brevia main window: hwnd=" + window);
+    if (!PostMessage(window, 0x10, IntPtr.Zero, IntPtr.Zero)) throw new System.ComponentModel.Win32Exception();
+  }
+}
+'@
     try { $app = [Diagnostics.Process]::GetProcessById([int]$env:BREVIA_TEST_PID) }
     catch [ArgumentException] { exit 0 }
     try {
       if ($app.MainModule.FileName -ne $env:BREVIA_TEST_EXE) { throw 'Test process identity changed' }
       $watch = [Diagnostics.Stopwatch]::StartNew()
-      while (!$app.HasExited -and $app.MainWindowHandle -eq [IntPtr]::Zero -and $watch.Elapsed.TotalSeconds -lt 10) {
+      $handle = [BreviaTestWindow]::Find($app.Id, $true)
+      while (!$app.HasExited -and $handle -eq [IntPtr]::Zero -and $watch.Elapsed.TotalSeconds -lt 10) {
         [Threading.Thread]::Sleep(100)
         $app.Refresh()
+        $handle = [BreviaTestWindow]::Find($app.Id, $false)
       }
-      if (!$app.HasExited -and !$app.CloseMainWindow()) { throw 'Test app has no closeable main window' }
+      if (!$app.HasExited) {
+        if ($handle -eq [IntPtr]::Zero) { throw 'Test app has no visible Brevia main window' }
+        [BreviaTestWindow]::Close($handle)
+      }
       if (!$app.WaitForExit(20000)) { throw 'Test app did not quit normally' }
     } finally { $app.Dispose() }
   `;
@@ -69,12 +110,19 @@ function closeApp(child, executable) {
     path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-Command', script],
     {
-      env: { ...process.env, BREVIA_TEST_PID: String(child.pid), BREVIA_TEST_EXE: executable },
+      env: {
+        ...process.env,
+        BREVIA_TEST_PID: String(child.pid),
+        BREVIA_TEST_EXE: executable,
+        // Add-Type 使用 Windows PowerShell 自带模块，不能继承 runner 的 PowerShell 7 模块。
+        PSModulePath: path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/Modules'),
+      },
       encoding: 'utf8',
       windowsHide: true,
       timeout: 35000,
     },
   );
+  if (result.stdout) console.error(result.stdout.trim());
   assert.equal(result.status, 0, result.stderr || result.error?.message || 'Quit test app');
 }
 
@@ -99,6 +147,7 @@ async function main() {
   let app;
   let createdProfile = false;
   try {
+    console.log('Windows upgrade: downloading the verified v1.4.5 installer');
     await download(
       'https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe',
       oldInstaller,
@@ -158,6 +207,7 @@ async function main() {
 
     // 重复安装应无副作用；实际宿主正在运行时静默安装必须退出而不强杀进程。
     install(installer, ['/S']);
+    console.log('Windows upgrade: starting the installed native app');
     app = spawn(path.join(directory, 'Brevia.exe'), [], {
       env: { ...process.env, BREVIA_DATA_DIR: runtimeProfile },
       stdio: 'inherit',
@@ -179,16 +229,23 @@ async function main() {
       'Windows upgrade passed: real v1.4.5, custom directory, retained profile, removed legacy registration, repeat install, running-app protection.',
     );
   } finally {
-    if (app && app.exitCode === null) {
-      const exited = once(app, 'exit');
-      closeApp(app, path.join(directory, 'Brevia.exe'));
-      await exited;
+    try {
+      if (app && app.exitCode === null) {
+        console.log('Windows upgrade: closing the native app normally');
+        const exited = once(app, 'exit');
+        closeApp(app, path.join(directory, 'Brevia.exe'));
+        await exited;
+        console.log('Windows upgrade: native host exited');
+      }
+      if (app) waitForWebViewExit(null, runtimeProfile);
+      const uninstaller = path.join(directory, 'uninstall.exe');
+      if (fs.existsSync(uninstaller)) install(uninstaller, ['/S', `_?=${directory}`]);
+      if (createdProfile) fs.rmSync(profile, { recursive: true, force: true });
+      fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    } finally {
+      // 清理失败应立即让 CI 报错；不能让仍存活的隔离子进程把失败步骤挂住。
+      app?.unref();
     }
-    if (app) waitForWebViewExit(null, runtimeProfile);
-    const uninstaller = path.join(directory, 'uninstall.exe');
-    if (fs.existsSync(uninstaller)) install(uninstaller, ['/S', `_?=${directory}`]);
-    if (createdProfile) fs.rmSync(profile, { recursive: true, force: true });
-    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   }
 }
 main().catch((error) => {
