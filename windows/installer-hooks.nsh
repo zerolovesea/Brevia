@@ -129,7 +129,8 @@ Function BreviaVerifyUninstaller
   ${EndIf}
 FunctionEnd
 
-Function BreviaMigrateLegacy
+; Tauri 在 include hooks 后才注册自定义插件；留到安装段展开才能解析 RunAsUser。
+!macro NSIS_HOOK_PREINSTALL
   ${If} $BreviaDirectorySuggested != 1
     Call BreviaRestoreLegacyDirectory
   ${Else}
@@ -140,7 +141,7 @@ Function BreviaMigrateLegacy
     Abort "$(BreviaMigrationFailed)"
   ${EndIf}
   ${If} $BreviaLegacyDir == ""
-    Return
+    Goto brevia_migration_done
   ${EndIf}
   !insertmacro CheckIfAppIsRunning "$BreviaLegacyDir\Brevia.exe" "Brevia"
   InitPluginsDir
@@ -213,8 +214,5 @@ Function BreviaMigrateLegacy
     Abort "$(BreviaMigrationFailed)"
   ${EndIf}
   SetOutPath "$INSTDIR"
-FunctionEnd
-
-!macro NSIS_HOOK_PREINSTALL
-  Call BreviaMigrateLegacy
+  brevia_migration_done:
 !macroend

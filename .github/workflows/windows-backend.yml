@@ -55,10 +55,13 @@ jobs:
           node-version: 22.23.1
           cache: npm
       - run: npm ci
-      - uses: actions/cache@v4
+      - name: Restore native build cache
+        id: native-build-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             dist/native-win/sources
+            dist/native-win/build
             macos/host/target
             ~/.cargo/registry
           key: native-windows-${{ hashFiles('macos/host/Cargo.lock', 'windows/build.cjs', 'windows/CMakeLists.txt') }}
@@ -84,7 +87,18 @@ jobs:
           path: ~/.cargo/bin/cargo-tauri.exe
           key: tauri-cli-${{ runner.os }}-${{ runner.arch }}-2.12.2
       - name: Build complete native Windows installer
+        id: native-build
         run: npm run dist:win
+      - name: Upload native packaging diagnostics
+        if: failure() && steps.native-build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-diagnostic-${{ github.sha }}
+          path: |
+            dist/native-win/app/
+            macos/host/target/release/Brevia.exe
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: windows-native-${{ github.sha }}
@@ -93,6 +107,16 @@ jobs:
             dist/native-win/Brevia-*-x64-setup.exe
           if-no-files-found: error
           retention-days: 7
+      - name: Preserve native build cache
+        if: ${{ !cancelled() && (steps.native-build.outcome == 'success' || steps.native-build.outcome == 'failure') && steps.native-build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            dist/native-win/sources
+            dist/native-win/build
+            macos/host/target
+            ~/.cargo/registry
+          key: native-windows-${{ hashFiles('macos/host/Cargo.lock', 'windows/build.cjs', 'windows/CMakeLists.txt') }}
       - name: Test native host
         run: cargo test --release --locked --manifest-path macos/host/Cargo.toml
       - name: Test real WebView2 and PDF export
