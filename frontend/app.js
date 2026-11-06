@@ -3300,22 +3300,16 @@ function renderAgentSettings() {
     ['captions', '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。'],
     ['microphone', '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。'],
   ];
-  const concepts = [
-    ['Skill', '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。'],
-    ['CLI', '本机命令入口，适合能运行终端命令的 Agent。'],
-    ['MCP', '客户端工具接口，适合通过 MCP 连接应用的 Agent。'],
-  ];
   return `<div class="preferences-content agent-settings">
     <section class="preferences-section agent-connection">
       <header class="agent-access-heading"><span class="agent-access-icon">${interfaceIcon('laptop')}</span><h3>Skill + CLI</h3><span class="agent-status" data-state="${!value.enabled ? 'off' : value.status?.ready ? 'ready' : 'pending'}" data-agent-status role="status">${escapeHtml(status)}</span></header>
       <p class="agent-intro">${t('适合 Codex、Claude Code 等能操作本机的 Agent。')}</p>
       ${needsEnable ? `<div class="agent-enable"><p>${t('本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。')}</p><button type="button" class="secondary" data-agent-enable${agentSettingsBusy ? ' disabled' : ''}>${t('启用本机接入')}</button></div>` : ''}
       <ol class="agent-steps">
-        <li><span class="agent-step-number" aria-hidden="true">1</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('连接你的 Agent')}</h3><button type="button" class="primary" data-agent-copy="guide">${interfaceIcon('copy')}${t('复制引导语')}</button></div><p>${t('复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。')}</p><details class="agent-cli"><summary>${interfaceIcon('chevron-right')}${t('查看引导语')}</summary><pre class="agent-guide">${escapeHtml(agentSetupGuide())}</pre></details></div></li>
-        <li><span class="agent-step-number" aria-hidden="true">2</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('试着这样提问')}</h3><span>${t('点击复制')}</span></div><div class="agent-examples">${examples.map(([icon, prompt]) => `<button type="button" class="agent-example" data-agent-copy="prompt" data-agent-prompt="${escapeHtml(t(prompt))}" title="${t('复制到剪贴板')}">${interfaceIcon(icon)}<span>${escapeHtml(t(prompt))}</span>${interfaceIcon('copy')}</button>`).join('')}</div></div></li>
+        <li><span class="agent-step-number" aria-hidden="true">1</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('连接你的 Agent')}</h3></div><p>${t('把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。')}</p><div class="agent-guide-block"><pre class="agent-guide">${escapeHtml(agentSetupGuide())}</pre><button type="button" class="icon-button agent-guide-copy" data-agent-copy="guide" title="${t('复制引导语')}" aria-label="${t('复制引导语')}"><span data-copy-icon>${interfaceIcon('copy')}</span></button></div></div></li>
+        <li><span class="agent-step-number" aria-hidden="true">2</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('试着这样提问')}</h3></div><div class="agent-examples">${examples.map(([icon, prompt]) => `<button type="button" class="agent-example" data-agent-copy="prompt" data-agent-prompt="${escapeHtml(t(prompt))}" title="${t('复制到剪贴板')}">${interfaceIcon(icon)}<span>${escapeHtml(t(prompt))}</span><span data-copy-icon>${interfaceIcon('copy')}</span></button>`).join('')}</div></div></li>
       </ol>
     </section>
-    <dl class="agent-concepts">${concepts.map(([name, description]) => `<div><dt>${name}</dt><dd>${t(description)}</dd></div>`).join('')}</dl>
     <section class="preferences-section agent-connection"><div class="agent-step-heading"><h3>MCP</h3><button type="button" class="secondary" data-agent-copy="mcp">${interfaceIcon('copy')}${t('复制 MCP 配置')}</button></div><p class="agent-intro">${t('用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。')}</p><details class="agent-cli"><summary>${interfaceIcon('chevron-right')}${t('CLI 路径')}</summary><div class="agent-cli-path"><code title="${escapeHtml(value.cli_path)}">${escapeHtml(value.cli_path)}</code><button type="button" class="secondary" data-agent-copy="cli" title="${t('复制路径')}">${interfaceIcon('copy')}<span>${t('复制路径')}</span></button></div></details></section>
     <p class="settings-inline-error" data-agent-error role="status"${agentSettingsError || value.status?.error ? '' : ' hidden'}>${escapeHtml(agentSettingsError || value.status?.error || '')}</p>
   </div>`;
@@ -5132,7 +5126,20 @@ settingsModal.addEventListener('click', async (event) => {
               ? agentCopy.dataset.agentPrompt
               : agentSettings.cli_path;
       await window.brevia.share.copyText({ text });
-      showToast(t('已复制到剪贴板'), undefined, 'success');
+      const icon = agentCopy.querySelector('[data-copy-icon]');
+      if (icon) {
+        clearTimeout(agentCopy.copyFeedbackTimer);
+        icon.innerHTML = interfaceIcon('check');
+        agentCopy.dataset.copyState = 'done';
+        agentCopy.setAttribute('aria-label', t('已复制到剪贴板'));
+        agentCopy.copyFeedbackTimer = setTimeout(() => {
+          icon.innerHTML = interfaceIcon('copy');
+          delete agentCopy.dataset.copyState;
+          agentCopy.removeAttribute('aria-label');
+          if (agentCopy.dataset.agentCopy === 'guide')
+            agentCopy.setAttribute('aria-label', t('复制引导语'));
+        }, 1800);
+      } else showToast(t('已复制到剪贴板'), undefined, 'success');
     } catch (error) {
       showToast(error.detail || error.message, undefined, 'error');
     }
@@ -11292,7 +11299,7 @@ if (window.brevia) {
     label.dataset.speaker = payload.speaker;
     label.textContent = name;
     element.querySelector('.speaker-avatar')?.remove();
-    label.insertAdjacentHTML('beforebegin', renderSpeakerAvatar(name));
+    label.insertAdjacentHTML('beforebegin', renderSpeakerAvatar({ id: payload.speaker, name }));
     liveSegmentData.set(payload.segment_id, {
       ...data,
       revision: Number(payload.revision),

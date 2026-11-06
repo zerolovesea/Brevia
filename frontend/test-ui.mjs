@@ -5196,6 +5196,8 @@ for (const [kind, anchorState] of [
     assert.doesNotMatch(agentMarkup, /must-never-render/);
     assert.equal((agentMarkup.match(/data-agent-copy="prompt"/g) || []).length, 3);
     assert.match(agentMarkup, /data-agent-copy="guide"/);
+    assert.doesNotMatch(agentMarkup, /agent-concepts|查看引导语/);
+    assert.match(agentMarkup, /agent-guide-block/);
     assert.match(agentMarkup, /data-agent-copy="mcp"/);
     assert.match(agentMarkup, /data-agent-copy="cli"/);
     const guide = context.agentSetupGuide();
@@ -5207,14 +5209,10 @@ for (const [kind, anchorState] of [
     for (const key of [
       'Agent 与 MCP',
       '适合 Codex、Claude Code 等能操作本机的 Agent。',
-      '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。',
+      '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。',
       '复制引导语',
-      '查看引导语',
       '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
       'Skill 文件',
-      '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。',
-      '本机命令入口，适合能运行终端命令的 Agent。',
-      '客户端工具接口，适合通过 MCP 连接应用的 Agent。',
       '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。',
       '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。',
       '启用本机接入',
@@ -5223,7 +5221,6 @@ for (const [kind, anchorState] of [
       '复制 MCP 配置',
       '复制路径',
       '试着这样提问',
-      '点击复制',
       '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。',
       '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。',
       '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。',
@@ -6590,9 +6587,13 @@ assert.equal(
     first.match(/data-speaker-color="([0-5])"/)[1],
     second.match(/data-speaker-color="([0-5])"/)[1],
   );
-  assert.match(render('<img src=x>'), /&lt;<\/span>/);
+  assert.match(render('<img src=x>'), /<svg/);
   assert.doesNotMatch(render('<img src=x>'), /<img/);
-  assert.match(render('😀小陈'), /😀<\/span>/);
+  assert.match(render('😀小陈'), /<svg/);
+  assert.equal(
+    render({ id: 'stable-speaker', name: '陈' }),
+    render({ id: 'stable-speaker', name: '林' }),
+  );
 }
 // 关闭搜索、修改查询和较新请求都必须使旧响应失效，旧错误也不能关闭新结果。
 {

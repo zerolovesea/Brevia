@@ -248,18 +248,12 @@
         'Agent 与 MCP': 'Agent 与 MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           '适合 Codex、Claude Code 等能操作本机的 Agent。',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。',
         '复制引导语': '复制引导语',
-        '查看引导语': '查看引导语',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
         'Skill 文件': 'Skill 文件',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。',
-        '本机命令入口，适合能运行终端命令的 Agent。': '本机命令入口，适合能运行终端命令的 Agent。',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          '客户端工具接口，适合通过 MCP 连接应用的 Agent。',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -1164,19 +1158,12 @@
         'Agent 与 MCP': 'Agent & MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'For Agents that can operate this computer, such as Codex and Claude Code.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          'Send the setup prompt to your Agent. It will read the Skill, then use Brevia through the CLI.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          'Copy the prompt below and send it to your Agent (Codex, Claude Code, etc.).',
         '复制引导语': 'Copy setup prompt',
-        '查看引导语': 'View setup prompt',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'First read the Brevia Skill below, then check the connection through the CLI. Follow the Skill to carry out my requests; only start recording when I explicitly ask.',
         'Skill 文件': 'Skill file',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Instructions that teach the Agent how to use Brevia. Actions are performed through the CLI or MCP.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'A local command entry point for Agents that can run terminal commands.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'A client tool interface for Agents that connect to apps through MCP.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'For MCP-compatible clients. Paste the configuration into your client’s MCP settings, then reconnect to get started.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -2284,19 +2271,12 @@
         'Agent 与 MCP': 'Agent y MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Para agentes que pueden operar este equipo, como Codex y Claude Code.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          'Envía las instrucciones al agente. Primero leerá el Skill y luego usará Brevia mediante la CLI.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          'Copia el siguiente mensaje y envíaselo a tu Agent (Codex, Claude Code, etc.).',
         '复制引导语': 'Copiar instrucciones',
-        '查看引导语': 'Ver instrucciones',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'Primero lee el Skill de Brevia que aparece a continuación y comprueba la conexión mediante la CLI. Sigue las indicaciones del Skill para ejecutar mis solicitudes; inicia la grabación solo cuando te lo pida expresamente.',
         'Skill 文件': 'Archivo Skill',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Instrucciones para que el agente sepa usar Brevia. Las acciones se ejecutan mediante la CLI o MCP.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'Acceso local por comandos para agentes que pueden usar la terminal.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'Interfaz de herramientas para agentes que se conectan a aplicaciones mediante MCP.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'Para clientes compatibles con MCP. Pega la configuración en sus ajustes de MCP y vuelve a conectar para empezar.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -3412,19 +3392,12 @@
         'Agent 与 MCP': 'Agent と MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Codex や Claude Code など、このコンピュータを操作できる Agent 向けです。',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          '導入プロンプトを Agent に送ると、Skill を読み、CLI 経由で Brevia を操作します。',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          '以下のプロンプトをコピーして Agent（Codex、Claude Code など）に送信してください。',
         '复制引导语': '導入プロンプトをコピー',
-        '查看引导语': '導入プロンプトを表示',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'まず以下の Brevia Skill を読み、CLI で接続を確認してください。以降は Skill の説明に従って私の依頼を実行し、録音は私が明示的に求めた場合にのみ開始してください。',
         'Skill 文件': 'Skill ファイル',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Agent に Brevia の使い方を伝える手順書です。実際の操作は CLI または MCP 経由で行います。',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'ターミナルのコマンドを実行できる Agent 向けのローカル操作窓口です。',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'MCP 経由でアプリに接続する Agent 向けのツールインターフェースです。',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'MCP 対応クライアント向けです。クライアントの MCP 設定に構成を貼り付け、再接続すると利用できます。',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -4536,19 +4509,12 @@
         'Agent 与 MCP': 'Agent 및 MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Codex, Claude Code 등 이 컴퓨터를 조작할 수 있는 Agent용입니다.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          '설정 프롬프트를 Agent에게 보내면 Skill을 읽은 뒤 CLI로 Brevia를 사용합니다.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          '아래 프롬프트를 복사해 Agent(Codex, Claude Code 등)에게 보내세요.',
         '复制引导语': '설정 프롬프트 복사',
-        '查看引导语': '설정 프롬프트 보기',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           '먼저 아래 Brevia Skill을 읽고 CLI로 연결을 확인하세요. 이후에는 Skill의 안내에 따라 제 요청을 수행하고, 제가 명시적으로 요청할 때만 녹음을 시작하세요.',
         'Skill 文件': 'Skill 파일',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Agent에게 Brevia 사용법을 알려주는 안내서입니다. 실제 작업은 CLI 또는 MCP로 실행합니다.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          '터미널 명령을 실행할 수 있는 Agent를 위한 로컬 명령 인터페이스입니다.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'MCP로 앱에 연결하는 Agent를 위한 클라이언트 도구 인터페이스입니다.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'MCP 지원 클라이언트용입니다. 클라이언트의 MCP 설정에 구성을 붙여넣고 다시 연결하면 사용할 수 있습니다.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -5643,19 +5609,12 @@
         'Agent 与 MCP': 'Agent et MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Pour les agents capables d’utiliser cet ordinateur, comme Codex et Claude Code.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          'Envoyez les instructions à l’agent. Il lira le Skill, puis utilisera Brevia via la CLI.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          'Copiez le texte ci-dessous et envoyez-le à votre Agent (Codex, Claude Code, etc.).',
         '复制引导语': 'Copier les instructions',
-        '查看引导语': 'Voir les instructions',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'Lisez d’abord le Skill Brevia ci-dessous, puis vérifiez la connexion via la CLI. Suivez ensuite les consignes du Skill pour exécuter mes demandes ; ne lancez un enregistrement que si je le demande explicitement.',
         'Skill 文件': 'Fichier Skill',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Instructions expliquant à l’agent comment utiliser Brevia. Les actions sont exécutées via la CLI ou MCP.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'Une interface de commandes locale pour les agents capables d’utiliser le terminal.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'Une interface d’outils pour les agents qui se connectent aux applications via MCP.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'Pour les clients compatibles MCP. Collez la configuration dans les réglages MCP du client, puis reconnectez-vous pour commencer.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -6788,19 +6747,12 @@
         'Agent 与 MCP': 'Agent und MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Für Agents, die diesen Computer bedienen können, etwa Codex oder Claude Code.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          'Sende die Startanweisung an den Agent. Er liest zuerst den Skill und nutzt Brevia dann über die CLI.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          'Kopiere den folgenden Prompt und sende ihn an deinen Agent (Codex, Claude Code usw.).',
         '复制引导语': 'Startanweisung kopieren',
-        '查看引导语': 'Startanweisung anzeigen',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'Lies zuerst den folgenden Brevia-Skill und prüfe dann die Verbindung über die CLI. Führe meine Anfragen anschließend gemäß dem Skill aus. Starte Aufnahmen nur, wenn ich ausdrücklich darum bitte.',
         'Skill 文件': 'Skill-Datei',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Anleitung zur Nutzung von Brevia durch den Agent. Aktionen werden über die CLI oder MCP ausgeführt.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'Lokaler Befehlszugang für Agents, die Terminalbefehle ausführen können.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'Tool-Schnittstelle für Agents, die sich über MCP mit Apps verbinden.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'Für MCP-kompatible Clients. Füge die Konfiguration in die MCP-Einstellungen des Clients ein und verbinde ihn erneut.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
@@ -7941,19 +7893,12 @@
         'Agent 与 MCP': 'Agent и MCP',
         '适合 Codex、Claude Code 等能操作本机的 Agent。':
           'Для агентов, которые могут управлять этим компьютером, например Codex и Claude Code.',
-        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
-          'Отправьте агенту вводный запрос. Он прочитает Skill, а затем будет использовать Brevia через CLI.',
+        '把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。':
+          'Скопируйте запрос ниже и отправьте своему Agent (Codex, Claude Code и т. п.).',
         '复制引导语': 'Скопировать вводный запрос',
-        '查看引导语': 'Посмотреть вводный запрос',
         '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
           'Сначала прочитай приведённый ниже Skill Brevia, затем проверь подключение через CLI. Выполняй мои дальнейшие запросы по инструкциям Skill; начинай запись только по моей явной просьбе.',
         'Skill 文件': 'Файл Skill',
-        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
-          'Инструкции по использованию Brevia для агента. Сами действия выполняются через CLI или MCP.',
-        '本机命令入口，适合能运行终端命令的 Agent。':
-          'Локальный командный интерфейс для агентов, умеющих работать с терминалом.',
-        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
-          'Интерфейс инструментов для агентов, подключающихся к приложениям через MCP.',
         '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
           'Для клиентов с поддержкой MCP. Вставьте конфигурацию в настройки MCP клиента и подключитесь заново.',
         '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':

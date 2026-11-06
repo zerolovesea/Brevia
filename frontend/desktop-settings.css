@@ -2265,8 +2265,8 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   flex-shrink: 0;
 }
 .agent-guide {
-  margin: 10px 0 0;
-  padding: 12px;
+  margin: 0;
+  padding: 12px 12px 46px;
   border-radius: 8px;
   background: var(--color-navigation);
   color: var(--color-text-muted);
@@ -2274,24 +2274,6 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-.agent-concepts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  margin: 0;
-  padding: 0 20px;
-}
-.agent-concepts dt {
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.agent-concepts dd {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1.6;
 }
 .agent-settings .agent-connection {
   padding: 20px;
@@ -2405,14 +2387,10 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   height: 14px;
   color: var(--color-text-muted);
 }
-.agent-example > svg:last-child {
+.agent-example [data-copy-icon] {
   opacity: 0.55;
 }
 @media (max-width: 1000px) {
-  .agent-concepts {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-  }
   .agent-enable {
     flex-wrap: wrap;
   }
@@ -2448,4 +2426,25 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   .ai-example-flow {
     display: none;
   }
+}
+
+.agent-guide-block {
+  position: relative;
+}
+.agent-guide-copy {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+[data-copy-icon] {
+  display: inline-flex;
+  align-items: center;
+}
+[data-copy-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+[data-copy-state="done"] [data-copy-icon] {
+  color: var(--color-success);
+  opacity: 1;
 }

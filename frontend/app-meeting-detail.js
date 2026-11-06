@@ -9,6 +9,7 @@ function renderSegmentData(segment, editable, speakerNames) {
     startSeconds: segment.start_ms / 1000,
     endSeconds: segment.end_ms / 1000,
     speaker: {
+      id: segment.speaker,
       name: formatSpeakerName(segment.speaker_name),
       segmentId: editable ? segment.id : undefined,
       editing: editable && segment.id === editingSegmentSpeakerId,

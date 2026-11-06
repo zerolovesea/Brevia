@@ -303,9 +303,10 @@ function formatSpeakerName(speaker) {
 }
 function renderSpeakerAvatar(speaker) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name || '';
+  const identity = typeof speaker === 'object' ? speaker?.id || name : name;
   let color = 0;
-  for (const letter of name) color = (color * 31 + letter.codePointAt(0)) >>> 0;
-  return `<span class="speaker-avatar" data-speaker-color="${color % 6}" aria-hidden="true">${escapeHtml([...formatSpeakerName(speaker)][0] || '')}</span>`;
+  for (const letter of identity) color = (color * 31 + letter.codePointAt(0)) >>> 0;
+  return `<span class="speaker-avatar" data-speaker-color="${color % 6}" aria-hidden="true">${interfaceIcon('person')}</span>`;
 }
 /** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
 function rectanglesIntersect(first, second) {

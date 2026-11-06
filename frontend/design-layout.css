@@ -10489,13 +10489,19 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 }
 #transcript-scroll .segment:not(:has(.segment-text-input)) {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  grid-template-areas: "meta copy";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "meta" "copy";
+  row-gap: 6px;
   align-items: start;
 }
 #transcript-scroll .segment:not(:has(.segment-text-input)) .segment-meta {
   grid-area: meta;
-  padding-top: 3px;
+  padding-top: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px 8px;
 }
 #transcript-scroll .segment:not(:has(.segment-text-input)) .segment-copy {
   grid-area: copy;
@@ -10781,4 +10787,30 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   padding: 10px 12px;
   font-size: 12px;
   line-height: 1.6;
+}
+
+#transcript-scroll .segment-meta .speaker-avatar {
+  flex: none;
+  order: 0;
+}
+#transcript-scroll .segment-meta .segment-speaker {
+  order: 1;
+  min-width: 0;
+  width: auto;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#transcript-scroll .segment-meta time {
+  order: 2;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.speaker-avatar {
+  flex-shrink: 0;
+}
+.speaker-avatar svg {
+  width: 17px;
+  height: 17px;
 }
