@@ -127,14 +127,22 @@ jobs:
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           node windows/test-upgrade.cjs "dist/native-win/Brevia-$version-x64-setup.exe"
-      - uses: actions/cache@v4
+      - name: Restore verified smoke models
+        id: smoke-models-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dist/native-smoke-models
+          key: native-models-v1-${{ hashFiles('backend/models.json') }}
+      - name: Prepare verified smoke models
+        run: node scripts/prepare-native-smoke.cjs dist/native-smoke-models
+      - name: Cache verified smoke models
+        if: steps.smoke-models-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
         with:
           path: dist/native-smoke-models
           key: native-models-v1-${{ hashFiles('backend/models.json') }}
       - name: Validate real ASR, VAD, voiceprints and translation
         run: |
-          node scripts/prepare-native-smoke.cjs dist/native-smoke-models
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $modelPath = 'dist/中文用户 模型'
           Move-Item dist/native-smoke-models $modelPath
           try {
