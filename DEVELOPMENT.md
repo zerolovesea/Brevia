@@ -38,7 +38,7 @@ macOS WebKit 实现面向 Apple Silicon、macOS 14 及以上。安装文件是�
 
 ### 本地开发与打包
 
-构建需要 Apple Silicon Mac、Xcode（Swift 6.2 或以上）、Metal Toolchain、rustup、CMake 和 Node.js 22.23.1 或以上。首次构建会下载固定版本的原生源码和依赖；构建缓存位于 `dist/native` 和 `macos/inference/.build`。不需要安装 Python。
+构建需要 Apple Silicon Mac、Xcode 26.4.1 或以上（Swift 6.3）、Metal Toolchain、rustup、CMake 和 Node.js 22.23.1 或以上。固定的 MLX Swift 0.33.0 依赖要求 Swift 6.3；桌面 CI 统一使用 Xcode 26.4.1。首次构建会下载固定版本的原生源码和依赖；构建缓存位于 `dist/native` 和 `macos/inference/.build`。不需要安装 Python。
 
 ```sh
 xcodebuild -downloadComponent MetalToolchain
@@ -106,7 +106,7 @@ npm run test:windows:native
 
 格式工具版本固定在锁文件或 `requirements-dev.txt`；升级工具单独提交。Prettier 保留 HTML 空白语义，不重排模板字符串中的嵌入代码；Markdown 不强制重排段落。`frontend/styles.css` 由 `npm run build` 生成，不手动格式化。模型、录音、翻译词条的实际内容、锁文件、第三方文件和原生工程生成配置不做人工风格清理。
 
-Swift 使用与移动端 CI 一致的 Xcode 自带的 `swift-format`（`xcrun swift-format format --in-place <文件>`），CI 使用 `xcrun swift-format lint --strict` 检查；Kotlin 遵循 Android Studio 默认格式。少量 Ruby 和 Shell 脚本沿用语言惯例，不为格式引入额外依赖；分别用 `ruby -c`、`bash -n` 检查语法。原生源码修改后运行对应平台构建。
+Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun swift-format format --in-place <文件>`），CI 使用 `xcrun swift-format lint --strict` 检查；Kotlin 遵循 Android Studio 默认格式。少量 Ruby 和 Shell 脚本沿用语言惯例，不为格式引入额外依赖；分别用 `ruby -c`、`bash -n` 检查语法。原生源码修改后运行对应平台构建。
 
 品牌图形以 `frontend/assets/brevia-logo.svg` 为唯一静态源，字形沿用开屏动画最终定格。安装 ImageMagick 后运行 `npm run assets:brand` 同步桌面、官网、文档和手机资源；`npm run assets:brand:check` 校验产物。不要直接修改生成的图标。
 
@@ -194,7 +194,7 @@ npm run build         # tailwind.css → styles.css，构建后 styles.css 应�
 
 先提交版本号、更新日志和 release note，确认待发布提交已通过检查，再由维护者创建并推送 `v<version>` 标签。[Release 工作流](.github/workflows/release.yml)在标签推送时构建并发布 macOS 和 Windows 安装包；也支持手动触发。签名和发布凭据由维护者配置，普通贡献者无需持有。
 
-macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.2 与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
+macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.4.1（Swift 6.3）与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
 
 工作流先验证应用签名和成品业务测试，再公证并装订应用，生成签名更新归档与 `latest-webkit.json`，最后公证 DMG。应用与 DMG 的公证状态均回读验证；临时钥匙串总在收尾删除。Windows 使用 MSVC 构建原生引擎和 Tauri NSIS 安装器，验证随包 CLI/MCP、WebView2、PDF、旧版迁移和更新签名。Windows 更新复用上述 Tauri 密钥；可配置 `WIN_CERTIFICATE_P12_BASE64` 和 `WIN_CERTIFICATE_PASSWORD` 进行 Authenticode 签名，未配置时 Windows 会显示未签名发布者提示。
 

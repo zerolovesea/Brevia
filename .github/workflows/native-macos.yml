@@ -50,7 +50,9 @@ jobs:
       - run: npm ci
       - name: Prepare native toolchain
         run: |
-          sudo xcode-select --switch /Applications/Xcode_26.2.app
+          sudo xcode-select --switch /Applications/Xcode_26.4.1.app
+          xcodebuild -version
+          xcrun swift --version
           xcodebuild -downloadComponent MetalToolchain
       - run: npm test
         env:

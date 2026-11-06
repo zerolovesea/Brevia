@@ -50,7 +50,9 @@ jobs:
       - name: Prepare native macOS toolchain
         if: runner.os == 'macOS'
         run: |
-          sudo xcode-select --switch /Applications/Xcode_26.2.app
+          sudo xcode-select --switch /Applications/Xcode_26.4.1.app
+          xcodebuild -version
+          xcrun swift --version
           xcodebuild -downloadComponent MetalToolchain
           cargo install tauri-cli --version 2.12.2 --locked
       - name: Prepare native Windows bundler
@@ -102,6 +104,7 @@ jobs:
         run: npm run test:mac:webkit
       - name: Configure Windows signing when a certificate is available
         if: runner.os == 'Windows'
+        shell: pwsh
         env:
           WIN_CERTIFICATE_P12_BASE64: ${{ secrets.WIN_CERTIFICATE_P12_BASE64 }}
           WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
@@ -123,11 +126,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Verify native Windows WebView and update artifacts
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           node macos/host/smoke.cjs dist/native-win/app
           if (!(Test-Path dist/native-win/latest-windows.json)) { throw 'Native update signature missing' }
       - name: Verify Windows upgrade preserves data
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           node windows/test-upgrade.cjs "dist/native-win/Brevia-$version-x64-setup.exe"
@@ -149,6 +154,7 @@ jobs:
           rm -f "$RUNNER_TEMP/brevia.p12"
       - name: Remove Windows signing material
         if: always() && runner.os == 'Windows'
+        shell: pwsh
         run: |
           if ($env:BREVIA_WINDOWS_CERT_THUMBPRINT) {
             Remove-Item "Cert:\CurrentUser\My\$env:BREVIA_WINDOWS_CERT_THUMBPRINT" -ErrorAction SilentlyContinue
