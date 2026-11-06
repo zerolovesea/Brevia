@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
 const { download, digest } = require('./build.cjs');
+const { waitForWebViewExit } = require('./test-processes.cjs');
 
 const legacyGuid = 'cd5ecd10-b94d-5d23-8c47-11b57b4f71d8';
 const uninstallRoot = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
@@ -46,6 +47,37 @@ function legacyEntries() {
     }),
   );
 }
+
+function closeApp(child, executable) {
+  // 新建的隔离资料默认关闭即退出；走真实窗口关闭/flush 链路，不用 TerminateProcess。
+  const script = `
+    $ErrorActionPreference = 'Stop'
+    try { $app = [Diagnostics.Process]::GetProcessById([int]$env:BREVIA_TEST_PID) }
+    catch [ArgumentException] { exit 0 }
+    try {
+      if ($app.MainModule.FileName -ne $env:BREVIA_TEST_EXE) { throw 'Test process identity changed' }
+      $watch = [Diagnostics.Stopwatch]::StartNew()
+      while (!$app.HasExited -and $app.MainWindowHandle -eq [IntPtr]::Zero -and $watch.Elapsed.TotalSeconds -lt 10) {
+        [Threading.Thread]::Sleep(100)
+        $app.Refresh()
+      }
+      if (!$app.HasExited -and !$app.CloseMainWindow()) { throw 'Test app has no closeable main window' }
+      if (!$app.WaitForExit(20000)) { throw 'Test app did not quit normally' }
+    } finally { $app.Dispose() }
+  `;
+  const result = spawnSync(
+    path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-Command', script],
+    {
+      env: { ...process.env, BREVIA_TEST_PID: String(child.pid), BREVIA_TEST_EXE: executable },
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 35000,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr || result.error?.message || 'Quit test app');
+}
+
 async function main() {
   assert.equal(process.platform, 'win32', 'Run this integration check on Windows');
   assert.equal(
@@ -63,6 +95,7 @@ async function main() {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-upgrade-'));
   const directory = path.join(scratch, 'Custom Brevia Location');
   const oldInstaller = path.join(scratch, 'old-setup.exe');
+  const runtimeProfile = path.join(scratch, 'isolated-runtime');
   let app;
   let createdProfile = false;
   try {
@@ -125,11 +158,9 @@ async function main() {
 
     // 重复安装应无副作用；实际宿主正在运行时静默安装必须退出而不强杀进程。
     install(installer, ['/S']);
-    const runtimeProfile = path.join(scratch, 'isolated-runtime');
-    app = spawn(path.join(directory, 'Brevia.exe'), ['--background'], {
+    app = spawn(path.join(directory, 'Brevia.exe'), [], {
       env: { ...process.env, BREVIA_DATA_DIR: runtimeProfile },
       stdio: 'inherit',
-      windowsHide: true,
     });
     await once(app, 'spawn');
     const ready = path.join(runtimeProfile, '.agent/credentials.json');
@@ -150,10 +181,10 @@ async function main() {
   } finally {
     if (app && app.exitCode === null) {
       const exited = once(app, 'exit');
-      // 仅收尾本测试启动且从未录音的隔离进程；生产安装器没有强杀分支。
-      app.kill();
+      closeApp(app, path.join(directory, 'Brevia.exe'));
       await exited;
     }
+    if (app) waitForWebViewExit(null, runtimeProfile);
     const uninstaller = path.join(directory, 'uninstall.exe');
     if (fs.existsSync(uninstaller)) install(uninstaller, ['/S', `_?=${directory}`]);
     if (createdProfile) fs.rmSync(profile, { recursive: true, force: true });

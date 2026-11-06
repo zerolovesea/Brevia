@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const { once } = require('node:events');
+const { waitForWebViewExit } = require('../../windows/test-processes.cjs');
 
 async function smoke() {
   const bundle = path.resolve(process.argv[2] || 'dist/native/image/Brevia.app');
@@ -111,60 +112,6 @@ async function smoke() {
     // 进程退出后，杀毒软件仍可能短暂保留文件句柄。
     fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
-}
-
-function waitForWebViewExit(hostName, data) {
-  const started = Date.now();
-  // 不输出完整命令行、不关闭别的 WebView2；用实例名/资料目录及创建时间识别测试进程。
-  const script = `
-    $ErrorActionPreference = 'Stop'
-    [void][Reflection.Assembly]::LoadWithPartialName('System.Management')
-    $query = [System.Management.ManagementObjectSearcher]::new("SELECT ProcessId, CreationDate, CommandLine FROM Win32_Process WHERE Name='msedgewebview2.exe'")
-    $watch = [Diagnostics.Stopwatch]::StartNew()
-    $first = $true
-    try {
-      while ($true) {
-        $remaining = [Collections.Generic.List[string]]::new()
-        $processes = $query.Get()
-        try {
-          foreach ($process in $processes) {
-            $command = [string]$process['CommandLine']
-            if ($command.IndexOf($env:BREVIA_SMOKE_HOST_NAME, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $command.IndexOf($env:BREVIA_SMOKE_PROFILE, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-              $kind = [regex]::Match($command, '--type=([a-z-]+)').Groups[1].Value
-              if (!$kind) { $kind = 'browser' }
-              $remaining.Add("pid=" + $process['ProcessId'] + " created=" + $process['CreationDate'] + " type=" + $kind)
-            }
-            $process.Dispose()
-          }
-        } finally { $processes.Dispose() }
-        if ($remaining.Count -eq 0) {
-          exit 0
-        }
-        if ($first) {
-          [Console]::WriteLine("Waiting for WebView2: " + [string]::Join(', ', $remaining))
-          $first = $false
-        }
-        if ($watch.Elapsed.TotalSeconds -ge 20) {
-          [Console]::Error.WriteLine("WebView2 exit timed out: " + [string]::Join(', ', $remaining))
-          exit 1
-        }
-        [Threading.Thread]::Sleep(200)
-      }
-    } finally { $query.Dispose() }
-  `;
-  const result = spawnSync(
-    path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
-    ['-NoProfile', '-NonInteractive', '-Command', script],
-    {
-      env: { ...process.env, BREVIA_SMOKE_HOST_NAME: hostName, BREVIA_SMOKE_PROFILE: data },
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 25000,
-    },
-  );
-  if (result.stdout) console.error(result.stdout.trim());
-  assert.equal(result.status, 0, result.stderr || result.error?.message || 'WebView2 process exit');
-  console.error(`WebView2 process exit verified after ${Date.now() - started} ms.`);
 }
 
 async function evaluateWebView(expression) {
