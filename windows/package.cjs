@@ -89,14 +89,15 @@ async function main() {
   });
   await packageAgent(control);
   fs.renameSync(path.join(control, 'brevia.cmd'), path.join(app, 'brevia.cmd'));
-  const signed = Boolean(
-    process.env.TAURI_SIGNING_PRIVATE_KEY || process.env.TAURI_SIGNING_PRIVATE_KEY_PATH,
-  );
-  if (signed !== Boolean(process.env.BREVIA_NATIVE_UPDATE_PUBKEY))
-    throw new Error('Configure both native update signing keys');
+  const privateKey =
+    process.env.TAURI_SIGNING_PRIVATE_KEY || process.env.TAURI_SIGNING_PRIVATE_KEY_PATH;
+  const publicKey = process.env.BREVIA_NATIVE_UPDATE_PUBKEY;
+  const signed = Boolean(privateKey);
+  if (signed !== Boolean(publicKey)) throw new Error('Configure both native update signing keys');
   const config = {
     version,
     mainBinaryName: 'Brevia',
+    plugins: { updater: { pubkey: publicKey || '' } },
     bundle: {
       active: true,
       targets: ['nsis'],
@@ -120,7 +121,11 @@ async function main() {
       },
     },
   };
-  const env = { ...process.env, TAURI_CONFIG: JSON.stringify(config) };
+  const env = {
+    ...process.env,
+    TAURI_CONFIG: JSON.stringify(config),
+    ...(signed && { TAURI_SIGNING_PRIVATE_KEY: privateKey }),
+  };
   if (process.argv[2] === 'app') {
     run('cargo', ['build', '--release', '--locked', '--manifest-path', 'macos/host/Cargo.toml'], {
       env,
@@ -157,7 +162,7 @@ async function main() {
       if (record.length < 10) throw new Error('Invalid native update key or signature');
       return record.subarray(2, 10);
     };
-    if (!keyId(signature).equals(keyId(process.env.BREVIA_NATIVE_UPDATE_PUBKEY)))
+    if (!keyId(signature).equals(keyId(publicKey)))
       throw new Error('Updater public key and signature differ');
     fs.writeFileSync(installer + '.sig', signature + '\n');
     fs.writeFileSync(
