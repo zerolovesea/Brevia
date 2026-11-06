@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const { once } = require('node:events');
 
@@ -13,10 +13,12 @@ async function smoke() {
   const resources = path.join(bundle, windows ? 'resources' : 'Contents/Resources');
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-webkit-smoke-')));
   const contents = path.join(temp, windows ? 'Host' : 'Host/Contents');
-  const host = path.join(contents, windows ? 'Brevia.exe' : 'MacOS/brevia-host');
+  const hostName = windows ? `BreviaSmoke-${path.basename(temp)}.exe` : 'MacOS/brevia-host';
+  const host = path.join(contents, hostName);
   const data = path.join(temp, 'data');
   let child;
   let debugPort;
+  let debugPolicy;
   if (windows) {
     const server = require('node:net').createServer();
     server.listen(0, '127.0.0.1');
@@ -30,6 +32,33 @@ async function smoke() {
       fs.copyFileSync(path.join(bundle, 'Brevia.exe'), host);
       const loader = path.join(bundle, 'WebView2Loader.dll');
       if (fs.existsSync(loader)) fs.copyFileSync(loader, path.join(contents, 'WebView2Loader.dll'));
+      if (process.env.GITHUB_ACTIONS === 'true') {
+        // CI 以管理员运行；WebView2 150 起忽略提升进程的环境覆盖。
+        // 只给本次临时 exe 设置机器策略，退出时删除，不改生产 host 的安全边界。
+        debugPolicy =
+          'HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2\\AdditionalBrowserArguments';
+        const result = spawnSync(
+          'reg.exe',
+          [
+            'add',
+            debugPolicy,
+            '/v',
+            hostName,
+            '/t',
+            'REG_SZ',
+            '/d',
+            `--remote-debugging-port=${debugPort} --remote-debugging-address=127.0.0.1`,
+            '/f',
+            '/reg:64',
+          ],
+          { encoding: 'utf8', windowsHide: true },
+        );
+        assert.equal(
+          result.status,
+          0,
+          result.stderr || result.error?.message || 'WebView2 test policy',
+        );
+      }
     } else {
       fs.mkdirSync(path.join(contents, 'Resources'));
       fs.copyFileSync(path.join(bundle, 'Contents/Info.plist'), path.join(contents, 'Info.plist'));
@@ -63,7 +92,23 @@ async function smoke() {
       clearTimeout(timer);
     }
   } finally {
-    fs.rmSync(temp, { recursive: true, force: true });
+    if (debugPolicy) {
+      const result = spawnSync(
+        'reg.exe',
+        ['delete', debugPolicy, '/v', hostName, '/f', '/reg:64'],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+        },
+      );
+      assert.equal(
+        result.status,
+        0,
+        result.stderr || result.error?.message || 'Remove WebView2 test policy',
+      );
+    }
+    // 浏览器子进程比 host 稍晚关闭资料库；等待其释放文件句柄。
+    fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }
 
