@@ -158,7 +158,7 @@ Function BreviaMigrateLegacy
   ${EndIf}
   ${If} $BreviaLegacyScope == "currentuser"
     ; HKCU 的程序可能由普通用户写入，不可从提升权限的安装器直接执行。
-    File "/oname=$PLUGINSDIR\brevia-uninstall-user.ps1" "${BREVIA_HOOK_DIR}/uninstall-legacy.ps1"
+    File "/oname=$PLUGINSDIR\brevia-uninstall-user.ps1" "${BREVIA_HOOK_DIR}\uninstall-legacy.ps1"
     Delete "$PLUGINSDIR\brevia-uninstall-result"
     nsis_tauri_utils::RunAsUser "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$PLUGINSDIR\brevia-uninstall-user.ps1" -Uninstaller "$PLUGINSDIR\brevia-old-uninstaller.exe" -Directory "$BreviaLegacyDir" -Result "$PLUGINSDIR\brevia-uninstall-result"'
     Pop $0
