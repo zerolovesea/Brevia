@@ -12,6 +12,32 @@ use tokio::sync::oneshot;
 
 type Reply = Result<Value, Value>;
 
+#[cfg(windows)]
+fn node_path(path: PathBuf) -> PathBuf {
+    use std::path::{Component, Prefix};
+    let mut components = path.components();
+    let mut ordinary = match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(drive) => PathBuf::from(format!("{}:", char::from(drive))),
+            Prefix::VerbatimUNC(server, share) => PathBuf::from(r"\\").join(server).join(share),
+            _ => return path,
+        },
+        _ => return path,
+    };
+    ordinary.extend(components);
+    // Node 22 的模块解析不接受 verbatim 路径（nodejs/node#62446）。
+    // 仅在 Win32 拼法仍指向同一位置时去掉前缀，避免改变特殊文件名的含义。
+    if let (Ok(original), Ok(resolved)) = (
+        std::fs::canonicalize(&path),
+        std::fs::canonicalize(&ordinary),
+    ) {
+        if original == resolved {
+            return ordinary;
+        }
+    }
+    path
+}
+
 pub struct Control {
     stdin: Mutex<Option<ChildStdin>>,
     replies: Mutex<HashMap<u64, oneshot::Sender<Reply>>>,
@@ -25,6 +51,8 @@ impl Control {
     pub fn start(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         let resources = app.path().resource_dir()?;
         #[cfg(windows)]
+        let resources = node_path(resources);
+        #[cfg(windows)]
         let resources = if resources.join("resources/control/control.cjs").is_file() {
             resources.join("resources")
         } else {
@@ -32,13 +60,16 @@ impl Control {
         };
         let bundled = resources.join("control/control.cjs").is_file();
         let locate = |key: &str, name: &str| -> Result<PathBuf, String> {
-            if bundled {
-                Ok(resources.join("control").join(name))
+            let path = if bundled {
+                resources.join("control").join(name)
             } else {
                 std::env::var_os(key)
                     .map(PathBuf::from)
-                    .ok_or_else(|| format!("Missing {key}"))
-            }
+                    .ok_or_else(|| format!("Missing {key}"))?
+            };
+            #[cfg(windows)]
+            let path = node_path(path);
+            Ok(path)
         };
         let mut command = Command::new(locate(
             "BREVIA_CONTROL_NODE",
@@ -192,5 +223,24 @@ impl Control {
 pub fn notify(app: &AppHandle, event: Value) {
     if let Some(control) = app.try_state::<Control>() {
         let _ = control.send(&event);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn node_starts_a_canonicalized_windows_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = temp.path().join("控制入口 with spaces.cjs");
+        std::fs::write(&entry, "process.stdout.write('ready')").unwrap();
+        let canonical = std::fs::canonicalize(&entry).unwrap();
+        let output = Command::new("node")
+            .arg(node_path(canonical))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{:?}", output.stderr);
+        assert_eq!(output.stdout, b"ready");
     }
 }
