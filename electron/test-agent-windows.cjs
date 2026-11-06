@@ -107,7 +107,7 @@ test(
       $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
       $acl = [System.IO.File]::GetAccessControl($env:BREVIA_AGENT_CREDENTIALS)
       $directory = [System.IO.Directory]::GetAccessControl([System.IO.Path]::GetDirectoryName($env:BREVIA_AGENT_CREDENTIALS))
-      ConvertTo-Json -Compress -InputObject @{ sid=$sid; protected=$directory.AreAccessRulesProtected; rules=@($acl.Access | ForEach-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }) }
+      ConvertTo-Json -Compress -InputObject @{ sid=$sid; protected=$directory.AreAccessRulesProtected; rules=@($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value }) }
     `,
         ],
         {
