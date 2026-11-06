@@ -30,6 +30,9 @@ function install(executable, args, expected = 0) {
     stdio: 'inherit',
     timeout: 600000,
     windowsHide: true,
+    // NSIS 的末尾 /D= 与 _?= 路径即使含空格也不可加引号；只引用程序名。
+    argv0: `"${executable}"`,
+    windowsVerbatimArguments: true,
   });
   if (result.error) throw result.error;
   assert.equal(result.status, expected, `${path.basename(executable)} ${args.join(' ')}`);

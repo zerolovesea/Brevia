@@ -25,11 +25,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  checks:
     runs-on: windows-latest
-    timeout-minutes: 90
-    env:
-      BREVIA_SKIP_E2E: '1'
+    timeout-minutes: 20
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
@@ -44,6 +42,19 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm test
+        env:
+          BREVIA_SKIP_E2E: '1'
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
       - uses: actions/cache@v4
         with:
           path: |
