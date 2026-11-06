@@ -42,7 +42,7 @@ Diese Seite beschreibt die Neuerungen in main. Die Downloads enthalten noch v1.4
 2. Ein Meeting mit Mikrofon, Systemton oder verbundenem Smartphone starten oder eine Datei importieren.
 3. Notizen machen, das Transkript nachbearbeiten und Ergebnisse bearbeiten oder exportieren.
 
-Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Laufzeitumgebung werden nicht benötigt. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
+Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Inferenz-Laufzeitumgebung werden nicht benötigt. Unter Windows lädt das Installationsprogramm WebView2 nur bei Bedarf herunter. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
 
 ## Mit dem Smartphone aufnehmen
 

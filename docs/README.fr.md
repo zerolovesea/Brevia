@@ -42,7 +42,7 @@ Cette page présente les nouveautés de main. Les téléchargements proposent en
 2. Lancez une réunion avec le microphone, le son du système ou un téléphone connecté. Vous pouvez aussi importer un fichier.
 3. Prenez des notes, affinez la transcription et modifiez ou exportez les résultats.
 
-Les moteurs d’inférence sont inclus. Il n’est pas nécessaire d’installer Python ni un environnement supplémentaire. Téléchargez les modèles souhaités pour les utiliser hors ligne. FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen et Hy-MT sont disponibles selon la plateforme.
+Les moteurs d’inférence sont inclus. Aucun Python ni environnement d’inférence supplémentaire n’est nécessaire. Sous Windows, le programme d’installation télécharge WebView2 uniquement s’il manque. Téléchargez les modèles souhaités pour les utiliser hors ligne. FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen et Hy-MT sont disponibles selon la plateforme.
 
 ## Enregistrer avec le téléphone
 

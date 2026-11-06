@@ -42,7 +42,7 @@ Esta página describe las novedades de main. Las descargas siguen siendo de v1.4
 2. Inicia una reunión con el micrófono, el audio del sistema o un teléfono conectado; también puedes importar un archivo.
 3. Toma notas, refina la transcripción y edita o exporta los resultados.
 
-Los motores de inferencia vienen incluidos. No necesitas instalar Python ni descargar un entorno adicional. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
+Los motores de inferencia vienen incluidos. No necesitas instalar Python ni un entorno de inferencia adicional. En Windows, el instalador descarga WebView2 solo si falta. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
 
 ## Graba con el móvil
 

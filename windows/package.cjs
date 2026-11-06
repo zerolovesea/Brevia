@@ -1,4 +1,4 @@
-// Windows 安装包使用 WebView2、随包 Node 和原生引擎；系统运行时也支持离线安装。
+// Windows 复用系统 WebView2，缺失时由安装器补装；Node 和推理引擎始终随包提供。
 const fs = require('node:fs');
 const path = require('node:path');
 const { build } = require('esbuild');
@@ -104,7 +104,7 @@ async function main() {
       icon: [path.join(root, 'electron/assets/icon.ico')],
       resources: { [resources]: 'resources/', [path.join(app, 'brevia.cmd')]: 'brevia.cmd' },
       windows: {
-        webviewInstallMode: { type: 'offlineInstaller', silent: true },
+        webviewInstallMode: { type: 'embedBootstrapper', silent: true },
         ...(process.env.BREVIA_WINDOWS_CERT_THUMBPRINT && {
           certificateThumbprint: process.env.BREVIA_WINDOWS_CERT_THUMBPRINT,
           digestAlgorithm: 'sha256',

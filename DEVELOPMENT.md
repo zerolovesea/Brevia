@@ -76,7 +76,7 @@ npm run dist:win            # 构建 NSIS 安装包
 npm run test:windows:native
 ```
 
-输出为 `dist/native-win/app/` 和 `dist/native-win/Brevia-<版本>-x64-setup.exe`。原生依赖固定版本并校验 SHA256。安装包内含必要推理引擎、Node 和 WebView2 离线安装器；用户无需另外下载运行包。WebView2 离线安装器会增加成品大小，实际大小以 CI 构件为准。模型权重仍按所选模型下载；macOS 的 MLX 模型由 Windows 的 ONNX/GGUF 实现承担相应功能，不能直接运行 MLX 权重。当前 Windows 推理使用 CPU，不保证与 Apple Silicon 的 Metal 性能相同。
+输出为 `dist/native-win/app/` 和 `dist/native-win/Brevia-<版本>-x64-setup.exe`。原生依赖固定版本并校验 SHA256。必要推理引擎和 Node 始终随包提供，不下载推理运行包。Windows 复用系统 WebView2，安装包只内置小型引导程序；已安装 WebView2 时不下载，缺失时在安装阶段联网补装。没有 WebView2 的离线机器需由管理员预装微软运行时。模型权重仍按所选模型下载；macOS 的 MLX 模型由 Windows 的 ONNX/GGUF 实现承担相应功能，不能直接运行 MLX 权重。当前 Windows 推理使用 CPU，不保证与 Apple Silicon 的 Metal 性能相同。
 
 从官方 Electron v1.4.5 升级会校验旧卸载器并清理旧程序文件，保留会议、模型和原安装目录。更早版本或卸载器被修改时拒绝自动执行，先保留应用数据手动卸载旧版再安装。升级前结束录音并退出应用；安装器不会强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
 
