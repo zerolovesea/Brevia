@@ -9,7 +9,7 @@ trap 'rm -rf "$output"' EXIT
 download() {
   local url=$1 file=$2 digest=$3
   if [[ ! -f "$file" ]] || [[ "$(shasum -a 256 "$file" | cut -d ' ' -f 1)" != "$digest" ]]; then
-    curl --fail --location --proto '=https' --retry 2 "$url" -o "$file"
+    curl --fail --location --proto '=https' --retry 2 --retry-all-errors --connect-timeout 20 --max-time 300 --retry-max-time 900 "$url" -o "$file"
   fi
   [[ "$(shasum -a 256 "$file" | cut -d ' ' -f 1)" == "$digest" ]] || exit 1
 }
