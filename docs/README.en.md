@@ -8,16 +8,20 @@
 
 ## Download
 
-| Platform | Download                                                                                                 | Requirements                 |
-| -------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac      | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows  | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone   | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
-| Android  | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
+| Platform | Download                                                                                             | Requirements                 |
+| -------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac      | [macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows  | [Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone   | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android  | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Upgrading from the Electron version? Install the native package once. Your meetings and models stay in place; later updates use the new app’s updater.
+<!-- native-release-pending -->
+
+This page describes the new features on main. Downloads still provide v1.4.5; native installers will arrive with the next release.
+
+<!-- /native-release-pending -->
 
 ## What you can do
 

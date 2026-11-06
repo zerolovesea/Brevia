@@ -78,7 +78,7 @@ npm run test:windows:native
 
 输出为 `dist/native-win/app/` 和 `dist/native-win/Brevia-<版本>-x64-setup.exe`。原生依赖固定版本并校验 SHA256。安装包内含必要推理引擎、Node 和 WebView2 离线安装器；用户无需另外下载运行包。WebView2 离线安装器会增加成品大小，实际大小以 CI 构件为准。模型权重仍按所选模型下载；macOS 的 MLX 模型由 Windows 的 ONNX/GGUF 实现承担相应功能，不能直接运行 MLX 权重。当前 Windows 推理使用 CPU，不保证与 Apple Silicon 的 Metal 性能相同。
 
-首次从 Electron 升级会清理旧程序文件，保留会议、模型和原安装目录。升级前结束录音并退出应用；安装器不会强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
+从官方 Electron v1.4.5 升级会校验旧卸载器并清理旧程序文件，保留会议、模型和原安装目录。更早版本或卸载器被修改时拒绝自动执行，先保留应用数据手动卸载旧版再安装。升级前结束录音并退出应用；安装器不会强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
 
 `npm start` 在两端都复用原生依赖的编译缓存，但仍重新组装应用；`start:fresh` 只额外重置引导，不清会议。`npm run clean` 回收可重建的原生编译目录，保留安装包和已下载模型；下次启动会重新编译。`npm run clean:dist` 删除整个 `dist`（包括本地安装包与下载缓存），先退出其中运行的应用。
 
@@ -204,7 +204,7 @@ macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.2 与固定版本的
 npm run release:offline
 ```
 
-`release:offline` 按当前系统生成原生 DMG 或 Windows 安装器，不运行 Python 或 Electron 打包。未提供 Apple 凭据时不提交公证。手动触发 Release 工作流会构建和验证两端签名成品；只有 `v*` 标签触发才公开发布。
+`release:offline` 按当前系统生成原生 DMG 或 Windows 安装器，不运行 Python 或 Electron 打包。此入口不提交 Apple 公证。手动触发 Release 工作流会构建和验证两端签名成品；只有 `v*` 标签触发才公开发布。
 
 ### 6. 发布后
 

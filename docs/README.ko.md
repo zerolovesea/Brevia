@@ -8,16 +8,20 @@
 
 ## 다운로드
 
-| 플랫폼  | 다운로드                                                                                                 | 요구 사항                    |
-| ------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac     | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
-| Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
+| 플랫폼  | 다운로드                                                                                             | 요구 사항                    |
+| ------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac     | [macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows | [Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Electron 버전 사용자는 네이티브 설치 파일로 한 번 설치하세요. 기존 회의와 모델은 유지되며 이후에는 앱에서 업데이트합니다.
+<!-- native-release-pending -->
+
+이 페이지는 main의 새 기능을 소개합니다. 현재 다운로드는 v1.4.5이며, 네이티브 설치 파일은 다음 릴리스에서 제공합니다.
+
+<!-- /native-release-pending -->
 
 ## 주요 기능
 

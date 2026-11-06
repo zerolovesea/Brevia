@@ -17,7 +17,11 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
 
-从旧 Electron 版升级时，需先手动安装一次原生版。会议和模型继续保留，之后通过应用内更新。
+<!-- native-release-pending -->
+
+本页介绍 main 中的新版功能。当前下载仍为 v1.4.5，原生安装包将在下一版发布。
+
+<!-- /native-release-pending -->
 
 ## 能做什么
 

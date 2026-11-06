@@ -8,16 +8,20 @@
 
 ## Télécharger
 
-| Plateforme | Télécharger                                                                                              | Configuration                |
-| ---------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac        | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows    | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone     | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
-| Android    | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
+| Plateforme | Télécharger                                                                                          | Configuration                |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac        | [macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows    | [Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone     | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android    | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Vous utilisez la version Electron ? Installez une fois le paquet natif. Les réunions et modèles sont conservés ; les mises à jour suivantes passent par l’application.
+<!-- native-release-pending -->
+
+Cette page présente les nouveautés de main. Les téléchargements proposent encore v1.4.5 ; les installateurs natifs arriveront avec la prochaine version.
+
+<!-- /native-release-pending -->
 
 ## Fonctionnalités
 

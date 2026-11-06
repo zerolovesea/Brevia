@@ -8,16 +8,20 @@
 
 ## Download
 
-| Plattform | Download                                                                                                 | Voraussetzungen              |
-| --------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac       | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows   | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
-| Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
+| Plattform | Download                                                                                             | Voraussetzungen              |
+| --------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac       | [macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows   | [Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Beim Wechsel von Electron das native Paket einmal installieren. Meetings und Modelle bleiben erhalten; spätere Updates erfolgen über die App.
+<!-- native-release-pending -->
+
+Diese Seite beschreibt die Neuerungen in main. Die Downloads enthalten noch v1.4.5; native Installationspakete folgen mit der nächsten Version.
+
+<!-- /native-release-pending -->
 
 ## Funktionen
 

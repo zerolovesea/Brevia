@@ -8,16 +8,20 @@
 
 ## ダウンロード
 
-| プラットフォーム | ダウンロード                                                                                             | 動作環境                     |
-| ---------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac              | [macOS](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows          | [Windows](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone           | [App Store](https://apps.apple.com/app/id6819869442)                                                     | iOS 15+                      |
-| Android          | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)     | Android 7+                   |
+| プラットフォーム | ダウンロード                                                                                         | 動作環境                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac              | [macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
+| Windows          | [Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
+| iPhone           | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android          | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-Electron 版から移行する場合は、ネイティブ版を一度インストールしてください。会議とモデルは引き継がれ、以降はアプリ内で更新できます。
+<!-- native-release-pending -->
+
+このページは main の新機能を紹介しています。現在のダウンロードは v1.4.5 です。ネイティブ版のインストーラーは次回リリースで公開します。
+
+<!-- /native-release-pending -->
 
 ## できること
 
