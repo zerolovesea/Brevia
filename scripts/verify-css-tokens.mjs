@@ -3,7 +3,7 @@
  *
  * 为什么存在：`tailwind.css` 里做过大范围颜色重构（令牌化、删暗色覆盖）时，
  * 源码 diff 和现有测试都看不出「某个元素在两个主题下的实际颜色变了没有」。
- * 这个工具启动真实 Electron 应用，用 CDP 把**所有元素**的颜色类计算样式抓下来，
+ * 这个工具启动Playwright 与真实桌面控制器，用 CDP 把**所有元素**的颜色类计算样式抓下来，
  * 跑两次（改动前 / 改动后）直接 diff，把「零视觉变化」变成可核对的证据。
  *
  * 用法：
@@ -18,7 +18,7 @@
  * 先用同一份 CSS 跑两次建立噪声基线，再拿改动后的结果与之比较；
  * 只有**超出噪声基线**的差异才是真回归。`--diff` 会把差异按元素分组输出。
  *
- * 需要 GUI 环境；不加新依赖（Node 内置 fetch/WebSocket + 已安装的 electron）。
+ * 需要安装 Playwright Chromium（npx playwright install chromium）。
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -105,19 +105,23 @@ const port = await new Promise((resolve) => {
     server.close(() => resolve(p));
   });
 });
-// 与 electron/test-e2e.mjs 同样的约束：临时目录必须在工作区内，Chromium 才写得进
-// user-data-dir；--no-sandbox 让 Electron 子进程能在这个沙箱下启动。
+// 与 desktop/test-e2e.mjs 同样的约束：临时目录必须在工作区内，Chromium 才写得进
+// user-data-dir；--no-sandbox 让 浏览器子进程能在这个沙箱下启动。
 const child = spawn(
-  path.join(root, 'node_modules', '.bin', 'electron'),
+  process.execPath,
   [
-    '.',
+    'desktop/test-host.cjs',
     '--no-sandbox',
     `--user-data-dir=${path.join(scratch, 'userdata')}`,
     `--remote-debugging-port=${port}`,
   ],
   {
     cwd: root,
-    env: { ...process.env, BREVIA_DATA_DIR: path.join(scratch, 'data') },
+    env: {
+      ...process.env,
+      BREVIA_DATA_DIR: path.join(scratch, 'data'),
+      BREVIA_TEST_USER_DATA: path.join(scratch, 'userdata'),
+    },
     stdio: 'ignore',
     detached: true,
   },
@@ -136,8 +140,12 @@ for (let attempt = 0; attempt < 200 && !socketUrl; attempt += 1) {
   try {
     const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
     socketUrl =
-      targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl)
-        ?.webSocketDebuggerUrl ?? null;
+      targets.find(
+        (target) =>
+          target.type === 'page' &&
+          target.url.includes('/frontend/index.html') &&
+          target.webSocketDebuggerUrl,
+      )?.webSocketDebuggerUrl ?? null;
   } catch {
     /* 调试端口还没起来。 */
   }
@@ -145,7 +153,7 @@ for (let attempt = 0; attempt < 200 && !socketUrl; attempt += 1) {
 }
 if (!socketUrl) {
   stop();
-  console.error('✗ 未能连上渲染进程（需要 GUI 环境）。');
+  console.error('✗ 未能连上渲染进程（需要 Playwright Chromium）。');
   process.exit(1);
 }
 

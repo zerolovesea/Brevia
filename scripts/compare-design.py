@@ -1,4 +1,4 @@
-"""用原尺寸 Electron 截图生成参考/当前/叠加/差异；合成画板只做视觉对照。"""
+"""用原尺寸 Desktop 截图生成参考/当前/叠加/差异；合成画板只做视觉对照。"""
 
 import argparse
 import hashlib
@@ -45,7 +45,7 @@ def comparison_board(reference, current, overlay, heat):
         font = ImageFont.load_default()
     for index, (label, picture) in enumerate(
         zip(
-            ["Reference", "Electron", "50% overlay", "Diff (>24)"],
+            ["Reference", "Desktop", "50% overlay", "Diff (>24)"],
             [reference, current, overlay, heat],
         )
     ):
@@ -88,7 +88,7 @@ def compare_feedback(args):
     lines = [
         "# 2026-10-14 标注修正对照",
         "",
-        "真实 Electron 981×613 窗口，应用 zoom=23/30，导出 DPR=30/23；文件均为1280×800。",
+        "真实 Desktop 981×613 窗口，应用 zoom=23/30，导出 DPR=30/23；文件均为1280×800。",
         "参考与截图不裁剪、不拉伸。每项保留原图、当前、50%叠加、阈值24的Diff和四格。",
         "本轮用户标注优先：更紧凑导航/列表、顶部按钮对齐、移除语言入口及纪要提示、简化手机安装说明。",
         "测试内容、日期、任务数量和本轮覆盖旧PNG的要求会产生差异；这里不提供还原率或全册通过结论。",
@@ -342,7 +342,7 @@ def run(args):
                 board.paste(picture, (column * 640, index * 432 + 32))
                 draw.text(
                     (column * 640 + 12, index * 432 + 10),
-                    row["reference"] + (" / Reference" if column == 0 else " / Electron"),
+                    row["reference"] + (" / Reference" if column == 0 else " / Desktop"),
                     fill="#222222",
                 )
         board.save(overview / f"whole-desktop-{offset // 5 + 1}.jpg", quality=92)
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mobile-only", action="store_true", help="仅更新手机多分镜对照，保留桌面结果"
     )
-    parser.add_argument("--feedback", help="只比较标注反馈的独立Electron截图目录")
+    parser.add_argument("--feedback", help="只比较标注反馈的独立Desktop截图目录")
     parser.add_argument("--output", default="output/playwright/layout-style-comparison")
     parser.add_argument("--self-test", action="store_true")
     options = parser.parse_args()

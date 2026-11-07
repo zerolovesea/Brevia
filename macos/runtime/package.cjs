@@ -255,10 +255,7 @@ async function main() {
     fs.copyFileSync(path.join(root, 'macos/host/Info.plist'), plist);
     for (const key of ['CFBundleVersion', 'CFBundleShortVersionString'])
       run('plutil', ['-replace', key, '-string', version, plist]);
-    fs.copyFileSync(
-      path.join(root, 'electron/assets/icon.icns'),
-      path.join(resources, 'icon.icns'),
-    );
+    fs.copyFileSync(path.join(root, 'desktop/assets/icon.icns'), path.join(resources, 'icon.icns'));
     fs.mkdirSync(path.join(resources, 'frontend'));
     for (const name of ['summary-providers.js', 'i18n-data.js', 'model-selection.js'])
       fs.copyFileSync(path.join(root, 'frontend', name), path.join(resources, 'frontend', name));
@@ -279,8 +276,6 @@ async function main() {
     await build({
       ...options,
       entryPoints: ['macos/control.cjs'],
-      alias: { electron: './macos/electron-compat.cjs' },
-      external: ['electron-updater'],
       outfile: path.join(control, 'control.cjs'),
     });
     await build({

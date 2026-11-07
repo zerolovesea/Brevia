@@ -1,8 +1,7 @@
-/** 隔离 Electron 验证下一版桌面入口、胶囊与截图，不触碰用户录音。 */
+/** 隔离桌面控制器 验证下一版桌面入口、胶囊与截图，不触碰用户录音。 */
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -49,10 +48,10 @@ audio.writeUInt32LE(audio.length - 44, 40);
 const audioPath = path.join(sandbox, 'silent.wav');
 writeFileSync(audioPath, audio);
 const child = spawn(
-  createRequire(import.meta.url)('electron'),
+  process.execPath,
   [
-    '.',
-    `--inspect=${mainPort}`,
+    'desktop/test-host.cjs',
+    `--control-inspect=${mainPort}`,
     '--no-sandbox',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
@@ -65,9 +64,9 @@ const child = spawn(
     env: {
       ...process.env,
       BREVIA_DATA_DIR: path.join(sandbox, 'data'),
+      BREVIA_TEST_USER_DATA: path.join(sandbox, 'userdata'),
       BREVIA_MEETINGS_DIR: path.join(sandbox, 'recordings'),
       BREVIA_MOBILE_PORT: '0',
-      BREVIA_PYTHON: process.env.BREVIA_PYTHON || path.join(root, '.venv/bin/python'),
     },
     stdio: ['ignore', 'ignore', 'pipe'],
     detached: true,
@@ -106,7 +105,7 @@ try {
   for (let attempt = 0; attempt < 300; attempt++) {
     try {
       target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(
-        (tab) => tab.type === 'page',
+        (tab) => tab.type === 'page' && tab.url.includes('/frontend/index.html'),
       );
     } catch {
       /* 启动期间调试端口尚未就绪。 */
@@ -182,7 +181,7 @@ try {
     }
   };
   const nativeWindow =
-    "process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/index.html'))";
+    "process.getBuiltinModule('module').createRequire(process.cwd()+'/desktop/main.js')('./platform.cjs').NativeWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/index.html'))";
   const capture = async (name) => {
     await delay(250);
     const { data } = await send('Page.captureScreenshot', {
@@ -297,7 +296,7 @@ try {
   await mainEval(`${nativeWindow}.close(); true`);
   assert.equal(await mainEval(`${nativeWindow}.isVisible()`), false, '隐藏保留窗口');
   await mainEval(
-    `process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').app.emit('second-instance'); true`,
+    `process.getBuiltinModule('module').createRequire(process.cwd()+'/desktop/main.js')('./platform.cjs').app.emit('activate'); true`,
   );
   assert.equal(await mainEval(`${nativeWindow}.isVisible()`), true, '再次启动恢复隐藏主窗');
   await evaluate(String.raw`(async()=>{
@@ -427,7 +426,9 @@ try {
   );
   await capture('04-background-recording');
   await evaluate(`document.querySelector('[data-task-summary]').click()`);
-  await mainEval(`${nativeWindow}.minimize(); true`);
+  await mainEval(
+    `(()=>{const w=${nativeWindow};w.minimized=true;w.emit('minimize');return true;})()`,
+  );
   let capsule;
   for (let attempt = 0; attempt < 60; attempt++) {
     capsule = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((target) =>
@@ -462,10 +463,10 @@ try {
   );
   assert.equal(await evaluate(`Boolean(document.querySelector('.capsule-return'))`), false);
   const nativeCapsule =
-    "process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/recording-capsule.html'))";
+    "process.getBuiltinModule('module').createRequire(process.cwd()+'/desktop/main.js')('./platform.cjs').NativeWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/recording-capsule.html'))";
   const defaultBounds = await mainEval(`${nativeCapsule}.getBounds()`);
   const workArea = await mainEval(
-    `process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').screen.getDisplayMatching(${nativeCapsule}.getBounds()).workArea`,
+    `process.getBuiltinModule('module').createRequire(process.cwd()+'/desktop/main.js')('./platform.cjs').screen.getDisplayMatching(${nativeCapsule}.getBounds()).workArea`,
   );
   assert.equal(defaultBounds.x, Math.round(workArea.x + (workArea.width - 344) / 2));
   assert.equal(
@@ -573,7 +574,9 @@ try {
     true,
     '点击 Logo 从最小化恢复主窗口',
   );
-  await mainEval(`${nativeWindow}.minimize(); true`);
+  await mainEval(
+    `(()=>{const w=${nativeWindow};w.minimized=true;w.emit('minimize');return true;})()`,
+  );
   await delay(200);
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
   await capture('05-capsule-recording');

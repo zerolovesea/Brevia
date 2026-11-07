@@ -13,11 +13,22 @@
         {
           "identifier": "brevia-desktop",
           "windows": ["main", "floating-caption", "recording-capsule"],
-          "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-start-dragging"]
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-unlisten",
+            "core:window:allow-start-dragging"
+          ]
         }
       ]
     }
   },
   "plugins": { "updater": { "pubkey": "", "requireSignedVersion": true } },
-  "bundle": { "icon": ["../../electron/assets/trayTemplate.png", "../../electron/assets/icon.icns", "../../electron/assets/icon.ico"], "macOS": { "minimumSystemVersion": "14.0" } }
+  "bundle": {
+    "icon": [
+      "../../desktop/assets/trayTemplate.png",
+      "../../desktop/assets/icon.icns",
+      "../../desktop/assets/icon.ico"
+    ],
+    "macOS": { "minimumSystemVersion": "14.0" }
+  }
 }

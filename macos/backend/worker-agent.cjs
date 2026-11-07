@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { schemas, failure } = require('../../electron/agent-contract.cjs');
+const { schemas, failure } = require('../../desktop/agent-contract.cjs');
 const { latestSegments } = require('./meeting-evidence.cjs');
 const { srtTime } = require('./worker-exports.cjs');
 const { ModelNotInstalled } = require('./models.cjs');

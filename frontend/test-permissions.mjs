@@ -9,8 +9,6 @@ const permissionSource = app.slice(
 );
 const permissionRequests = new Set();
 let requested = [];
-let stoppedStream;
-const stream = {};
 const context = {
   window: {
     brevia: {
@@ -27,17 +25,6 @@ const context = {
         },
       },
     },
-  },
-  navigator: {
-    mediaDevices: {
-      getUserMedia: async () => {
-        requested.push('web-mic');
-        return stream;
-      },
-    },
-  },
-  stopMediaStream: (value) => {
-    stoppedStream = value;
   },
   t: (value) => value,
   interfaceIcon: () => '',
@@ -85,9 +72,6 @@ assert.deepEqual(
   ['screen', 'microphone'],
   'native access does not open a web microphone',
 );
-context.window.brevia.nativeAudio = false;
-await context.requestPermissionAccess('microphone');
-assert.equal(stoppedStream, stream, 'Electron permission probe releases its microphone stream');
 context.window.brevia.permissions.requestScreen = async () => false;
 await assert.rejects(
   context.requestPermissionAccess('screen'),

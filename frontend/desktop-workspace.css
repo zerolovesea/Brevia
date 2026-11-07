@@ -170,7 +170,7 @@
   line-height: 1.4;
 }
 #live-view #transcript-scroll .segment:not(.segment-text-editing) {
-  padding: 10px 0 16px;
+  padding: 10px 0 42px;
   column-gap: 10px;
 }
 #live-view #transcript-scroll .segment :is(time, .translation) {

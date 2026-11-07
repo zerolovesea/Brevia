@@ -74,8 +74,6 @@ async function main() {
   await build({
     ...common,
     entryPoints: ['macos/control.cjs'],
-    alias: { electron: './macos/electron-compat.cjs' },
-    external: ['electron-updater', '@ffmpeg-installer/ffmpeg'],
     outfile: path.join(control, 'control.cjs'),
   });
   await build({
@@ -102,7 +100,7 @@ async function main() {
       active: true,
       targets: ['nsis'],
       createUpdaterArtifacts: signed,
-      icon: [path.join(root, 'electron/assets/icon.ico')],
+      icon: [path.join(root, 'desktop/assets/icon.ico')],
       resources: { [resources]: 'resources/', [path.join(app, 'brevia.cmd')]: 'brevia.cmd' },
       windows: {
         webviewInstallMode: { type: 'embedBootstrapper', silent: true },

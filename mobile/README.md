@@ -93,7 +93,7 @@ git pull --ff-only origin main
 git switch -c feature/mobile-transcript-layout
 ```
 
-手机界面与同步逻辑在 `mobile/lib/`；原生后台能力在 `mobile/ios/`、`mobile/android/`。涉及配对协议或桌面联动时，同时检查 `electron/mobile-server.js`、`macos/backend/worker-mobile.cjs` 和 `frontend/` 对应实现。修改前遵循[贡献规范](../DEVELOPMENT.md#协作与检查)。
+手机界面与同步逻辑在 `mobile/lib/`；原生后台能力在 `mobile/ios/`、`mobile/android/`。涉及配对协议或桌面联动时，同时检查 `desktop/mobile-server.js`、`macos/backend/worker-mobile.cjs` 和 `frontend/` 对应实现。修改前遵循[贡献规范](../DEVELOPMENT.md#协作与检查)。
 
 需要新的展示版本时修改 `mobile/pubspec.yaml`，例如 `version: 0.1.5+5`。CI 保留 `0.1.5`，自动生成并覆盖 `+` 后的构建号；同一展示版本可以有多个测试构建，无需每个 PR 都升级版本。iOS 实时活动扩展从 Flutter 配置继承相同版本，不能另设版本号。
 

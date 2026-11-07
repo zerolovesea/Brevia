@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 const { z } = require('zod');
-const { call, credentials } = require('../electron/agent-client.cjs');
-const { schemas, scopeFor } = require('../electron/agent-contract.cjs');
-const { errorResult } = require('../electron/agent-service.cjs');
+const { call, credentials } = require('../desktop/agent-client.cjs');
+const { schemas, scopeFor } = require('../desktop/agent-contract.cjs');
+const { errorResult } = require('../desktop/agent-service.cjs');
 const path = require('node:path');
 const os = require('node:os');
 

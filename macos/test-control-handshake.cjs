@@ -9,15 +9,15 @@ test('native startup requires the host handshake and preserves the following com
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-host-handshake-'));
   try {
     fs.mkdirSync(path.join(root, 'macos'));
-    fs.mkdirSync(path.join(root, 'electron'));
+    fs.mkdirSync(path.join(root, 'desktop'));
     const entry = path.join(root, 'macos/control.cjs');
     fs.copyFileSync(path.join(__dirname, 'control.cjs'), entry);
     fs.writeFileSync(
-      path.join(root, 'macos/electron-compat.cjs'),
+      path.join(root, 'desktop/platform.cjs'),
       `exports.listen = () => require('node:readline').createInterface({input:process.stdin})
         .on('line', line => process.stdout.write(line + '\\n'));`,
     );
-    fs.writeFileSync(path.join(root, 'electron/main.js'), "process.stdout.write('started\\n');");
+    fs.writeFileSync(path.join(root, 'desktop/main.js'), "process.stdout.write('started\\n');");
     const run = (input) =>
       spawnSync(process.execPath, [entry], {
         env: { ...process.env, BREVIA_WAIT_FOR_HOST: '1' },
@@ -47,8 +47,8 @@ test('note images keep their bytes across the native JSON bridge and reject malf
   const pending = new Map();
   let next = 0;
   const module = { exports: {} };
-  const nativeRequire = createRequire(path.join(__dirname, 'electron-compat.cjs'));
-  runInNewContext(fs.readFileSync(path.join(__dirname, 'electron-compat.cjs'), 'utf8'), {
+  const nativeRequire = createRequire(path.join(__dirname, '../desktop/platform.cjs'));
+  runInNewContext(fs.readFileSync(path.join(__dirname, '../desktop/platform.cjs'), 'utf8'), {
     module,
     require: (name) =>
       name === 'node:readline' ? { createInterface: () => lines } : nativeRequire(name),
@@ -77,7 +77,7 @@ test('note images keep their bytes across the native JSON bridge and reject malf
   });
   const adapter = module.exports;
   adapter.listen();
-  const view = new adapter.BrowserWindow({});
+  const view = new adapter.NativeWindow({});
   await view.loadFile(path.join(__dirname, '../frontend/index.html'));
   adapter.ipcMain.handle('meeting.note-image.save', (_, payload) => {
     assert.ok(payload.bytes instanceof ArrayBuffer);
@@ -105,7 +105,7 @@ test('note images keep their bytes across the native JSON bridge and reject malf
       .readFileSync(path.join(__dirname, 'bridge.js'), 'utf8')
       .replace(
         '/* BREVIA_PRELOAD */',
-        fs.readFileSync(path.join(__dirname, '../electron/preload.js'), 'utf8'),
+        fs.readFileSync(path.join(__dirname, '../desktop/preload.js'), 'utf8'),
       ),
     {
       window,

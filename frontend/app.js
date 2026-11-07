@@ -655,7 +655,7 @@ function currentSummaryConfig() {
     providers: summaryConfig.providers,
   };
 }
-/** 在浏览器存储之外保存纪要模型设置；密钥保留在 Electron 安全存储中。*/
+/** 在浏览器存储之外保存纪要模型设置；密钥由本地业务端管理。*/
 async function persistSummaryConfig(apiKey) {
   await window.brevia?.summary.config.save({
     ...currentSummaryConfig(),
@@ -927,8 +927,6 @@ async function requestPermissionAccess(kind) {
     ? window.brevia.permissions.requestScreen()
     : window.brevia.permissions.requestMicrophone());
   if (!granted) throw new Error(`${t('请在系统设置中允许')} · ${permissionSettingsPath(kind)}`);
-  if (kind === 'microphone' && !window.brevia.nativeAudio)
-    stopMediaStream(await navigator.mediaDevices.getUserMedia({ audio: true }));
   return true;
 }
 /** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
@@ -6991,7 +6989,7 @@ function adoptMobileMeeting(meeting) {
     .map((segment) =>
       renderTranscriptSegment({
         ...renderSegmentData(segment, false, new Map()),
-        showSpeaker: false,
+        showSpeaker: Boolean(segment.speaker_name),
       }),
     )
     .join('');
@@ -7003,7 +7001,8 @@ function adoptMobileMeeting(meeting) {
       start_ms: segment.start_ms,
       end_ms: segment.end_ms,
       track: segment.track,
-      speaker: segment.speaker_name || segment.speaker,
+      speaker: segment.speaker,
+      speaker_name: segment.speaker_name,
     });
     latestLiveSegmentId = segment.id;
   });
@@ -7139,7 +7138,7 @@ async function submitMeeting(event) {
         (await window.brevia.meeting.import({
           ...payload,
           ...(form.get('meeting-date') ? { meeting_date: form.get('meeting-date') } : {}),
-          path: importAudioSelection?.path || 'selected-by-electron',
+          path: importAudioSelection?.path || 'selected-by-desktop',
         }));
       if (!meeting) return;
       breviaClient.state.selectedMeetingId = meeting.id;
@@ -9358,7 +9357,8 @@ function segmentInfoFor(meetingId, segmentId) {
     ? {
         text: segment.text,
         start_ms: segment.start_ms,
-        speaker: segment.speaker_name || segment.speaker,
+        speaker: segment.speaker,
+        speaker_name: segment.speaker_name,
       }
     : null;
 }
@@ -9736,6 +9736,33 @@ function isDefaultSegmentSpeakerName(name) {
     name.replace(/[\s_-]+/g, ''),
   );
 }
+// 只同步身份，保留正文选区、翻译和滚动位置。
+function updateLiveSpeaker(meetingId, segment) {
+  if (!segment || breviaClient?.state.meeting?.id !== meetingId) return;
+  const data = liveSegmentData.get(segment.id);
+  const element = liveSegments.get(segment.id);
+  if (!data || !element) return;
+  const name = formatSpeakerName(segment.speaker_name || segment.speaker);
+  let label = element.querySelector('.segment-speaker');
+  if (!label) {
+    label = document.createElement('button');
+    label.type = 'button';
+    label.className = 'segment-speaker';
+    element.querySelector('.segment-meta').append(label);
+  }
+  label.dataset.segmentSpeaker = segment.id;
+  label.dataset.speaker = segment.speaker;
+  label.textContent = name;
+  label.title = name;
+  element.querySelector('.speaker-avatar')?.remove();
+  label.insertAdjacentHTML('beforebegin', renderSpeakerAvatar({ id: segment.speaker, name }));
+  liveSegmentData.set(segment.id, {
+    ...data,
+    revision: Number(segment.revision) || data.revision,
+    speaker: segment.speaker,
+    speaker_name: name,
+  });
+}
 async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
   closeMeetingPopovers();
   followLiveTranscript = followPlaybackTranscript = false;
@@ -9751,7 +9778,7 @@ async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
       ...new Set([...meeting.speakers, ...speakerProfiles].map((person) => person.name)),
     ].filter((name) => name && name.length <= 32 && !isDefaultSegmentSpeakerName(name));
     segmentSpeakerPicker.setAttribute('aria-label', t('标记说话人'));
-    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(name)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
+    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(meeting.speakers.find((person) => person.name === name) || speakerProfiles.find((person) => person.name === name) || name)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
     anchor.closest('.segment')?.classList.add('has-segment-menu');
     draft.open = true;
     segmentSpeakerPicker.showPopover();
@@ -9808,8 +9835,12 @@ segmentSpeakerPicker.addEventListener('submit', async (event) => {
     if (currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
     if (breviaClient?.state.meeting?.id === meeting.id) {
       breviaClient.state.meeting.speakers = meeting.speakers;
-      const segment = liveSegmentData.get(draft.segmentId);
-      if (segment) segment.speaker = name;
+      updateLiveSpeaker(
+        meeting.id,
+        (meeting.current_segments || meeting.segments || []).find(
+          (segment) => segment.id === draft.segmentId,
+        ),
+      );
     }
     if (segmentSpeakerDraft === draft) {
       closeMeetingPopovers();
@@ -10074,6 +10105,13 @@ async function saveSegmentProfile() {
     const profiles = await window.brevia.speakerProfile.list();
     speakerProfiles = profiles;
     if (meeting && currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
+    if (meeting)
+      updateLiveSpeaker(
+        meeting.id,
+        (meeting.current_segments || meeting.segments || []).find(
+          (segment) => segment.id === draft.segmentId,
+        ),
+      );
     if (segmentProfileDraft !== draft) return;
     draft.success = profiles.find((p) =>
       draft.create ? p.name === name : p.id === draft.profileId,
@@ -11165,7 +11203,8 @@ if (window.brevia) {
       start_ms: payload.start_ms,
       end_ms: payload.end_ms,
       track: payload.track,
-      speaker: payload.speaker_name || payload.speaker,
+      speaker: payload.speaker,
+      speaker_name: payload.speaker_name,
     });
     while (liveSegments.size > maxLiveSegments) {
       const [segmentId, stale] = liveSegments.entries().next().value;
@@ -11286,25 +11325,7 @@ if (window.brevia) {
       element.querySelector('.speaker-name-input')
     )
       return;
-    // 声纹晚于正文到达，只补说话人，保留选区、滚动位置和正在显示的字幕。
-    const name = formatSpeakerName(payload.speaker_name || payload.speaker);
-    let label = element.querySelector('.segment-speaker');
-    if (!label) {
-      label = document.createElement('button');
-      label.type = 'button';
-      label.className = 'segment-speaker';
-      element.querySelector('.segment-meta').append(label);
-    }
-    label.dataset.segmentSpeaker = payload.segment_id;
-    label.dataset.speaker = payload.speaker;
-    label.textContent = name;
-    element.querySelector('.speaker-avatar')?.remove();
-    label.insertAdjacentHTML('beforebegin', renderSpeakerAvatar({ id: payload.speaker, name }));
-    liveSegmentData.set(payload.segment_id, {
-      ...data,
-      revision: Number(payload.revision),
-      speaker: name,
-    });
+    updateLiveSpeaker(payload.meeting_id, { ...payload, id: payload.segment_id });
   });
   window.brevia.on('transcript.final', (payload) => {
     if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;

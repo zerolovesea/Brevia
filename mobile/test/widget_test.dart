@@ -27,7 +27,7 @@ void main() {
   test(
     'dynamic desktop errors preserve actionable messages in every language',
     () {
-      final source = File('../electron/mobile-server.js').readAsStringSync();
+      final source = File('../desktop/mobile-server.js').readAsStringSync();
       final messages = RegExp(
         r'''(?:fail\(\d+,\s*|new Error\(|captureError:\s*|error:\s*)(['"])([^'"\n]*[\u3400-\u9fff][^'"\n]*)\1''',
       ).allMatches(source).map((match) => match[2]!).toSet();

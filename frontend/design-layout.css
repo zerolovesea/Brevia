@@ -10497,6 +10497,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #transcript-scroll .segment:not(:has(.segment-text-input)) .segment-meta {
   grid-area: meta;
   padding-top: 0;
+  padding-inline-end: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -10813,4 +10814,9 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 .speaker-avatar svg {
   width: 17px;
   height: 17px;
+}
+
+#transcript-scroll .segment:not(:has(.segment-text-input)) .segment-tools {
+  top: auto;
+  bottom: 0;
 }

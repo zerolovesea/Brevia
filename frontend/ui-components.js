@@ -375,7 +375,7 @@ function renderTranscriptSegment({
       ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>`
       : textEditable
         ? `<span class="segment-speaker">${escapeHtml(speaker.name)}</span>`
-        : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`
+        : `<button class="segment-speaker" title="${escapeHtml(speaker.name)}"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`
     : '';
   const overlap =
     showSpeaker && speaker.overlapNames?.length
@@ -396,7 +396,7 @@ function renderTranscriptSegment({
       ? `<p class="translation is-stale">${t('译文 · 待更新')}</p>`
       : `<p class="translation">${textEditable ? `<span>${escapeHtml(t(textModified ? '译文（未更新）' : '翻译'))}</span> ` : ''}${escapeHtml(translation)}</p>`
     : '';
-  // 编辑框与 electron/main.js 的 segment.text schema 同界（单句 4000 字符）；
+  // 编辑框与 desktop/main.js 的 segment.text schema 同界（单句 4000 字符）；
   // 保存时后端会把换行折成空格，因此这里不需要限制成单行输入。
   const copy =
     textEditable && segmentId

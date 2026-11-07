@@ -1,5 +1,5 @@
-// 唯一源图为 frontend/assets/brevia-logo.svg；使用 Electron 自带的渲染器生成各端资源。
-const { app, BrowserWindow, nativeImage } = require('electron');
+// 唯一源图为 frontend/assets/brevia-logo.svg；使用固定版本 Playwright Chromium 生成各端资源。
+const { chromium } = require('playwright');
 const { readFileSync, writeFileSync, mkdtempSync, rmSync } = require('node:fs');
 const { resolve, join } = require('node:path');
 const { tmpdir } = require('node:os');
@@ -9,11 +9,9 @@ const assert = require('node:assert/strict');
 const root = resolve(__dirname, '..');
 const check = process.argv.includes('--check');
 const temp = mkdtempSync(join(tmpdir(), 'brevia-brand-'));
-app.setPath('userData', temp);
-app.disableHardwareAcceleration();
 
-app.whenReady().then(async () => {
-  let win;
+(async () => {
+  let browser, win;
   try {
     const logo = readFileSync(join(root, 'frontend/assets/brevia-logo.svg'), 'utf8');
     assert.doesNotMatch(logo, /<text\b/, '品牌字形必须固定为路径');
@@ -30,7 +28,7 @@ app.whenReady().then(async () => {
     const add = (path, data) => outputs.set(path, Buffer.from(data));
     for (const path of [
       'frontend/assets/brevia-mark.svg',
-      'electron/assets/icon.svg',
+      'desktop/assets/icon.svg',
       'website/assets/brevia-mark.svg',
     ])
       add(path, mark);
@@ -38,10 +36,11 @@ app.whenReady().then(async () => {
       add(path, logo);
     add('frontend/assets/brevia-wordmark.svg', wordmark);
 
-    win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-    await win.loadURL('data:text/html,<meta charset="utf-8">');
+    browser = await chromium.launch({ headless: true });
+    win = await browser.newPage();
+    await win.goto('data:text/html,<meta charset="utf-8">');
     const png = async (source, width, height = width) => {
-      const data = await win.webContents.executeJavaScript(`(async () => {
+      const data = await win.evaluate(`(async () => {
         const image = new Image();
         image.src = ${JSON.stringify(`data:image/svg+xml;base64,${Buffer.from(source).toString('base64')}`)};
         await image.decode();
@@ -58,20 +57,23 @@ app.whenReady().then(async () => {
         assert.equal(converted.status, 0, converted.error?.message || converted.stderr.toString());
         buffer = converted.stdout;
       }
-      assert.deepEqual(nativeImage.createFromBuffer(buffer).getSize(), { width, height });
+      assert.deepEqual(
+        { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) },
+        { width, height },
+      );
       if (source === mark) assert.equal(buffer[25], 2, '平台图标必须使用无透明通道的 RGB PNG');
       return buffer;
     };
     const trayMark = mark
       .replace(/<path fill="#26221e"[^>]*\/>/, '')
       .replaceAll('#fbfaf7', '#000000');
-    add('electron/assets/trayTemplate.png', await png(trayMark, 32));
+    add('desktop/assets/trayTemplate.png', await png(trayMark, 32));
     const sizes = new Map();
     const icon = async (size) => {
       if (!sizes.has(size)) sizes.set(size, await png(mark, size));
       return sizes.get(size);
     };
-    add('electron/assets/tray.png', await icon(32));
+    add('desktop/assets/tray.png', await icon(32));
     add('mobile/assets/brevia-logo.png', await icon(192));
     add('mobile/assets/brevia-lockup.png', await png(logo, 606, 192));
     add(
@@ -120,7 +122,7 @@ app.whenReady().then(async () => {
     }
     const ico = Buffer.concat([directory, ...icoImages]);
     assert.equal(offset, ico.length);
-    add('electron/assets/icon.ico', ico);
+    add('desktop/assets/icon.ico', ico);
     const chunks = [];
     for (const [type, size] of [
       ['icp4', 16],
@@ -142,7 +144,7 @@ app.whenReady().then(async () => {
     header.writeUInt32BE(8 + chunks.reduce((size, chunk) => size + chunk.length, 0), 4);
     const icns = Buffer.concat([header, ...chunks]);
     assert.equal(header.readUInt32BE(4), icns.length);
-    add('electron/assets/icon.icns', icns);
+    add('desktop/assets/icon.icns', icns);
 
     for (const [path, data] of outputs) {
       const target = join(root, path);
@@ -154,8 +156,7 @@ app.whenReady().then(async () => {
     console.error(error);
     process.exitCode = 1;
   } finally {
-    win?.destroy();
+    await browser?.close();
     rmSync(temp, { recursive: true, force: true });
-    app.exit(process.exitCode || 0);
   }
-});
+})();

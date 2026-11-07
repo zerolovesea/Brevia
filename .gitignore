@@ -43,10 +43,10 @@ design.md
 # 基准测试临时区：会议音频副本、模型软链、Whisper 下载、benchmark JSON
 .bench-tmp/
 
-# e2e 冒烟的 Electron 临时 user-data-dir（scripts 自动创建/清理）
+# e2e 冒烟的 浏览器临时 user-data-dir（scripts 自动创建/清理）
 .e2e-tmp/
 
-# 计算样式指纹工具的 Electron 临时目录（脚本自动创建/清理）
+# 计算样式指纹工具的 浏览器临时目录（脚本自动创建/清理）
 .css-fingerprint-tmp/
 
 # 可重建的截图、调试预览和测试日志。
@@ -72,3 +72,5 @@ credentials.json
 /docs/brand-motion/
 /docs/desktop-ui-*.md
 /docs/global-recording-shortcuts.md
+
+/.playwright-cli/

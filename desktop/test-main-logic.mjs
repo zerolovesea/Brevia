@@ -1,0 +1,1503 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { EventEmitter, once } from 'node:events';
+import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Writable } from 'node:stream';
+import { pathToFileURL } from 'node:url';
+
+await import('./test-markdown-workflow.mjs');
+
+const require = createRequire(import.meta.url);
+const {
+  applyPendingMove,
+  currentDirectory,
+  readLocation,
+  recordingsDirectory,
+  setFirstRunDirectories,
+} = require('./model-location');
+const modelLocationRoot = await mkdtemp(path.join(tmpdir(), 'brevia-model-location-'));
+try {
+  const data = path.join(modelLocationRoot, 'data');
+  const oldModels = path.join(data, 'models');
+  const newModels = path.join(modelLocationRoot, 'external-models');
+  await mkdir(oldModels, { recursive: true });
+  await mkdir(path.join(data, 'meetings'));
+  await mkdir(newModels);
+  await writeFile(path.join(oldModels, 'model.gguf'), 'model data');
+  const oldRealPath = await realpath(oldModels);
+  const newRealPath = await realpath(newModels);
+  const dottedChild = path.join(oldModels, '..archive');
+  await mkdir(dottedChild);
+  await assert.rejects(setFirstRunDirectories(data, { models: dottedChild }), /outside/);
+  await rm(dottedChild, { recursive: true });
+  await assert.rejects(setFirstRunDirectories(data, { models: data }), /folders must be separate/);
+  await assert.rejects(
+    setFirstRunDirectories(data, { recordings: oldModels }),
+    /folders must be separate/,
+  );
+  await setFirstRunDirectories(data, { models: newModels });
+  assert.equal(currentDirectory(data), oldRealPath, 'model directory changes only after migration');
+  await writeFile(path.join(newModels, 'foreign-file'), 'keep');
+  await assert.rejects(applyPendingMove(data), /no longer empty/);
+  assert.equal(await readFile(path.join(oldModels, 'model.gguf'), 'utf8'), 'model data');
+  await rm(path.join(newModels, 'foreign-file'));
+  assert.equal(
+    readLocation(data).pending,
+    undefined,
+    'failed moves cannot later commit a stale copy',
+  );
+  await setFirstRunDirectories(data, { models: newModels });
+  await mkdir(`${newModels}.brevia-migration`);
+  await writeFile(path.join(`${newModels}.brevia-migration`, 'keep'), 'not ours');
+  await assert.rejects(applyPendingMove(data), /staging folder already exists/);
+  assert.equal(
+    await readFile(path.join(`${newModels}.brevia-migration`, 'keep'), 'utf8'),
+    'not ours',
+  );
+  await rm(`${newModels}.brevia-migration`, { recursive: true });
+  await setFirstRunDirectories(data, { models: newModels });
+  await applyPendingMove(data);
+  assert.equal(currentDirectory(data), newRealPath);
+  assert.equal(await readFile(path.join(newModels, 'model.gguf'), 'utf8'), 'model data');
+  assert.deepEqual(readLocation(data), { current: newRealPath });
+  await assert.rejects(readFile(path.join(oldModels, 'model.gguf')), { code: 'ENOENT' });
+
+  const freshData = path.join(modelLocationRoot, 'fresh-data');
+  const chosenModels = path.join(modelLocationRoot, 'chosen-models');
+  const chosenRecordings = path.join(modelLocationRoot, 'chosen-recordings');
+  await mkdir(path.join(freshData, 'models'), { recursive: true });
+  await mkdir(path.join(freshData, 'meetings'));
+  await mkdir(chosenModels);
+  await mkdir(chosenRecordings);
+  await writeFile(path.join(freshData, 'meetings', 'existing-recording'), 'keep');
+  assert.equal(
+    await setFirstRunDirectories(freshData, { models: chosenModels, recordings: chosenRecordings }),
+    true,
+  );
+  assert.equal(
+    recordingsDirectory(freshData),
+    await realpath(path.join(freshData, 'meetings')),
+    'recordings remain at the source until copied',
+  );
+  await applyPendingMove(freshData);
+  assert.equal(currentDirectory(freshData), await realpath(chosenModels));
+  assert.equal(recordingsDirectory(freshData), await realpath(chosenRecordings));
+  assert.equal(await readFile(path.join(chosenRecordings, 'existing-recording'), 'utf8'), 'keep');
+  await assert.rejects(readFile(path.join(freshData, 'meetings', 'existing-recording')), {
+    code: 'ENOENT',
+  });
+
+  // The other partition may be managed by an environment variable.
+  const externalModels = path.join(modelLocationRoot, 'env-models');
+  const nextRecordings = path.join(modelLocationRoot, 'next-recordings');
+  await mkdir(externalModels);
+  await mkdir(nextRecordings);
+  await writeFile(path.join(externalModels, 'model'), 'external');
+  await setFirstRunDirectories(
+    freshData,
+    { models: externalModels, recordings: nextRecordings },
+    { models: externalModels },
+  );
+  await applyPendingMove(freshData);
+  assert.equal(currentDirectory(freshData), await realpath(chosenModels));
+  assert.equal(await readFile(path.join(nextRecordings, 'existing-recording'), 'utf8'), 'keep');
+
+  // A completed but unpublished staging copy must be rebuilt from the latest source.
+  const retryModels = path.join(modelLocationRoot, 'retry-models');
+  await mkdir(retryModels);
+  await setFirstRunDirectories(data, { models: retryModels });
+  await mkdir(`${retryModels}.brevia-migration`);
+  await writeFile(
+    path.join(`${retryModels}.brevia-migration`, '.brevia-models-migration'),
+    newRealPath,
+  );
+  await writeFile(path.join(newModels, 'new-after-failure'), 'latest');
+  await rm(retryModels, { recursive: true });
+  await applyPendingMove(data);
+  assert.equal(await readFile(path.join(retryModels, 'new-after-failure'), 'utf8'), 'latest');
+
+  // A disconnected destination must never trigger deletion of the surviving source.
+  const cleanupSource = path.join(modelLocationRoot, 'cleanup-source');
+  await mkdir(cleanupSource);
+  await writeFile(path.join(cleanupSource, 'keep'), 'only copy');
+  await writeFile(
+    path.join(data, 'models-location.json'),
+    JSON.stringify({ current: path.join(modelLocationRoot, 'offline'), cleanup: cleanupSource }),
+  );
+  await assert.rejects(applyPendingMove(data), { code: 'ENOENT' });
+  assert.equal(await readFile(path.join(cleanupSource, 'keep'), 'utf8'), 'only copy');
+
+  const racingData = path.join(modelLocationRoot, 'racing-data');
+  const racingTarget = path.join(modelLocationRoot, 'racing-target');
+  await mkdir(path.join(racingData, 'models'), { recursive: true });
+  await mkdir(racingTarget);
+  await writeFile(path.join(racingData, 'models', 'model'), 'keep source');
+  await setFirstRunDirectories(racingData, { models: racingTarget });
+  const fsPromises = require('node:fs/promises');
+  const racingModule = { exports: {} };
+  runInNewContext(await readFile(new URL('./model-location.js', import.meta.url), 'utf8'), {
+    module: racingModule,
+    require: (name) =>
+      name === 'node:fs/promises'
+        ? {
+            ...fsPromises,
+            rmdir: async (directory) => {
+              await writeFile(path.join(directory, 'user-file'), 'keep target');
+              return fsPromises.rmdir(directory);
+            },
+          }
+        : require(name),
+  });
+  await assert.rejects(racingModule.exports.applyPendingMove(racingData), { code: 'ENOTEMPTY' });
+  assert.equal(await readFile(path.join(racingTarget, 'user-file'), 'utf8'), 'keep target');
+  assert.equal(await readFile(path.join(racingData, 'models', 'model'), 'utf8'), 'keep source');
+} finally {
+  await rm(modelLocationRoot, { recursive: true, force: true });
+}
+const {
+  audioFileURL,
+  isNewerVersion,
+  requiredModelsFrom,
+  workerError,
+  workerLogLevel,
+  writeAtomicFile,
+  migrateLegacyData,
+} = require('./main-logic');
+assert.equal(workerLogLevel('{"type":"log","message":"Model loaded: model.gguf"}'), 'INFO');
+assert.equal(workerLogLevel('Overflow! Original data is copied. No data loss!'), 'WARNING');
+assert.equal(workerLogLevel('{"type":"worker.warning","message":"No speakers found"}'), 'WARNING');
+
+const audioRoot = await mkdtemp(path.join(tmpdir(), 'brevia-audio-'));
+try {
+  const recordings = path.join(audioRoot, 'external-recordings');
+  const profiles = path.join(audioRoot, 'data', 'speaker-profiles');
+  await mkdir(recordings);
+  await mkdir(profiles, { recursive: true });
+  const outside = path.join(audioRoot, 'private.txt');
+  await writeFile(outside, 'private');
+  for (const directory of [recordings, profiles]) {
+    const audio = path.join(directory, 'recording.wav');
+    await writeFile(audio, 'audio');
+    assert.equal(
+      await audioFileURL(audio, [recordings, profiles]),
+      pathToFileURL(await realpath(audio)).href,
+    );
+  }
+  await assert.rejects(audioFileURL(outside, [recordings, profiles]), /Invalid audio path/);
+  await assert.rejects(audioFileURL(recordings, [recordings, profiles]), /Invalid audio path/);
+  await symlink(
+    audioRoot,
+    path.join(recordings, 'escape'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  await assert.rejects(
+    audioFileURL(path.join(recordings, 'escape', 'private.txt'), [recordings, profiles]),
+    /Invalid audio path/,
+  );
+} finally {
+  await rm(audioRoot, { recursive: true, force: true });
+}
+
+const windowsLogic = { exports: {} };
+runInNewContext(await readFile(new URL('./main-logic.js', import.meta.url), 'utf8'), {
+  module: windowsLogic,
+  require: (name) =>
+    name === 'node:path'
+      ? path.win32
+      : name === 'node:fs/promises'
+        ? { realpath: async (value) => value }
+        : require(name),
+});
+await windowsLogic.exports.audioFileURL('c:\\users\\ALICE\\brevia\\meetings\\a.wav', [
+  'C:\\Users\\Alice\\brevia\\meetings',
+]);
+await assert.rejects(
+  windowsLogic.exports.audioFileURL('D:\\Recordings-other\\a.wav', ['D:\\Recordings']),
+  /Invalid audio path/,
+);
+
+assert.equal(isNewerVersion('v1.0.6', '1.0.5'), true);
+assert.equal(isNewerVersion('1.0.5', '1.0.5'), false);
+assert.equal(isNewerVersion('1.0.4', '1.0.5'), false);
+
+// 纪要配置只认 version 2：旧的 {models, active, sequence} 结构不再迁移，一律当作未配置。
+const { z } = require('zod');
+const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8')).replace(
+  /\r\n/g,
+  '\n',
+);
+// 权限申请和设置跳转是两个独立的用户操作；不启动录音或弹出真实系统授权。
+{
+  const source = mainSource.slice(
+    mainSource.indexOf("  handleIpc('permissions.status'"),
+    mainSource.indexOf("  handleIpc('app.initialize'"),
+  );
+  const handlers = new Map();
+  const requests = [];
+  const opened = [];
+  let finishRequest;
+  let requestError;
+  const nativeAudio = {
+    query(command) {
+      requests.push(command);
+      if (requestError) return Promise.reject(requestError);
+      if (command === 'permissions') return { screen: 'denied' };
+      return new Promise((resolve) => {
+        finishRequest = resolve;
+      });
+    },
+  };
+  const context = {
+    handleIpc: (name, handler) => handlers.set(name, handler),
+    nativeAudio,
+    process: { platform: 'darwin' },
+    supportsSystemAudio: () => true,
+    shell: {
+      openExternal: async (url) => {
+        opened.push(url);
+      },
+    },
+  };
+  runInNewContext(source, context);
+  assert.deepEqual(requests, [], 'registering handlers must not ask for permission');
+  assert.deepEqual(await handlers.get('permissions.status')(), { screen: 'denied' });
+  requests.length = 0;
+  assert.equal(await handlers.get('permissions.open-screen-settings')(), true);
+  assert.equal(await handlers.get('permissions.open-microphone-settings')(), true);
+  assert.deepEqual(requests, [], 'opening Settings must not also request permission');
+  assert.deepEqual(opened, [
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  ]);
+  const first = handlers.get('permissions.request-screen')();
+  assert.equal(handlers.get('permissions.request-screen')(), first);
+  assert.deepEqual(requests, ['request-screen'], 'concurrent clicks share one native prompt');
+  finishRequest(false);
+  assert.equal(await first, false, 'denial remains denial instead of claiming success');
+  const second = handlers.get('permissions.request-screen')();
+  finishRequest(true);
+  assert.equal(await second, true);
+  assert.equal(requests.length, 2, 'a later explicit request can retry');
+  requestError = new Error('native helper unavailable');
+  await assert.rejects(handlers.get('permissions.request-screen')(), requestError);
+  requestError = undefined;
+  const retry = handlers.get('permissions.request-screen')();
+  finishRequest(true);
+  assert.equal(await retry, true, 'failed requests release the pending guard');
+  context.shell.openExternal = async () => {
+    throw new Error('settings unavailable');
+  };
+  await assert.rejects(handlers.get('permissions.open-screen-settings')(), /settings unavailable/);
+  await assert.rejects(
+    handlers.get('permissions.open-microphone-settings')(),
+    /settings unavailable/,
+  );
+}
+// 旧的跨网配置不能影响局域网服务启停。
+{
+  const { MobileServer } = require('./mobile-server');
+  const start = mainSource.indexOf(
+    '\n  try {\n',
+    mainSource.indexOf('mobileServer = new MobileServer'),
+  );
+  const startup = mainSource.slice(
+    start + '\n  try {\n'.length,
+    mainSource.indexOf('\n  } catch', start),
+  );
+  const directory = await mkdtemp(path.join(tmpdir(), 'brevia-mobile-startup-'));
+  try {
+    await writeFile(path.join(directory, 'remote.json'), '{');
+    for (const enabled of [true, false]) {
+      await writeFile(path.join(directory, 'config.json'), JSON.stringify({ enabled }));
+      const server = new MobileServer({ directory, advertise: false, port: 0 });
+      try {
+        await runInNewContext(`(async()=>{${startup}})()`, { mobileServer: server });
+        assert.equal(server.status().enabled, enabled);
+      } finally {
+        await server.disable();
+      }
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+// 文件预选不会导入会议；重试和取消仍走原有后端调用边界。
+const importHandlers = new Map();
+const importRequests = [];
+let importDialogCount = 0;
+let importDialogResult = { canceled: false, filePaths: ['/tmp/picked.wav'] };
+let importSize = 64;
+let importIsFile = true;
+let importFails = false;
+runInNewContext(
+  mainSource.slice(
+    mainSource.indexOf('let selectedImportAudio = null;'),
+    mainSource.indexOf("handleIpc('meeting.audio'"),
+  ),
+  {
+    z,
+    path,
+    meetingStart: z.object({ title: z.string() }),
+    stat: async () => ({ size: importSize, isFile: () => importIsFile }),
+    dialog: {
+      showOpenDialog: async () => {
+        importDialogCount++;
+        return importDialogResult;
+      },
+    },
+    worker: {
+      request: async (method, value) => {
+        if (importFails) throw new Error('worker unavailable');
+        importRequests.push({ method, value });
+        return { id: 'imported' };
+      },
+    },
+    resetFloatingCaptionState: () => {},
+    handleIpc: (channel, handler) => importHandlers.set(channel, handler),
+  },
+);
+const selectImportAudio = (payload = {}) =>
+  importHandlers.get('meeting.select-audio')(null, payload);
+const importAudio = (payload) => importHandlers.get('meeting.import')(null, payload);
+const selectedAudio = await selectImportAudio();
+assert.equal(selectedAudio.path, '/tmp/picked.wav');
+assert.equal(selectedAudio.size, 64);
+assert.equal(importRequests.length, 0, '选择文件不能创建会议');
+for (const file of ['relative.wav', '/tmp/not-audio.pdf']) {
+  await assert.rejects(selectImportAudio({ path: file }), /Unsupported audio file/);
+}
+importSize = 0;
+await assert.rejects(selectImportAudio({ path: '/tmp/empty.wav' }), /Invalid audio file/);
+importSize = 64;
+importIsFile = false;
+await assert.rejects(selectImportAudio({ path: '/tmp/folder.wav' }), /Invalid audio file/);
+importIsFile = true;
+await selectImportAudio({ path: '/tmp/dropped.MP3' });
+importFails = true;
+await assert.rejects(
+  importAudio({ title: 'Meeting', path: '/tmp/dropped.MP3' }),
+  /worker unavailable/,
+);
+importFails = false;
+await importAudio({ title: 'Meeting', path: '/tmp/dropped.MP3' });
+assert.equal(importDialogCount, 1, '预选后重试不重复打开文件选择器');
+assert.equal(importRequests[0].method, 'meeting.import');
+assert.equal(importRequests[0].value.path, '/tmp/dropped.MP3');
+importDialogResult = { canceled: true, filePaths: [] };
+assert.equal(await selectImportAudio(), null);
+assert.equal(await importAudio({ title: 'Meeting', path: '/tmp/arbitrary.wav' }), null);
+assert.equal(importRequests.length, 1, '未预选路径和取消操作不能直接导入');
+// 批量导出逐项失败仍继续，成功文件与旧返回字段保持一致。
+const exportIds = [
+  '7b7d84f6-6f54-49d8-8c44-99f59cd98a01',
+  '7b7d84f6-6f54-49d8-8c44-99f59cd98a02',
+  '7b7d84f6-6f54-49d8-8c44-99f59cd98a03',
+];
+const exportDirectory = path.join(tmpdir(), 'brevia-exports');
+let batchExportHandler;
+let exportCanceled = false;
+const exportCopies = [];
+const exportPrepared = [];
+runInNewContext(
+  mainSource.slice(
+    mainSource.indexOf("handleIpc('meeting.export-many'"),
+    mainSource.indexOf("handleIpc('meeting.share'"),
+  ),
+  {
+    z,
+    path,
+    handleIpc: (_, handler) => {
+      batchExportHandler = handler;
+    },
+    dialog: {
+      showOpenDialog: async () => ({ canceled: exportCanceled, filePaths: [exportDirectory] }),
+    },
+    existsSync: (file) =>
+      file === path.join(exportDirectory, 'transcript.md') ||
+      exportCopies.some(({ destination }) => destination === file),
+    prepareExport: async (payload) => {
+      exportPrepared.push(payload);
+      if (payload.meeting_id === exportIds[1]) throw new Error('recording unavailable');
+      return { path: '/source/transcript.md' };
+    },
+    copyFile: async (source, destination) => {
+      exportCopies.push({ source, destination });
+    },
+  },
+);
+const exportResult = JSON.parse(
+  JSON.stringify(await batchExportHandler(null, { meeting_ids: exportIds })),
+);
+assert.equal(exportPrepared.length, 3, '单项失败不阻止后续导出');
+assert.equal(exportResult.format, 'md');
+assert.deepEqual(
+  exportResult.paths,
+  ['transcript-2.md', 'transcript-3.md'].map((name) => path.join(exportDirectory, name)),
+);
+assert.deepEqual(
+  exportResult.results.map(({ meeting_id, error }) => ({ meeting_id, error })),
+  exportIds.map((meeting_id, i) => ({
+    meeting_id,
+    error: i === 1 ? 'recording unavailable' : undefined,
+  })),
+);
+assert.equal(exportCopies.length, 2);
+exportCanceled = true;
+assert.equal(await batchExportHandler(null, { meeting_ids: exportIds }), null);
+assert.equal(exportPrepared.length, 3, '取消目录选择不进行导出');
+await assert.rejects(batchExportHandler(null, { meeting_ids: ['invalid'] }));
+await assert.rejects(batchExportHandler(null, { meeting_ids: Array(201).fill(exportIds[0]) }));
+
+exportCanceled = false;
+for (const content of ['mynotes', 'notes']) {
+  await batchExportHandler(null, { meeting_ids: [exportIds[0]], content, format: 'md' });
+  assert.equal(exportPrepared.at(-1).content, content);
+  await assert.rejects(
+    batchExportHandler(null, { meeting_ids: exportIds, content, format: 'json' }),
+  );
+}
+
+const workerEventBlock = mainSource.slice(
+  mainSource.indexOf('const workerEvent ='),
+  mainSource.indexOf('const workerMessage ='),
+);
+for (const source of (await readdir(new URL('../macos/backend/', import.meta.url))).filter(
+  (name) => name.endsWith('.cjs') && !name.startsWith('test-'),
+)) {
+  const workerSource = await readFile(
+    new URL('../macos/backend/' + source, import.meta.url),
+    'utf8',
+  );
+  for (const [, type] of workerSource.matchAll(/this\.emit\(\s*['"]([^'"]+)/g))
+    assert.match(
+      workerEventBlock,
+      new RegExp(`['"]${type}['"]`),
+      `${type} emitted by ${source} must be accepted by desktop`,
+    );
+}
+
+assert.match(
+  mainSource,
+  /screen\.getDisplayMatching\(mainWindow\.getBounds\(\)\)/,
+  'floating captions open on the main window display',
+);
+assert.match(
+  mainSource,
+  /const\s+captionWindow\s+=\s+\(?floatingCaptionWindow\s+=\s+new\s+NativeWindow/,
+  'caption callbacks keep ownership of their own window',
+);
+assert.match(
+  mainSource,
+  /if \(floatingCaptionWindow !== captionWindow\) return;/,
+  'stale caption callbacks cannot clear a newer window',
+);
+assert.match(
+  mainSource,
+  /const startupAnimationMs = 1700;/,
+  'startup animation keeps a visible minimum duration',
+);
+assert.match(
+  mainSource,
+  /Promise\s*\.race\(\s*\[\s*initializeWorker\(\s*,?\s*\),\s+new\s+Promise\(\s*\(\s*resolve,?\s*\)\s+=>\s+setTimeout\(\s*resolve,\s+startupDataWaitMs,?\s*\),?\s*\),?\s*\],?\s*\)/,
+  'startup does not wait indefinitely for the worker',
+);
+assert.match(
+  mainSource,
+  /powerMonitor\.on\('suspend',\s+\(\)\s+=>\s+\{\s+void\s+stopActiveMeetingForSleep\(\);\s+\}\);/,
+  'system sleep stops an active meeting',
+);
+assert.match(
+  mainSource,
+  /async function stopActiveMeetingForSleep\(\)/,
+  'system sleep shares the normal meeting stop path',
+);
+assert.match(
+  mainSource,
+  /const refinementWorker = new WorkerClient\(\{ refinement: true \}\);/,
+  'refinement runs in an isolated worker process',
+);
+assert.match(
+  mainSource,
+  /BREVIA_RECOVER_INTERRUPTED: recoverInterrupted \? '1' : '0'/,
+  'only the first main worker recovers interrupted meetings',
+);
+assert.match(
+  mainSource,
+  /refinementWorker\s*\.request\(\s*'meeting\s*\.refine',\s+value,?\s*\)/,
+  'refinement IPC uses the isolated worker',
+);
+assert.match(
+  mainSource,
+  /Another meeting is already being refined/,
+  'the isolated worker rejects concurrent meetings',
+);
+assert.doesNotMatch(mainSource, /'tts'/, 'removed TTS data is not migrated');
+assert.match(
+  mainSource,
+  /displayHeaderFooter: true/,
+  'PDF export uses Chromium header space for its brand',
+);
+assert.match(
+  mainSource,
+  /headerTemplate:\s+'<div\s+style="width:100%;text-align:center;opacity:\.72"><svg\s+width="98"\s+height="28"/,
+  'PDF header uses a crisp, visible vector brand',
+);
+assert.match(
+  mainSource,
+  /value\.task === 'meeting\.refine' \? refinementWorker : worker/,
+  'refinement task controls target the isolated worker',
+);
+assert.match(
+  mainSource,
+  /worker\s*\.request\(\s*'meeting\s*\.refinement-recover',\s+\{\s+meeting_id:\s+meetingId\s+\},?\s*\)/,
+  'a crashed refinement returns the meeting to a retryable state',
+);
+assert.match(mainSource, /\['meeting\.audio', 15000\]/, 'audio IPC cannot retain requests forever');
+assert.match(
+  mainSource,
+  /stoppingForSleep\s+\|\|\s+worker\.active\?\.meeting_id\s+!==\s+value\.meeting_id\)\s+return\s+\{\s+dropped:\s+true\s+\}/,
+  'late audio frames are dropped while a sleep stop is in progress',
+);
+assert.match(
+  mainSource,
+  /abandonActive\(reason\)/,
+  'a worker that cannot resume clears its stale active meeting',
+);
+assert.match(
+  mainSource,
+  /'meeting\.interrupted'/,
+  'the renderer receives an interrupted-meeting event',
+);
+assert.match(
+  mainSource,
+  /worker\.active = null;\n    worker\.recycle\(\);/,
+  'a stopped meeting recycles native model memory',
+);
+assert.match(
+  mainSource,
+  /refinementWorker\.active\s+!==\s+active[\s\S]*refinementWorker\.active\s+=\s+null;\s+refinementWorker\.recycle\(\);/,
+  'a completed refinement releases only its own isolated worker state',
+);
+assert.match(
+  mainSource,
+  /speaker-profile\.enroll[\s\S]*?\.finally\(\(\) => worker\.recycle\(\)\)/,
+  'voice enrollment releases native speaker models while idle',
+);
+assert.match(
+  mainSource,
+  /segment\.speaker-profile-sample[\s\S]*?\.finally\(\(\) => worker\.recycle\(\)\)/,
+  'segment voice samples release native speaker models while idle',
+);
+const sourceStatement = (decl) => {
+  const start = mainSource.indexOf(decl);
+  return mainSource.slice(start, mainSource.indexOf(';', start) + 1);
+};
+const schemaBlock = (decl) => {
+  const start = mainSource.indexOf(decl);
+  return mainSource.slice(start, mainSource.indexOf('\n});', start) + 5);
+};
+const asyncFn = (name) => {
+  const start = mainSource.indexOf(`async function ${name}(`);
+  return mainSource.slice(start, mainSource.indexOf('\n}\n', start) + 2);
+};
+
+{
+  let downloads = 0,
+    installs = 0,
+    idle = true,
+    enabled = true,
+    destroyed = false;
+  let afterDownload = () => {},
+    installError;
+  const stopped = [];
+  const app = {
+    isPackaged: true,
+    async nativeUpdate(operation) {
+      if (operation === 'download') {
+        downloads++;
+        afterDownload();
+      }
+      if (operation === 'install') {
+        installs++;
+        if (installError) throw installError;
+      }
+    },
+    relaunch() {},
+    quit() {},
+  };
+  const window = {
+    webContents: { isCrashed: () => false },
+    isDestroyed: () => destroyed,
+    isEnabled: () => enabled,
+    setEnabled: (value) => {
+      enabled = value;
+    },
+  };
+  const worker = (name) => ({
+    active: null,
+    pending: new Map(),
+    request: async () => idle,
+    stopForMigration: async () => stopped.push(name),
+  });
+  const context = {
+    process: { platform: 'win32' },
+    app,
+    desktop: { state: {}, mainWindow: window, action: async () => {} },
+    worker: worker('live'),
+    refinementWorker: worker('refinement'),
+    mobileServer: { sessions: new Map() },
+    storageMigrationInProgress: false,
+    destructiveOperationInProgress: false,
+    installingUpdate: false,
+    quittingAfterMeetingStop: false,
+    quitRequested: false,
+    createWindow: () => {
+      destroyed = false;
+      enabled = true;
+      context.desktop.mainWindow = window;
+      return { webContents: new EventEmitter() };
+    },
+    reportMainError() {},
+  };
+  runInNewContext(asyncFn('installUpdate'), context);
+  for (const target of [context.worker, context.refinementWorker]) {
+    target.active = { meeting_id: 'running' };
+    await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+    target.active = null;
+  }
+  context.worker.pending.set('save', {});
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  context.worker.pending.clear();
+  context.mobileServer.sessions.set('upload', { finished: false });
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  context.mobileServer.sessions.clear();
+  idle = false;
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  idle = true;
+  assert.equal(downloads, 0);
+  afterDownload = () => {
+    context.worker.active = {};
+  };
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  assert.deepEqual(stopped, []);
+  assert.equal(installs, 0);
+  context.worker.active = null;
+  afterDownload = () => {};
+  installError = Error('signature rejected');
+  await assert.rejects(context.installUpdate(), /signature rejected/);
+  assert.equal(enabled, true);
+  assert.equal(app.preparingUpdate, false);
+  assert.equal(context.installingUpdate, false);
+  assert.deepEqual(
+    stopped,
+    ['live', 'refinement'],
+    'Windows releases database owners before install',
+  );
+  installError = null;
+  stopped.length = 0;
+  assert.equal(await context.installUpdate(), true);
+  assert.deepEqual(stopped, ['live', 'refinement']);
+  context.process.platform = 'darwin';
+  app.preparingUpdate = false;
+  context.installingUpdate = false;
+  enabled = true;
+  stopped.length = 0;
+  app.nativeUpdate = async (operation) => {
+    if (operation === 'install') {
+      destroyed = true;
+      context.desktop.mainWindow = null;
+      throw Error('native relaunch failed');
+    }
+  };
+  await assert.rejects(context.installUpdate(), /native relaunch failed/);
+  assert.equal(
+    context.desktop.mainWindow,
+    window,
+    'failed native relaunch restores a closed window',
+  );
+  assert.equal(enabled, true);
+  assert.deepEqual(stopped, []);
+}
+
+const timers = new Map();
+let nextTimer = 0;
+const workerClientContext = {
+  nativeBackend: undefined,
+  mobileServer: undefined,
+  Buffer,
+  maximumCommandBytes: 32 * 1024 * 1024,
+  command: z.object({ type: z.string(), payload: z.record(z.string(), z.unknown()) }),
+  storageMigrationInProgress: false,
+  destructiveOperationInProgress: false,
+  app: { isQuitting: false },
+  workerError,
+  writeLog: () => {},
+  setTimeout: (callback, ms) => {
+    const timer = ++nextTimer;
+    timers.set(timer, { callback, ms });
+    return timer;
+  },
+  clearTimeout: (timer) => timers.delete(timer),
+};
+const timeoutStart = mainSource.indexOf('const workerRequestTimeouts = ');
+runInNewContext(
+  [
+    sourceStatement('const dataTaskCommands = '),
+    mainSource.slice(timeoutStart, mainSource.indexOf(']);', timeoutStart) + 3),
+    mainSource.slice(
+      mainSource.indexOf('class WorkerClient {'),
+      mainSource.indexOf('\nconst worker = new WorkerClient();'),
+    ),
+    'this.WorkerClient = WorkerClient;',
+  ].join('\n'),
+  workerClientContext,
+);
+const requests = new workerClientContext.WorkerClient();
+requests.sendEvent = () => {};
+requests.active = { meeting_id: 'recording' };
+const writes = [],
+  completeWrites = [];
+requests.process = {
+  exitCode: null,
+  stdin: new Writable({
+    highWaterMark: 1,
+    write(chunk, _, done) {
+      writes.push(JSON.parse(chunk.toString()));
+      completeWrites.push(done);
+    },
+  }),
+};
+workerClientContext.app.preparingUpdate = true;
+for (const action of ['meeting.start', 'meeting.import', 'mobile.prepare', 'models.download']) {
+  await assert.rejects(requests.request(action), (error) => error.code === 'error.tasks.running');
+}
+assert.deepEqual(writes, [], 'staging prevents all recording sources from entering the worker');
+workerClientContext.app.preparingUpdate = false;
+const firstRequest = requests.request('meeting.list');
+const secondRequest = requests.request('meeting.get', { meeting_id: 'meeting' });
+assert.equal(writes.length, 1, 'backpressure keeps the second request outside the pipe');
+assert.equal(requests.outbox.length, 1);
+assert.equal(
+  timers.get(requests.pending.get('cmd-1').timer).ms,
+  60000,
+  'unlisted channels have a finite default timeout',
+);
+const expired = assert.rejects(secondRequest, /timed out/);
+const expiry = requests.pending.get('cmd-2').timer;
+const expire = timers.get(expiry).callback;
+timers.delete(expiry);
+expire();
+await expired;
+assert.equal(
+  requests.recycleRequested,
+  true,
+  'a timed-out worker is recycled once the recording ends',
+);
+completeWrites.shift()();
+await new Promise(setImmediate);
+assert.equal(writes.length, 1, 'a queued request that expired is never sent');
+requests.receive({ id: 'cmd-1', ok: true, result: [] });
+await firstRequest;
+assert.equal(timers.size, 0);
+workerClientContext.destructiveOperationInProgress = true;
+await assert.rejects(
+  requests.request('meeting.import', {}),
+  (error) => error.code === 'error.tasks.running',
+);
+workerClientContext.destructiveOperationInProgress = false;
+
+const safetyContext = {
+  mobileServer: undefined,
+  worker: requests,
+  refinementWorker: { active: null },
+};
+runInNewContext(
+  [
+    sourceStatement('const dataTaskCommands = '),
+    'let destructiveOperationInProgress = false;',
+    sourceStatement('const destructiveCommands = '),
+    asyncFn('requestWithTaskSafety'),
+    'this.requestWithTaskSafety = requestWithTaskSafety;',
+  ].join('\n'),
+  safetyContext,
+);
+requests.pending.set('import', { type: 'meeting.import' });
+for (const type of ['storage.clear', 'storage.cleanup', 'models.delete']) {
+  await assert.rejects(
+    safetyContext.requestWithTaskSafety(type, {}),
+    (error) => error.code === 'error.tasks.running',
+  );
+}
+requests.pending.clear();
+
+const longRequest = requests.request('meeting.refine', { meeting_id: 'meeting' });
+const beforeProgress = requests.pending.get('cmd-3').timer;
+requests.receive({ type: 'refinement.progress', payload: { meeting_id: 'other' } });
+assert.equal(
+  requests.pending.get('cmd-3').timer,
+  beforeProgress,
+  'other meetings cannot prolong a stalled task',
+);
+requests.receive({ type: 'refinement.progress', payload: { meeting_id: 'meeting' } });
+assert.ok(!timers.has(beforeProgress), 'task progress renews its inactivity deadline');
+const following = requests.request('meeting.list');
+assert.equal(writes.length, 2);
+completeWrites.shift()();
+await new Promise(setImmediate);
+assert.equal(writes.length, 3, 'the next request waits for the previous write callback');
+const failedLong = assert.rejects(longRequest, /test pipe failure/);
+const failedFollowing = assert.rejects(following, /test pipe failure/);
+completeWrites.shift()(new Error('test pipe failure'));
+requests.process.stdin.on('error', () => {});
+await Promise.all([failedLong, failedFollowing]);
+assert.equal(requests.pending.size, 0);
+assert.equal(requests.outbox.length, 0);
+assert.equal(timers.size, 0);
+
+const activeMeeting = { meeting_id: 'meeting-1', started_at: Date.now() };
+const stopContext = {
+  nativeAudio: undefined,
+  worker: {
+    active: activeMeeting,
+    request: async () => {
+      throw new Error('offline');
+    },
+  },
+};
+runInNewContext(
+  `${asyncFn('stopActiveMeeting')}\nthis.stopActiveMeeting = stopActiveMeeting;`,
+  stopContext,
+);
+await assert.rejects(stopContext.stopActiveMeeting(), /offline/);
+assert.equal(stopContext.worker.active, activeMeeting, 'a failed stop remains retryable');
+stopContext.worker.request = async () => ({});
+const recorderErrors = [];
+stopContext.nativeAudio = {
+  command: async () => {
+    throw new Error('capture disconnected');
+  },
+};
+stopContext.writeLog = () => {};
+stopContext.logText = String;
+stopContext.worker.sendEvent = (type, event) => recorderErrors.push([type, event.message]);
+await stopContext.stopActiveMeeting();
+assert.deepEqual(recorderErrors, [['native-audio.error', 'capture disconnected']]);
+assert.equal(stopContext.worker.active, null, 'a confirmed stop clears the active meeting');
+
+const configDir = await mkdtemp(path.join(tmpdir(), 'brevia-summary-config-'));
+const configFile = path.join(configDir, 'summary-models.json');
+const aiConfigFile = path.join(configDir, 'ai-assist.json');
+const configContext = {
+  z,
+  readFile,
+  writeAtomicFile,
+  summaryConfigPath: () => configFile,
+  aiAssistConfigPath: () => aiConfigFile,
+};
+runInNewContext(
+  [
+    sourceStatement('const summaryProviderIds = '),
+    schemaBlock('const summaryProviderEntry = '),
+    schemaBlock('const summaryConfig = '),
+    asyncFn('readSummaryConfig'),
+    asyncFn('writeSummaryConfig'),
+    'this.readSummaryConfig = readSummaryConfig;',
+    'this.writeSummaryConfig = writeSummaryConfig;',
+  ].join('\n'),
+  configContext,
+);
+const readConfig = configContext.readSummaryConfig;
+const writeConfig = (value) =>
+  writeFile(configFile, typeof value === 'string' ? value : JSON.stringify(value));
+
+assert.equal(await readConfig(), null, 'a missing file reads as unconfigured');
+const storedConfig = {
+  version: 2,
+  provider: 'custom-claude',
+  providers: {
+    'custom-claude': {
+      model: 'x',
+      endpoint: 'https://example.com/v1',
+      keyReference: 'summary-1',
+      keyLength: 8,
+    },
+  },
+};
+await writeConfig(storedConfig);
+assert.deepEqual(
+  await readConfig(),
+  { ...storedConfig, enabled: true },
+  'existing summary configs default to enabled',
+);
+await writeConfig({ ...storedConfig, enabled: false });
+assert.deepEqual(
+  await readConfig(),
+  { ...storedConfig, enabled: false },
+  'the summary switch survives a round trip',
+);
+await writeConfig({
+  models: [
+    {
+      name: '配置-1',
+      provider: 'OpenAI',
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      format: 'openai',
+      model: 'gpt-4.1-mini',
+      keyReference: 'summary-1',
+    },
+  ],
+  active: 0,
+  sequence: 1,
+});
+assert.equal(await readConfig(), null, 'the pre-1.0.8 multi-config structure is not migrated');
+await writeConfig({ version: 1, provider: 'openai', providers: {} });
+assert.equal(await readConfig(), null, 'version 1 is rejected');
+await writeConfig('{ not json');
+assert.equal(await readConfig(), null, 'a corrupt file reads as unconfigured instead of throwing');
+await writeConfig({ version: 2, provider: 'ollama', providers: {} });
+assert.equal(await readConfig(), null, 'a removed provider id is rejected');
+await writeConfig({ version: 2, provider: 'built-in', providers: {} });
+assert.deepEqual(
+  await readConfig(),
+  { version: 2, enabled: true, provider: 'built-in', providers: {} },
+  'built-in needs no provider entry',
+);
+runInNewContext(
+  [
+    schemaBlock('const aiAssistConfig = '),
+    schemaBlock('const aiAssistConfigV1 = '),
+    asyncFn('readAiAssistConfig'),
+    asyncFn('writeAiAssistConfig'),
+    'this.readAiAssistConfig = readAiAssistConfig;',
+    'this.writeAiAssistConfig = writeAiAssistConfig;',
+  ].join('\n'),
+  configContext,
+);
+await writeFile(aiConfigFile, JSON.stringify({ version: 1, enabled: true, proactivity: 'assist' }));
+assert.deepEqual(
+  JSON.parse(JSON.stringify(await configContext.readAiAssistConfig())),
+  { version: 2, enabled: true, proactivity: 'assist', provider: 'built-in', providers: {} },
+  'AI assist v1 keeps its switch and proactivity after migration',
+);
+// v1 复用纪要配置；迁移时若纪要用的是在线供应商，AI 笔记应继承它而非被切到内置模型。
+await writeConfig({
+  version: 2,
+  provider: 'custom-claude',
+  providers: {
+    'custom-claude': {
+      model: 'x',
+      endpoint: 'https://example.com/v1',
+      keyReference: 'summary-1',
+      keyLength: 8,
+    },
+  },
+});
+await writeFile(aiConfigFile, JSON.stringify({ version: 1, enabled: true, proactivity: 'auto' }));
+assert.deepEqual(
+  JSON.parse(JSON.stringify(await configContext.readAiAssistConfig())),
+  {
+    version: 2,
+    enabled: true,
+    proactivity: 'auto',
+    provider: 'custom-claude',
+    providers: {
+      'custom-claude': {
+        model: 'x',
+        endpoint: 'https://example.com/v1',
+        keyReference: 'summary-1',
+        keyLength: 8,
+      },
+    },
+  },
+  'AI assist v1 migration carries over the online summary provider',
+);
+for (const [save, load, file, value] of [
+  [configContext.writeSummaryConfig, readConfig, configFile, { ...storedConfig, enabled: false }],
+  [
+    configContext.writeAiAssistConfig,
+    configContext.readAiAssistConfig,
+    aiConfigFile,
+    { ...storedConfig, enabled: false, proactivity: 'quiet' },
+  ],
+]) {
+  await save(value);
+  assert.deepEqual(
+    JSON.parse(await readFile(file, 'utf8')),
+    value,
+    'saving writes the validated config to disk',
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(await load())),
+    value,
+    'the saved config survives a fresh disk read',
+  );
+  await assert.rejects(save({ ...value, provider: 'removed-provider' }));
+  assert.deepEqual(
+    JSON.parse(await readFile(file, 'utf8')),
+    value,
+    'invalid saves preserve the previous config',
+  );
+  await Promise.all(
+    Array.from({ length: 8 }, (_, i) => save({ ...value, enabled: Boolean(i % 2) })),
+  );
+  assert.equal((await load()).enabled, true, 'concurrent saves preserve the last requested config');
+}
+// 轮换密钥时必须先获得独立引用，配置落盘失败后仍可重试。
+Object.assign(configContext, { dataDir: () => configDir, path, mkdir, open, rm });
+runInNewContext(
+  `${asyncFn('saveProviderConfig')}
+this.saveCredentials = (payload, save) => saveProviderConfig(payload, summaryConfig, save);`,
+  configContext,
+);
+const secretFile = path.join(configDir, 'secrets', 'summary-1.key');
+const withSecret = { ...storedConfig, apiKey: 'test-key' };
+await assert.rejects(
+  configContext.saveCredentials(withSecret, async () => {
+    throw new Error('disk full');
+  }),
+  /disk full/,
+);
+await assert.rejects(readFile(secretFile), { code: 'ENOENT' });
+const savedOptions = await configContext.saveCredentials(
+  withSecret,
+  configContext.writeSummaryConfig,
+);
+assert.equal(savedOptions.apiKey, undefined);
+assert.equal(JSON.parse(await readFile(configFile, 'utf8')).apiKey, undefined);
+await assert.rejects(
+  configContext.saveCredentials(
+    { ...withSecret, apiKey: 'replacement' },
+    configContext.writeSummaryConfig,
+  ),
+  { code: 'EEXIST' },
+);
+assert.equal(await readFile(secretFile, 'utf8'), 'test-key');
+
+await rm(configDir, { recursive: true, force: true });
+
+// share.open-external 只放行社交网页(https)与邮件(mailto),其余 scheme 一律拒绝,
+// 避免通过 IPC 触发任意协议处理器。直接复用 main.js 中的守卫正则,防止实现漂移。
+const shareGuardSource = sourceStatement(
+  '    if (!/^(https:\\/\\/|mailto:)/i.test(value.url)) throw new Error',
+);
+assert.ok(
+  shareGuardSource.includes('Unsupported share URL'),
+  'share.open-external keeps its scheme guard',
+);
+const shareGuard = new Function(
+  'url',
+  `${shareGuardSource.trim().replace('value.url', 'url')} return true;`,
+);
+assert.equal(
+  shareGuard('https://twitter.com/intent/tweet?text=hi'),
+  true,
+  'https web share is allowed',
+);
+assert.equal(shareGuard('mailto:?subject=x&body=y'), true, 'mailto is allowed');
+for (const blocked of [
+  'file:///etc/passwd',
+  'http://insecure.example',
+  'javascript:alert(1)',
+  'ms-settings:privacy',
+]) {
+  assert.throws(() => shareGuard(blocked), /Unsupported share URL/, `${blocked} is rejected`);
+}
+
+// ── worker 错误 → 结构化判定 ────────────────────────────────────────────────────
+// 「模型没装」由 error_code/error_models 决定，不再正则解析文本。这条同时证明：
+// 无论报文里的 error 文案怎么写，判定都不受影响（改文案不会破坏下载链路）。
+const structured = workerError({
+  error: 'Model qwen3-asr-0.6b-int8 is not installed',
+  error_code: 'model_not_installed',
+  error_models: ['qwen3-asr-0.6b-int8'],
+});
+assert.equal(structured.message, 'Model qwen3-asr-0.6b-int8 is not installed');
+assert.equal(structured.code, 'model_not_installed');
+assert.deepEqual(requiredModelsFrom(structured), ['qwen3-asr-0.6b-int8']);
+
+// 同一组模型、完全不同的文案：判定结果必须一致。
+const reworded = workerError({
+  error: '该模型尚未下载，请先下载后重试。',
+  error_code: 'model_not_installed',
+  error_models: ['qwen3-asr-0.6b-int8'],
+});
+assert.deepEqual(requiredModelsFrom(reworded), ['qwen3-asr-0.6b-int8'], '判定不得依赖文案');
+
+// 多模型缺失。
+assert.deepEqual(
+  requiredModelsFrom(
+    workerError({ error: 'x', error_code: 'model_not_installed', error_models: ['a', 'b'] }),
+  ),
+  ['a', 'b'],
+);
+
+// 普通错误不能误触发下载流程——即使文案里恰好出现了 "not installed"。
+assert.equal(
+  requiredModelsFrom(new Error('sherpa-onnx is not installed')),
+  null,
+  '普通错误不得被当成模型缺失',
+);
+assert.equal(requiredModelsFrom(workerError({ error: 'boom' })), null);
+assert.equal(
+  requiredModelsFrom(workerError({ error: 'boom', error_code: 'model_not_installed' })),
+  null,
+  '没有模型列表时不触发下载',
+);
+assert.equal(
+  requiredModelsFrom(
+    workerError({ error: 'boom', error_code: 'model_not_installed', error_models: [] }),
+  ),
+  null,
+);
+assert.equal(requiredModelsFrom(undefined), null);
+// 非字符串 / 非数组的脏字段被过滤掉，避免把非法 id 传给下载接口。
+const dirty = workerError({
+  error: 'x',
+  error_code: 'model_not_installed',
+  error_models: ['ok', 7, null],
+});
+assert.deepEqual(requiredModelsFrom(dirty), ['ok']);
+assert.equal(workerError({ error: 'x' }).code, undefined);
+
+// Migration failure preserves the database until all recording/config files have moved.
+const migrationRoot = await mkdtemp(path.join(tmpdir(), 'brevia-migration-regression-'));
+try {
+  const source = path.join(migrationRoot, 'legacy'),
+    target = path.join(migrationRoot, 'data');
+  await mkdir(path.join(source, 'meetings'), { recursive: true });
+  await writeFile(path.join(source, 'meetings', 'audio.wav'), 'audio');
+  await writeFile(path.join(source, 'brevia.db'), 'database');
+  await writeFile(path.join(source, 'advanced-settings.json'), '{}');
+  await mkdir(path.join(source, 'models'));
+  await writeFile(
+    path.join(source, 'models-location.json'),
+    JSON.stringify({
+      current: path.join(source, 'models'),
+      recordings: path.join(source, 'meetings'),
+    }),
+  );
+  await writeFile(path.join(source, 'ai-assist.json'), '{"enabled":true}');
+  const fsPromises = require('node:fs/promises');
+  const migrationModule = { exports: {} };
+  let block = true,
+    crossVolume = false;
+  runInNewContext(await readFile(new URL('./main-logic.js', import.meta.url), 'utf8'), {
+    module: migrationModule,
+    require: (name) =>
+      name === 'node:fs/promises'
+        ? {
+            ...fsPromises,
+            rename: async (from, to) => {
+              if (from === path.join(source, 'meetings') && block)
+                throw Object.assign(new Error('locked'), { code: 'EACCES' });
+              if (crossVolume && path.dirname(from) === source)
+                throw Object.assign(new Error('cross volume'), { code: 'EXDEV' });
+              return fsPromises.rename(from, to);
+            },
+          }
+        : require(name),
+  });
+  await assert.rejects(migrationModule.exports.migrateLegacyData(source, target), /locked/);
+  assert.equal(await readFile(path.join(source, 'brevia.db'), 'utf8'), 'database');
+  assert.equal(await readFile(path.join(source, 'meetings', 'audio.wav'), 'utf8'), 'audio');
+  block = false;
+  crossVolume = true;
+  await migrationModule.exports.migrateLegacyData(source, target);
+  assert.equal(await readFile(path.join(target, 'brevia.db'), 'utf8'), 'database');
+  assert.equal(await readFile(path.join(target, 'meetings', 'audio.wav'), 'utf8'), 'audio');
+  assert.equal(await readFile(path.join(target, 'ai-assist.json'), 'utf8'), '{"enabled":true}');
+  assert.equal(currentDirectory(target), path.join(target, 'models'));
+  assert.equal(recordingsDirectory(target), path.join(target, 'meetings'));
+  await assert.rejects(readFile(path.join(target, '.brevia-data-migration.json')), {
+    code: 'ENOENT',
+  });
+  await migrateLegacyData(source, target);
+  const config = path.join(target, 'config.json');
+  await Promise.all(
+    Array.from({ length: 12 }, (_, number) => writeAtomicFile(config, JSON.stringify({ number }))),
+  );
+  assert.equal(JSON.parse(await readFile(config, 'utf8')).number, 11);
+  // Emulate Windows rejecting concurrent replacements; a failed save must not poison the queue.
+  const atomicModule = { exports: {} };
+  let replacing = false,
+    failNext = true;
+  runInNewContext(await readFile(new URL('./main-logic.js', import.meta.url), 'utf8'), {
+    module: atomicModule,
+    require: (name) =>
+      name === 'node:fs/promises'
+        ? {
+            ...fsPromises,
+            rename: async (from, to) => {
+              assert.equal(replacing, false, 'replacements of one target cannot overlap');
+              replacing = true;
+              try {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                if (failNext) {
+                  failNext = false;
+                  throw new Error('locked');
+                }
+                return await fsPromises.rename(from, to);
+              } finally {
+                replacing = false;
+              }
+            },
+          }
+        : require(name),
+  });
+  const saves = Array.from({ length: 8 }, (_, number) =>
+    atomicModule.exports.writeAtomicFile(config, JSON.stringify({ number })),
+  );
+  const outcomes = await Promise.allSettled(saves);
+  assert.equal(outcomes[0].status, 'rejected');
+  assert.match(outcomes[0].reason.message, /locked/);
+  assert.ok(outcomes.slice(1).every((result) => result.status === 'fulfilled'));
+  assert.equal(JSON.parse(await readFile(config, 'utf8')).number, 7);
+  assert.equal(
+    (await fsPromises.readdir(target)).some((name) => name.endsWith('.tmp')),
+    false,
+  );
+  for (const value of ['null', '{broken', '{"current":"../escape"}', '{"cleanup":42}']) {
+    const location = path.join(target, 'models-location.json');
+    await writeFile(location, value);
+    assert.throws(() => currentDirectory(target), /Cannot read/);
+    assert.equal(
+      await readFile(location, 'utf8'),
+      value,
+      'invalid metadata remains available for recovery',
+    );
+  }
+} finally {
+  await rm(migrationRoot, { recursive: true, force: true });
+}
+
+// Parent exit must not cancel process-group escalation while descendants survive.
+const processSignals = [],
+  processTimers = new Map();
+const processContext = {
+  process: { platform: 'darwin', kill: (pid, signal) => processSignals.push([pid, signal]) },
+  setTimeout(callback) {
+    processTimers.set(1, callback);
+    return { unref() {} };
+  },
+  clearTimeout() {
+    processTimers.clear();
+  },
+};
+runInNewContext(
+  mainSource.slice(
+    mainSource.indexOf('const stoppingProcessGroups = '),
+    mainSource.indexOf('let storageMigrationInProgress'),
+  ),
+  processContext,
+);
+const processChild = {
+  pid: 456,
+  exitCode: null,
+  signalCode: null,
+  once(event, callback) {
+    this.exited = callback;
+  },
+};
+processContext.child = processChild;
+runInNewContext('stopProcess(child, 1)', processContext);
+processChild.exitCode = 0;
+processChild.exited?.();
+assert.equal(processTimers.size, 1);
+processTimers.get(1)();
+assert.deepEqual(processSignals, [
+  [-456, 'SIGTERM'],
+  [-456, 'SIGKILL'],
+]);
+
+// 用真实 ChildProcess 的退出状态验证：重复收尾不能向已经回收的 Windows pid 发 taskkill。
+for (const exitCode of [0, 7]) {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      `process.stdin.resume(); process.stdin.on('end', () => process.exitCode = ${exitCode});`,
+    ],
+    { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true },
+  );
+  const exited = once(child, 'exit');
+  const killed = [];
+  const windowsContext = {
+    child,
+    process: { platform: 'win32' },
+    execFile: (file, args) => killed.push([file, [...args]]),
+  };
+  try {
+    await once(child, 'spawn');
+    runInNewContext(
+      mainSource.slice(
+        mainSource.indexOf('const stoppingProcessGroups = '),
+        mainSource.indexOf('let storageMigrationInProgress'),
+      ) + '\nstopProcess(child)',
+      windowsContext,
+    );
+    assert.deepEqual(killed, [['taskkill', ['/pid', String(child.pid), '/t', '/f']]]);
+    child.stdin.end();
+    await exited;
+    assert.equal(child.exitCode, exitCode);
+    runInNewContext('stopProcess(child)', windowsContext);
+    assert.equal(killed.length, 1, 'A completed child must not be targeted again');
+  } finally {
+    if (child.exitCode === null && !child.signalCode) child.kill();
+    await exited;
+  }
+}
+
+// Only a local top-level application frame may call privileged IPC.
+const ipcHandlers = new Map(),
+  ipcRoot = '/brevia-test';
+const ipcContext = {
+  path,
+  pathToFileURL,
+  packagedRoot: ipcRoot,
+  ipcMain: { handle: (channel, callback) => ipcHandlers.set(channel, callback) },
+  writeLog() {},
+  logText: String,
+};
+runInNewContext(
+  mainSource.slice(mainSource.indexOf('function handleIpc('), mainSource.indexOf('const root =')),
+  ipcContext,
+);
+ipcContext.handleIpc('summary.config.save', () => 'allowed');
+ipcContext.handleIpc('floating-caption.close', () => 'closed');
+const frame = { url: pathToFileURL(path.join(ipcRoot, 'frontend', 'index.html')).href + '?test=1' };
+const event = { senderFrame: frame, sender: { mainFrame: frame } };
+assert.equal(await ipcHandlers.get('summary.config.save')(event), 'allowed');
+frame.url = 'https://example.com';
+assert.ok((await ipcHandlers.get('summary.config.save')(event)).__brevia_error);
+frame.url = pathToFileURL(path.join(ipcRoot, 'frontend', 'floating-caption.html')).href;
+assert.ok((await ipcHandlers.get('summary.config.save')(event)).__brevia_error);
+assert.equal(await ipcHandlers.get('floating-caption.close')(event), 'closed');
+event.sender.mainFrame = {};
+assert.ok((await ipcHandlers.get('floating-caption.close')(event)).__brevia_error);
+
+{
+  const calls = [],
+    handlers = new Map();
+  const context = {
+    handleIpc: (name, fn) => handlers.set(name, fn),
+    agentService: { jobs: new Map([['agent-meeting', { status: 'running' }]]) },
+    worker: { request: async (type, payload) => calls.push(['main', type, payload]) },
+    refinementWorker: {
+      request: async (type, payload) => calls.push(['refinement', type, payload]),
+    },
+  };
+  runInNewContext(
+    mainSource.slice(
+      mainSource.indexOf('function handleTaskControl('),
+      mainSource.indexOf('async function saveProviderConfig('),
+    ),
+    context,
+  );
+  context.handleTaskControl('task.cancel', { parse: (value) => value });
+  await handlers.get('task.cancel')(null, { task: 'meeting.refine', meeting_id: 'agent-meeting' });
+  assert.equal(calls[0][0], 'main');
+  assert.equal(calls[0][1], 'agent.cancel');
+  await handlers.get('task.cancel')(null, { task: 'meeting.refine', meeting_id: 'normal-meeting' });
+  assert.equal(calls[1][0], 'refinement');
+  assert.equal(calls[1][1], 'task.cancel');
+  for (const channel of ['task.cancel', 'task.pause', 'task.resume']) {
+    context.handleTaskControl(channel, { parse: (value) => value });
+    const payload = { task: 'summary.generate', meeting_id: 'agent-meeting' };
+    await handlers.get(channel)(null, payload);
+    assert.deepEqual(calls.at(-1), ['main', channel, payload]);
+  }
+}
+
+console.log('Desktop behavior tests passed');
+
+{
+  const { createLineBuffer } = require('./main-logic');
+  const lines = [];
+  const buffer = createLineBuffer((line) => lines.push(line), 16);
+  buffer.push('first');
+  buffer.push(' line\n' + 'x'.repeat(100000));
+  buffer.push('tail');
+  buffer.end();
+  buffer.end();
+  assert.ok(lines.every((line) => line.length <= 16));
+  assert.equal(lines[0], 'first line');
+  assert.equal(lines.slice(1).join(''), 'x'.repeat(100000) + 'tail');
+}
+
+{
+  const source = await readFile(new URL('../scripts/release-offline.cjs', import.meta.url), 'utf8');
+  for (const [platform, expected] of [
+    ['darwin', ['dist:mac']],
+    ['win32', ['dist:win']],
+  ]) {
+    const calls = [];
+    runInNewContext(source, {
+      process: { platform, env: { APPLE_ID: 'test', PATH: '/tools' } },
+      require: () => ({
+        spawnSync: (command, args, options) => {
+          calls.push({ command, args: Array.from(args), options });
+          return { status: 0 };
+        },
+      }),
+    });
+    assert.deepEqual(
+      calls.map((call) => call.args[1]),
+      expected,
+    );
+    assert.equal(calls[0].options.env.APPLE_ID, undefined);
+  }
+  assert.throws(
+    () => runInNewContext(source, { process: { platform: 'linux' }, require: () => ({}) }),
+    /requires macOS or Windows/,
+  );
+}
+
+// 容量读取失败不能影响目录设置；已用空间与用户可用空间来自各自的系统计数。
+const diskHandlers = new Map();
+const diskContext = {
+  handleIpc: (channel, handler) => diskHandlers.set(channel, handler),
+  app: {
+    getPath: (name) => {
+      assert.equal(name, 'home');
+      return '/home';
+    },
+  },
+  statfs: async () => ({ blocks: 1000, bsize: 4096, bfree: 300, bavail: 270 }),
+  modelsDir: () => '/models',
+  recordingsDir: () => '/recordings',
+  process: { env: {} },
+};
+runInNewContext(
+  mainSource.slice(
+    mainSource.indexOf("handleIpc('storage.locations'"),
+    mainSource.indexOf("handleIpc('storage.choose-folder'"),
+  ),
+  diskContext,
+);
+const diskLocations = await diskHandlers.get('storage.locations')();
+assert.deepEqual(JSON.parse(JSON.stringify(diskLocations.disk)), {
+  total: 4096000,
+  used: 2867200,
+  free: 1105920,
+});
+diskContext.statfs = async () => {
+  throw new Error('unavailable');
+};
+const unavailableLocations = await diskHandlers.get('storage.locations')();
+assert.equal(unavailableLocations.disk, null);
+assert.equal(unavailableLocations.models, '/models');
+assert.equal(unavailableLocations.recordingsManaged, true);

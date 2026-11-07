@@ -2,7 +2,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -40,9 +39,9 @@ audio.writeUInt32LE(audio.length - 44, 40);
 const audioPath = path.join(sandbox, 'silent.wav');
 writeFileSync(audioPath, audio);
 const child = spawn(
-  createRequire(import.meta.url)('electron'),
+  process.execPath,
   [
-    '.',
+    'desktop/test-host.cjs',
     '--no-sandbox',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
@@ -55,9 +54,9 @@ const child = spawn(
     env: {
       ...process.env,
       BREVIA_DATA_DIR: path.join(sandbox, 'data'),
+      BREVIA_TEST_USER_DATA: path.join(sandbox, 'userdata'),
       BREVIA_MEETINGS_DIR: path.join(sandbox, 'recordings'),
       BREVIA_MOBILE_PORT: '0',
-      BREVIA_PYTHON: process.env.BREVIA_PYTHON || path.join(root, '.venv/bin/python'),
     },
     stdio: ['ignore', 'ignore', 'pipe'],
     detached: true,
@@ -95,7 +94,7 @@ try {
   for (let attempt = 0; attempt < 300; attempt++) {
     try {
       target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(
-        (tab) => tab.type === 'page',
+        (tab) => tab.type === 'page' && tab.url.includes('/frontend/index.html'),
       );
     } catch {
       /* 启动期间调试端口尚未就绪。 */

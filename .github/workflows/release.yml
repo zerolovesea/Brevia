@@ -31,8 +31,6 @@ jobs:
               dist/native-win/latest-windows.json
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
-    env:
-      PYTHONUTF8: '1'
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
@@ -40,14 +38,9 @@ jobs:
         with:
           node-version: 22.23.1
           cache: npm
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - run: npm ci
+      - run: npx playwright install chromium
       - run: npm test
-        env:
-          # 两端由成品系统 WebView 冒烟验证。
-          BREVIA_SKIP_E2E: '1'
       - name: Prepare native macOS toolchain
         if: runner.os == 'macOS'
         run: |

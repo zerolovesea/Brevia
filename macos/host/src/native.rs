@@ -134,7 +134,7 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         ))
         .initialization_script(include_str!("../../bridge.js").replace(
             "/* BREVIA_PRELOAD */",
-            include_str!("../../../electron/preload.js"),
+            include_str!("../../../desktop/preload.js"),
         ))
         .on_navigation(move |url| {
             let local = local_page(url, page);
@@ -421,7 +421,7 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
                 }
                 None => TrayIconBuilder::with_id("brevia")
                     .icon(tauri::include_image!(
-                        "../../electron/assets/trayTemplate.png"
+                        "../../desktop/assets/trayTemplate.png"
                     ))
                     .icon_as_template(cfg!(target_os = "macos"))
                     .menu(&menu)

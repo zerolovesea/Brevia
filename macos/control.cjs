@@ -13,6 +13,6 @@ if (process.env.BREVIA_WAIT_FOR_HOST === '1') {
 }
 process.resourcesPath = process.env.BREVIA_RESOURCES || path.dirname(__dirname);
 console.log = console.error;
-const desktop = require('./electron-compat.cjs');
+const desktop = require('../desktop/platform.cjs');
 desktop.listen();
-require('../electron/main.js');
+require('../desktop/main.js');

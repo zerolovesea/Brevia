@@ -1,6 +1,6 @@
 # Brevia 开发者手册
 
-本手册统一维护开发环境、代码协作、检查、桌面构建与正式发布流程。用户介绍见 [README](README.md)，手机录音、同步与送审详见[手机开发手册](mobile/README.md)，历史 Worker 协议见[后端 README](backend/README.md)，原生推理接口见[引擎 README](macos/inference/README.md)。
+本手册统一维护开发环境、代码协作、检查、桌面构建与正式发布流程。用户介绍见 [README](README.md)，手机录音、同步与送审详见[手机开发手册](mobile/README.md)，模型与配置资源见[后端 README](backend/README.md)，原生推理接口见[引擎 README](macos/inference/README.md)。
 
 - [原生桌面开发与打包](#macos-开发与打包)
 - [Windows 开发与打包](#windows-开发与打包)
@@ -28,7 +28,7 @@ macOS WebKit 实现面向 Apple Silicon、macOS 14 及以上。安装文件是�
 | GGUF 推理      | C++ 直接调用 llama.cpp；本地纪要、实时 AI 笔记和 Hy-MT 翻译独立调度并支持取消。                                           |
 | 会议业务       | 随包 Node.js 使用内置 SQLite 接口处理会议、手机同步、工作区、笔记、导出和任务；数据库字段、文件格式及手机协议保持兼容。   |
 
-不依赖用户安装 Node.js 或其他解释器。Node.js 随应用提供；Python 已退出 macOS 的运行和打包路径。Windows 也使用同一业务层和 C++ 推理引擎。仓库中的旧 Python 后端仅保留显式 Electron 开发入口、兼容测试和迁移对照，两端安装包均不包含它。
+Node.js 随应用提供，两端共用同一业务层与 C++ 推理引擎。旧 Electron 壳、Python 后端及对应开发入口已删除，应用不依赖用户安装解释器。
 
 ### 接入模型
 
@@ -46,7 +46,7 @@ npm ci
 npm start
 ```
 
-`npm start` 在 macOS 构建并打开 WebKit 应用；`npm run start:fresh` 会重置新手引导。原生依赖使用构建缓存，修改后重新启动即可测试。`npm run start:electron` 保留旧壳的显式入口，仍使用旧后端，不属于无 Python 的 macOS 路径。
+`npm start` 在 macOS 构建并打开 WebKit 应用；`npm run start:fresh` 会重置新手引导。原生依赖使用构建缓存，修改后重新启动即可测试。
 
 ```sh
 npm run package:mac       # 仅构建完整 Brevia.app
@@ -57,7 +57,7 @@ npm run test:mac:webkit
 
 成品位于 `dist/native/image/Brevia.app` 与 `dist/native/Brevia-WebKit-<版本>-arm64.dmg`。本地默认 ad-hoc 签名，设置 `BREVIA_SIGN_IDENTITY` 可使用钥匙串中的 Developer ID。打包检查每个 Mach-O 的 arm64 架构、macOS 14 最低版本和动态依赖，拒绝 Python 文件、包外运行库及超过 200 MB 的 DMG；正式替换产物前运行打包后录音与落盘测试。构建只生成本地文件。
 
-`npm run test:backend` 和 `npm run test:mac:webkit` 验证新业务后端与原生应用，不需要 Python。完整兼容回归 `npm test` 还包括旧 Electron 端到端和 Python 静态检查，需要旧开发环境；旧后端单测可单独运行 `npm run test:backend:legacy`。原生检查使用临时会议库，验证真实 WKWebView、打包后的控制层与新业务后端、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地已下载的真实模型验证各引擎。
+`npm test` 包括死代码检查、桌面控制器、UI、Playwright 端到端、Node 后端、Agent 与发布回归；首次运行前执行 `npx playwright install chromium`。Playwright 只用于开发检查，不进入安装包。`npm run test:backend` 可单独验证业务后端；`npm run test:mac:webkit` 使用临时会议库检查真实 WKWebView、包内控制层、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地真实模型验证各引擎。
 
 正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。旧 Electron 用户首次升级需要手动安装新包，之后使用各自的原生更新通道。
 
@@ -105,14 +105,14 @@ npm run test:windows:native
 | 范围                                        | 写入格式                | 只检查                                                                        |
 | ------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
 | 桌面、官网 JS / CSS / HTML 和维护文档、配置 | `npm run format`        | `npm run format:check`                                                        |
-| 后端与 Python 脚本                          | `npm run format:python` | `npm run lint:python`                                                         |
+| 手机与发布 Python 脚本                      | `npm run format:python` | `npm run lint:python`                                                         |
 | 手机 Dart（在 mobile 目录）                 | `dart format lib test`  | `dart format --output=none --set-exit-if-changed lib test`、`flutter analyze` |
 
 格式工具版本固定在锁文件或 `requirements-dev.txt`；升级工具单独提交。Prettier 保留 HTML 空白语义，不重排模板字符串中的嵌入代码；Markdown 不强制重排段落。`frontend/styles.css` 由 `npm run build` 生成，不手动格式化。模型、录音、翻译词条的实际内容、锁文件、第三方文件和原生工程生成配置不做人工风格清理。
 
 Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun swift-format format --in-place <文件>`），CI 使用 `xcrun swift-format lint --strict` 检查；Kotlin 遵循 Android Studio 默认格式。少量 Ruby 和 Shell 脚本沿用语言惯例，不为格式引入额外依赖；分别用 `ruby -c`、`bash -n` 检查语法。原生源码修改后运行对应平台构建。
 
-品牌图形以 `frontend/assets/brevia-logo.svg` 为唯一静态源，字形沿用开屏动画最终定格。安装 ImageMagick 后运行 `npm run assets:brand` 同步桌面、官网、文档和手机资源；`npm run assets:brand:check` 校验产物。不要直接修改生成的图标。
+品牌图形以 `frontend/assets/brevia-logo.svg` 为唯一静态源，字形沿用开屏动画最终定格。安装 Playwright Chromium 后运行 `npm run assets:brand` 同步桌面、官网、文档和手机资源；`npm run assets:brand:check` 校验产物。不要直接修改生成的图标。
 
 官网导航使用独立的手绘版本 `website/assets/brevia-logo-handdrawn.svg`，其他入口沿用统一品牌图形。
 
@@ -136,9 +136,9 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 
 纯格式调整与功能修改分开提交。不要夹带字段重命名、依赖升级或逻辑重构，也不要覆盖其他人的未提交改动。
 
-提交前运行上述范围内的格式与静态检查。桌面/后端修改运行 `npm test`；手机修改在 `mobile` 下运行 `flutter test`；发布脚本修改运行 `ruby mobile/scripts/test-release.rb`。网站演示修改运行 `node_modules/.bin/electron scripts/test-website-demos.cjs`（需要桌面环境）。格式检查由 CI 执行，不在发布流程里自动重写源码。
+提交前运行上述范围内的格式与静态检查。桌面/后端修改运行 `npm test`；手机修改在 `mobile` 下运行 `flutter test`；发布脚本修改运行 `ruby mobile/scripts/test-release.rb`。网站演示修改运行 `node scripts/test-website-demos.cjs`（需要 Playwright Chromium）。格式检查由 CI 执行，不在发布流程里自动重写源码。
 
-依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`。开发依赖也要检查；Electron 只用于显式旧壳开发及测试，不进入两端成品。2026-11-06 移除退役 electron-builder 及其依赖后，全量与生产依赖审计均无已知公告。
+依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`，覆盖开发及生产依赖。
 
 ### CI / CD 职责
 
@@ -155,7 +155,7 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 
 后端单测由 `npm test` / `npm run test:backend` 执行；`test:mac:webkit` 专门检查原生平台与成品，不重复后端单测。macOS 验证及 Release 均先执行完整 `npm test`，再检查原生成品。
 
-`electron/` 当前仍包含两端原生应用复用的主控制器、手机服务、Agent、预加载协议及品牌资源；`macos/control.cjs` 通过平台适配层加载其中的业务代码。移除 Electron 运行时不等于可以删除该目录。彻底移除开发依赖前，还需迁出这些共享模块、退役旧壳与 Python 开发入口，并替换依赖 Electron 的 E2E、官网演示、图标生成及样式指纹工具；旧数据迁移和旧版安装器升级验证仍需保留。
+`desktop/` 管理两端共用的桌面控制器、手机服务、Agent、预加载协议与品牌资源。`desktop/platform.cjs` 显式连接 Rust 原生宿主，`macos/backend/` 管理共用 Node Worker，`macos/`、`windows/` 分别维护平台能力和打包。旧数据迁移及旧版安装器升级验证继续保留。
 
 ## 正式发布
 
@@ -202,8 +202,8 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 ### 4. 验证
 
 ```bash
-npm test              # 死代码门禁 + Electron 逻辑 + UI 结构 + E2E 冒烟 + 后端用例
-ruff check backend/   # 必须 All checks passed
+npm test              # 死代码门禁 + 桌面控制器 + UI 结构 + E2E 冒烟 + 后端用例
+npm run lint:python   # 手机与发布辅助脚本
 npm run build         # tailwind.css → styles.css，构建后 styles.css 应无额外差异
 ```
 

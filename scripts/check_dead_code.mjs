@@ -1,13 +1,5 @@
 #!/usr/bin/env node
-// 死代码门禁：把项目里已有的四个分析器变成「有发现就失败」，而不是只打印给人看。
-//
-// 背景：`analyze_backend_dead.py` / `analyze_frontend_globals.mjs` / `analyze_electron_dead.mjs`
-// / `analyze_website_globals.mjs` 早就存在，但只被手动运行过——于是「只被测试引用」
-// 的生产代码、没有生产者的 IPC 事件、无人读的调试属性一路积累下来。本次把它们接进
-// `npm test`（CI 的 release.yml 会跑 `npm test`），这类问题以后会在发版前直接失败。
-//
-// 分析器本身保持「只报告、不改动」，这里只负责判定与退出码。
-
+// 死代码门禁：分析器出现发现或执行失败时阻止检查。
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,9 +7,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const ANALYZERS = [
-  { name: 'backend', command: 'python', args: ['scripts/analyze_backend_dead.py'] },
   { name: 'frontend', command: 'node', args: ['scripts/analyze_frontend_globals.mjs'] },
-  { name: 'electron', command: 'node', args: ['scripts/analyze_electron_dead.mjs'] },
+  { name: 'desktop', command: 'node', args: ['scripts/analyze_desktop_dead.mjs'] },
   { name: 'website', command: 'node', args: ['scripts/analyze_website_globals.mjs'] },
 ];
 

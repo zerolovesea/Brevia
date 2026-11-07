@@ -1,4 +1,4 @@
-// 两种桌面壳共用 preload 的公开命令表，只有 IPC 传输和原生采集不同。
+// 原生桌面共用预加载命令表，通过 Tauri 传输和系统音频能力执行。
 (() => {
   if (window !== window.top) return;
   // macOS 14.0 的系统 WebKit 尚未提供 checkVisibility。
@@ -55,11 +55,7 @@
       });
     },
   };
-  const require = () => ({
-    contextBridge,
-    ipcRenderer,
-    webUtils: { getPathForFile: (file) => (typeof file === 'string' ? file : undefined) },
-  });
+  const webUtils = { getPathForFile: (file) => (typeof file === 'string' ? file : undefined) };
   const process = { platform: window.__BREVIA_PLATFORM__ || 'darwin' };
   {
     /* BREVIA_PRELOAD */

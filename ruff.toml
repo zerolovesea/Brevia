@@ -1,7 +1,6 @@
 target-version = "py312"
 line-length = 100
-include = ["backend/**/*.py", "scripts/**/*.py", "mobile/scripts/**/*.py"]
-extend-exclude = ["backend/build", "backend/runtime", "backend/bundled-models"]
+include = ["scripts/**/*.py", "mobile/scripts/**/*.py"]
 
 [lint]
 # 先检查语法、未定义名称和明确的控制流错误，不自动清理导入或改写业务逻辑。
