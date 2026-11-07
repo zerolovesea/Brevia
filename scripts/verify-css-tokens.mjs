@@ -128,7 +128,7 @@ const child = spawn(
 );
 const stop = () => {
   try {
-    process.kill(-child.pid, 'SIGTERM');
+    child.kill('SIGTERM');
   } catch {
     /* 已退出。 */
   }

@@ -14,7 +14,6 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { createServer } from 'node:net';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

@@ -4,7 +4,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.env.BREVIA_SKIP_E2E === '1') {
@@ -14,7 +14,7 @@ if (process.env.BREVIA_SKIP_E2E === '1') {
 const sandbox = path.join(root, '.e2e-tmp', `desktop-${process.pid}`);
 const defaultWindowScale = 1;
 const output = path.resolve(
-  process.env.BREVIA_FEEDBACK_CAPTURE_DIR || 'output/uiux-next-version-2026-10-20/implementation',
+  process.env.BREVIA_FEEDBACK_CAPTURE_DIR || 'output/playwright/desktop-experience',
 );
 mkdirSync(sandbox, { recursive: true });
 mkdirSync(path.join(sandbox, 'data'), { recursive: true });
@@ -32,21 +32,6 @@ const mainPort = await new Promise((resolve) => {
     server.close(() => resolve(value));
   });
 });
-const audio = Buffer.alloc(44 + 40 * 16000 * 2);
-audio.write('RIFF');
-audio.writeUInt32LE(audio.length - 8, 4);
-audio.write('WAVEfmt ', 8);
-audio.writeUInt32LE(16, 16);
-audio.writeUInt16LE(1, 20);
-audio.writeUInt16LE(1, 22);
-audio.writeUInt32LE(16000, 24);
-audio.writeUInt32LE(32000, 28);
-audio.writeUInt16LE(2, 32);
-audio.writeUInt16LE(16, 34);
-audio.write('data', 36);
-audio.writeUInt32LE(audio.length - 44, 40);
-const audioPath = path.join(sandbox, 'silent.wav');
-writeFileSync(audioPath, audio);
 const child = spawn(
   process.execPath,
   [
