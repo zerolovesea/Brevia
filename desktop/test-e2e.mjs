@@ -1810,6 +1810,7 @@ try {
     const result = await client.send('Runtime.evaluate', {
       expression,
       awaitPromise: true,
+      userGesture: true,
       returnByValue: true,
     });
     if (result.exceptionDetails)
@@ -1847,8 +1848,9 @@ try {
     branches[0].querySelector('summary').click();
     if (!branches[0].querySelector('blockquote').textContent.includes('开发团队周四可以交付测试版本')) throw Error('first-run source mismatch');
     const playback = branches[0].querySelector('[data-play-evidence]');
+    playerAudio.muted = true;
     const playing = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error('example WAV did not play')), 4000);
+      const timer = setTimeout(() => reject(Error('example WAV did not play: '+JSON.stringify({ready:playerAudio.readyState,network:playerAudio.networkState,error:playerAudio.error?.message,paused:playerAudio.paused}))), 4000);
       playerAudio.addEventListener('playing', () => {clearTimeout(timer);resolve()}, {once:true});
     });
     playback.click();
