@@ -20,17 +20,28 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-v2.0.0 ist ein großes Update der Desktop-App. Speichern Sie Ihre Aufnahme und suchen Sie in v1.4.5 nach Updates. Ihre Meetings, Aufnahmen und heruntergeladenen Modelle bleiben erhalten.
+Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat heruntergeladen.
 
 ## Funktionen
 
 - Mikrofon und Systemton gemeinsam aufnehmen, mit Live-Transkription, Übersetzung, schwebenden Untertiteln und Aufnahmesteuerung.
 - Sprecher im Hintergrund erkennen, während Untertitel sofort erscheinen. Anschließend Transkripte verbessern, Namen korrigieren und Stimmprofile speichern.
+- Schnelle Transkription: Auf einem M4 Pro dauerte die vollständige Transkription einer **66 min 40 s** langen Aufnahme **3 min 33 s**.
 - Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
 - Meetings in Arbeitsbereichen organisieren, Inhalte durchsuchen und als Markdown, TXT, JSON, SRT, DOCX, PDF oder WAV exportieren.
 - Vorhandene Audio- und Videodateien transkribieren, übersetzen und nach Sprechern auswerten – auch über einen lokalen Agenten.
 
-![Brevia](assets/showcase/desktop/en/summary.gif)
+![KI schlägt eine Aufgabe für die Notizen vor](assets/showcase/desktop/en/ai-notes.png)
+
+### Meeting-Kapsel
+
+Bei eingeklapptem Hauptfenster lässt sich die Aufnahme über die schwebende Kapsel pausieren oder beenden. Aufgeklappt zeigt sie zweisprachige Live-Untertitel und Notizen.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Meeting-Kapsel mit Untertiteln und Aufnahmesteuerung" />
+
+[![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+
+Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme.
 
 ## Erste Schritte
 
@@ -46,6 +57,8 @@ Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Inferenz-Lauf
 
 Offline aufnehmen, Notizen schreiben und wichtige Stellen markieren. Sobald der Computer den Empfang bestätigt, kann die Smartphone-App verlassen werden: Import und Transkription laufen auf dem Desktop weiter. Die lokale Kopie bleibt erhalten. Das Smartphone kann auch als Mikrofon oder zur Anzeige von Live-Untertiteln dienen. Beide Geräte unter **Einstellungen → Geräteverbindung** im selben lokalen Netzwerk koppeln; für den Live-Modus muss der Computer laufen.
 
+![Live-Untertitel auf Smartphone und Computer](assets/showcase/desktop/en/phone.png)
+
 ## Lokalen Agenten verbinden
 
 Unter **Einstellungen → Agent & MCP** die Einrichtungsnachricht kopieren und dem lokalen Agenten geben. Er liest den enthaltenen Skill und nutzt Brevia über die CLI. Für MCP-Clients die MCP-Konfiguration auf derselben Seite kopieren.
@@ -60,11 +73,15 @@ Agenten können transkribieren, übersetzen, Stimmen erkennen, Meetings durchsuc
 
 [CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
+![Agent erstellt spanische und englische SRT-Dateien](assets/showcase/desktop/en/agent.png)
+
 ## Deine Daten
 
 Kein Konto erforderlich. Aufnahmen, Meetings und Modelle bleiben auf deinen Geräten. Das Smartphone synchronisiert per lokalem HTTPS. Lokale KI funktioniert offline; bei einem gewählten Onlinedienst werden die betreffenden Texte an diesen Anbieter gesendet. [Privacy](https://brevia.work/privacy.html).
 
-Der Desktop nutzt das System-WebView (WebKit auf macOS, WebView2 auf Windows), gemeinsame Meetinglogik und native Engines. Die mobile App verwendet Flutter.
+## Technik
+
+Der Desktop nutzt das System-WebView (WebKit auf macOS, WebView2 auf Windows), gemeinsame Meetinglogik und native Engines. Die mobile App verwendet Flutter. Brevia verwendet Tauri und Rust für den Desktop, SQLite für lokale Meetingdaten, sherpa-onnx für die Sprachverarbeitung und llama.cpp für Zusammenfassungen.
 
 ## Mitmachen
 

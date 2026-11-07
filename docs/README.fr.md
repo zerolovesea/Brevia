@@ -20,17 +20,28 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-La version 2.0.0 est une mise à jour majeure de l’application de bureau. Terminez et sauvegardez votre enregistrement, puis recherchez les mises à jour dans la version 1.4.5 pour l’installer. Vos réunions, enregistrements et modèles téléchargés seront conservés.
+Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo sur Windows. Les modèles de langue se téléchargent séparément.
 
 ## Fonctionnalités
 
 - Enregistrez le microphone et le son du système, avec transcription, traduction, sous-titres flottants et commandes d’enregistrement.
 - Identifiez les intervenants en arrière-plan pendant que les sous-titres s’affichent. Affinez ensuite la transcription, corrigez les noms et enregistrez les profils vocaux.
+- Transcription rapide : Sur un M4 Pro, Brevia a transcrit un enregistrement de **66 min 40 s** en **3 min 33 s**.
 - Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.
 - Classez les réunions par espace de travail, recherchez leur contenu et exportez en Markdown, TXT, JSON, SRT, DOCX, PDF ou WAV.
 - Importez des fichiers audio ou vidéo pour les transcrire, les traduire et analyser les intervenants, y compris via un agent local.
 
-![Brevia](assets/showcase/desktop/en/summary.gif)
+![L’IA propose une tâche à ajouter aux notes](assets/showcase/desktop/en/ai-notes.png)
+
+### Capsule de réunion
+
+Une fois la fenêtre principale réduite, la capsule flottante permet de suspendre ou d’arrêter l’enregistrement. Déployez-la pour lire les sous-titres bilingues en direct ou consulter vos notes.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Capsule avec sous-titres et commandes d’enregistrement" />
+
+[![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+
+Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement.
 
 ## Bien démarrer
 
@@ -46,6 +57,8 @@ Les moteurs d’inférence sont inclus. Aucun Python ni environnement d’infér
 
 Enregistrez hors ligne, prenez des notes et marquez les moments importants. Dès que l’ordinateur confirme la réception, vous pouvez quitter l’application mobile : l’importation et la transcription continuent sur le bureau. Le téléphone conserve sa copie. Il peut aussi servir de microphone ou afficher les sous-titres en direct. Associez les appareils sur le même réseau local dans **Paramètres → Connexion des appareils** ; le mode direct exige que l’ordinateur reste allumé.
 
+![Sous-titres sur le téléphone et l’ordinateur](assets/showcase/desktop/en/phone.png)
+
 ## Connecter un agent local
 
 Dans **Paramètres → Agent et MCP**, copiez le message de configuration et transmettez-le à votre agent local. Il lit le Skill fourni et utilise Brevia via la CLI. Pour un client MCP, copiez la configuration MCP depuis la même page.
@@ -60,11 +73,15 @@ Les agents peuvent transcrire, traduire, identifier les voix, chercher des réun
 
 [CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
+![L’agent enregistre les sous-titres SRT en espagnol et en anglais](assets/showcase/desktop/en/agent.png)
+
 ## Vos données
 
 Aucun compte nécessaire. Enregistrements, réunions et modèles restent sur vos appareils. La synchronisation utilise HTTPS sur le réseau local. L’IA locale fonctionne hors ligne ; si vous choisissez un service en ligne, le texte concerné lui est envoyé. [Privacy](https://brevia.work/privacy.html).
 
-Le bureau utilise le WebView du système (WebKit sur macOS, WebView2 sur Windows), une logique commune et des moteurs natifs. L’application mobile utilise Flutter.
+## Technologies
+
+Le bureau utilise le WebView du système (WebKit sur macOS, WebView2 sur Windows), une logique commune et des moteurs natifs. L’application mobile utilise Flutter. Brevia utilise Tauri et Rust sur ordinateur, SQLite pour les données de réunion, sherpa-onnx pour traiter la parole et llama.cpp pour rédiger les comptes rendus.
 
 ## Contribuer
 

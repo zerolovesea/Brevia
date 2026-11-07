@@ -1,6 +1,6 @@
 <h1 align="center"><img src="docs/assets/brevia-mark.svg" width="258" alt="Brevia · 言录" /></h1>
 
-<p align="center"><strong>专注对话，留下重点。</strong><br />本地优先的 AI 会议助手：录音、转写、翻译，把讨论整理成可回溯的笔记与行动。</p>
+<p align="center"><strong>Brevia 2.0 · 本地 AI 会议助手</strong><br />会中看双语字幕、记下决定，会后从纪要回到每一句原话。</p>
 
 <p align="center"><a href="docs/README.en.md">English</a> · <strong>简体中文</strong> · <a href="docs/README.es.md">Español</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.ko.md">한국어</a> · <a href="docs/README.fr.md">Français</a> · <a href="docs/README.de.md">Deutsch</a> · <a href="docs/README.ru.md">Русский</a></p>
 
@@ -20,59 +20,56 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
 
-v2.0.0 是桌面端大版本更新。v1.4.5 用户可以先保存录音，再在应用内检查并安装更新。已有会议、录音和模型将继续保留。
+Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次使用时，按需要下载语言模型。
 
-## 能做什么
+## 从录音到会议纪要
 
-- **记录会议。** 同时录制麦克风和系统声音，实时转写、翻译；收起主窗口后用悬浮字幕、录音胶囊和快捷键继续操作。
-- **认出发言者。** 已安装声纹模型时，后台识别实时发言者；会后精修区分说话人，可保存声纹档案、修正姓名和文字。
-- **整理讨论。** 边听边记，AI 提取重点、决定和待办。纪要、笔记和原因图关联原话，点时间戳回听。
-- **找回信息。** 用工作区、标签和全文搜索管理会议。导出 Markdown、TXT、JSON、SRT、DOCX、PDF 和 WAV。
-- **处理已有录音。** 导入音视频，完成转写、翻译与说话人分析；也能交给本机 Agent 批量处理。
+- **转写与翻译**　录制麦克风和电脑声音，边听边看双语字幕。也可以导入已有的访谈录音，导出 SRT 字幕。
+- **说话人识别**　逐字稿按发言人分段。保存声纹后，下次开会也能认出熟悉的声音；名字和原文都可以修正。
 
-![可编辑的会议纪要](docs/assets/showcase/desktop/zh/summary.gif)
+快速转写：在 M4 Pro 上，一段 **66 分 40 秒**的录音，完整转写共用了 **3 分 33 秒。**
 
-## 开始使用
+### AI 笔记
 
-1. 安装桌面版，在 **设置 → 模型库** 下载适合会议语言的转写模型。
-2. 新建会议，选择麦克风、系统声音或已连接的手机；也可以直接导入文件。
-3. 会中记下重点，会后精修、生成纪要，编辑后导出。
+讨论过程中，AI 会建议值得记下的决定和待办，你可以选择采纳，也可以随手写下自己的笔记。
 
-macOS 14.4 及以上仅申请系统音频录制权限，无需授予屏幕录制权限；macOS 14.0–14.3 仍使用屏幕与系统音频权限。若曾拒绝授权，请在系统设置中重新开启。
+![AI 建议将发言中的待办加入会议笔记](docs/assets/showcase/desktop/zh/ai-notes.png)
 
-推理引擎已随应用提供，不需要安装 Python 或另下推理运行包。Windows 缺少系统 WebView2 时，安装器会联网补装。模型权重按选择下载；本地模型就绪后可以离线使用。FunASR、Qwen3-ASR、Parakeet、Whisper 用于转写，Qwen 用于纪要，Hy-MT 用于翻译；可用模型以应用内为准。
+### 会议胶囊
 
-## 用手机录音
+收起主窗口后，在悬浮的会议胶囊里就能暂停或结束录音。展开胶囊，可以查看实时双语字幕和会议笔记。
 
-手机可独立录音、写笔记、标记重点。连接电脑后上传录音，**电脑确认接收后即可离开手机应用**，导入与转写在电脑后台继续，手机副本仍然保留。
+<img src="docs/assets/showcase/desktop/zh/capsule.png" width="352" alt="展开的会议胶囊，显示双语字幕、笔记页签和录音控件" />
 
-手机也能作为电脑麦克风，或查看电脑回传的实时字幕。两端连接同一可互通局域网，在 **设置 → 设备连接** 扫码配对；实时模式需要电脑保持运行。
+### 会议纪要与鱼骨图
 
-[手机使用指南](mobile/README.md#手机会议与桌面联动)
+会后生成可编辑的纪要。鱼骨图把结论和背后的原因放在一起，点时间戳就能回听对应的原话。
 
-## 让本地 Agent 使用 Brevia
+[![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](docs/assets/showcase/desktop/zh/summary.png)](docs/assets/showcase/desktop/zh/summary.gif)
 
-在 **设置 → Agent 与 MCP** 复制引导语，发给能操作本机的 Agent。它会读取随应用提供的 Skill，通过 CLI 使用 Brevia，无需再配置推理环境。
+## 手机和电脑一起开会
 
-支持 MCP 的客户端，直接在同一页面复制 MCP 配置并加入客户端即可。
+在同一局域网内，用手机扫描电脑 **设置 → 设备连接** 里的二维码。手机可以充当无线麦克风，也可以查看实时字幕。外出时用手机独立录音，回来后传给电脑继续转写、整理。
 
-可以这样提出任务：
+![手机与电脑显示同一场会议的实时字幕](docs/assets/showcase/desktop/zh/phone.png)
 
-> 把桌面上的访谈录音转成中文逐字稿，保存为 SRT。
->
-> 查找上周关于发布计划的会议，列出还没解决的问题。
->
-> 用已连接的手机开始录制这场会议。
+## 把任务交给 Agent
 
-Agent 可调用转写、翻译、说话人分析、声纹匹配、会议检索和录音控制；长任务支持查询进度与取消，已有文件不会被覆盖。应用未运行时可自动在后台启动。
+在 **设置 → Agent 与 MCP** 一键复制引导语，发给本机 Agent。它会读取 Brevia 的 **Skill**，通过 **CLI** 直接调用转写、翻译或会议检索。支持 **MCP** 的客户端也可以从同一页复制配置接入。
 
-[CLI / MCP 调用示例与权限](DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](skills/brevia/SKILL.md)
+> 把桌面上的西班牙语访谈转成字幕，再翻译成英文，两份都保存为 SRT。
+
+![Agent 调用 Brevia，保存西班牙语原文和英语译文两份 SRT 字幕](docs/assets/showcase/desktop/zh/agent.png)
 
 ## 数据与隐私
 
-无需账号。录音、会议和模型保存在自己的设备；手机通过局域网 HTTPS 与电脑同步。选择本地 AI 时可完全离线；选择在线 AI 时，相关文字发送给你配置的服务商。详见[隐私政策](https://brevia.work/privacy.html)。
+无需账号。录音和会议保存在自己的设备上，下载模型后可离线使用。选择在线 AI 时，相关文字会发送给你配置的服务商。[隐私政策](https://brevia.work/privacy.html)
 
-桌面使用系统 WebView（macOS WebKit / Windows WebView2），共享会议业务与界面，原生引擎处理音频和模型；手机端使用 Flutter。
+## 技术栈
+
+- **桌面端**用 Tauri 和 Rust 构建，借助系统自带的 WebKit（macOS）或 WebView2（Windows）显示界面。会议记录存储在本地 SQLite 数据库中。
+- **手机端**用 Flutter 开发，iOS 和 Android 共用一套录音与配对界面。
+- **本地 AI** 使用 sherpa-onnx 识别说话人，使用 llama.cpp 生成会议纪要。在 Apple Silicon Mac 上，Brevia 使用 MLX 运行 FunASR Nano、Qwen3-ASR 和 Parakeet 转写模型。
 
 ## 参与项目
 

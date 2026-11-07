@@ -79,7 +79,11 @@
     const height = compact ? 760 : 800;
     frame.style.width = `${width}px`;
     frame.style.height = `${height}px`;
-    const scale = Math.min(canvas.clientWidth / width, canvas.clientHeight / height, 0.78);
+    const scale = Math.min(
+      canvas.clientWidth / width,
+      canvas.clientHeight / height,
+      compact ? 0.78 : 1,
+    );
     frame.style.left = '50%';
     frame.style.transform = `translate(-50%,-50%) scale(${scale})`;
   }

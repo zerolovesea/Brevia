@@ -10,8 +10,8 @@ const project = join(root, 'output/readme-gif-export');
 const assets = join(root, 'docs/assets/showcase/desktop');
 const scenes = {
   capsule: { query: 'scene=capsule', start: 0, duration: 26 },
-  live: { query: 'scene=live', start: 0, duration: 12 },
-  summary: { query: 'scene=summary', start: 0, duration: 12 },
+  live: { current: true, start: 0, duration: 10 },
+  summary: { current: true, start: 20, duration: 12 },
   library: { query: 'scene=library', start: 0, duration: 12 },
   'phone-microphone': {
     query: 'scene=live&capture=microphone',
@@ -38,8 +38,11 @@ try {
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 for (const lang of onlyLanguage ? [onlyLanguage] : ['zh', 'en']) {
   mkdirSync(join(assets, lang), { recursive: true });
-  for (const [name, { query, start, duration }] of Object.entries(scenes)) {
+  for (const [name, { query, start, duration, current }] of Object.entries(scenes)) {
     if (onlyScene && name !== onlyScene) continue;
+    const source = current
+      ? `app-motion.html?lang=${lang}`
+      : `product-motion.html?${query}&lang=${lang}&manual=1&version=v${version}`;
     writeFileSync(
       join(project, 'index.html'),
       `<!doctype html>
@@ -53,24 +56,25 @@ iframe{display:block;width:1280px;height:800px;border:0;transform:scale(2);trans
 </style></head>
 <body><div id="root" data-composition-id="main" data-start="0"
   data-width="2560" data-height="1600" data-duration="${duration}">
-<iframe title="Brevia" src="./website/product-motion.html?${query}&lang=${lang}&manual=1&version=v${version}"></iframe>
+<iframe title="Brevia" src="./website/${source}"></iframe>
 </div><script>
 const frame=document.querySelector('iframe');
 let registered=false;
 function ready(){
-  const player=frame.contentWindow.productMotion;
+  const player=frame.contentWindow.${current ? 'appMotion' : 'productMotion'};
+  const seek=player?.${current ? 'render' : 'seek'};
   if(!player||registered)return;
   registered=true;
   const clock={
     get position(){return 0},
     set position(seconds){
-      player.seek((${start}+seconds)*1000);
+      seek((${start}+seconds)*1000);
       // 网页手动播放会暂停 CSS 入场动画；导出时显示控件完整终态。
       for(const animation of frame.contentDocument.getAnimations())
         if(Number.isFinite(animation.effect?.getComputedTiming().endTime))animation.finish();
     }
   };
-  player.seek(${start}*1000);
+  seek(${start}*1000);
   const tl=gsap.timeline({paused:true});
   tl.to(clock,{position:${duration},duration:${duration},ease:'none'});
   window.__timelines['main']=tl;
@@ -78,7 +82,7 @@ function ready(){
 }
 frame.addEventListener('load',ready);
 addEventListener('message',event=>{
-  if(event.source===frame.contentWindow&&event.data?.type==='brevia-motion-ready')ready();
+  if(event.source===frame.contentWindow&&event.data?.type==='${current ? 'brevia-landing-ready' : 'brevia-motion-ready'}')ready();
 });
 </script></body></html>`,
     );
@@ -102,6 +106,19 @@ addEventListener('message',event=>{
       ],
       { stdio: 'inherit' },
     );
+    if (name === 'summary')
+      execFileSync('ffmpeg', [
+        '-v',
+        'error',
+        '-y',
+        '-ss',
+        '8',
+        '-i',
+        output,
+        '-frames:v',
+        '1',
+        join(assets, lang, 'summary.png'),
+      ]);
     const gif = readFileSync(output);
     assert.equal(gif.subarray(0, 6).toString(), 'GIF89a');
     assert.equal(gif.readUInt16LE(6), 2560);

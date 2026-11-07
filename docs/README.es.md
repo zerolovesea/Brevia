@@ -20,17 +20,28 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-v2.0.0 es una actualización mayor de la aplicación de escritorio. Guarda la grabación y busca actualizaciones desde v1.4.5 para instalarla. Se conservarán tus reuniones, grabaciones y modelos descargados.
+El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos de idioma se descargan por separado.
 
 ## Qué puedes hacer
 
 - Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.
 - Identifica hablantes en segundo plano mientras aparecen los subtítulos. Después puedes refinar el texto, corregir nombres y guardar perfiles de voz.
+- Transcripción rápida: En un M4 Pro, Brevia transcribió una grabación de **66 min 40 s** en **3 min 33 s**.
 - Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
 - Organiza reuniones en espacios de trabajo, busca su contenido y exporta Markdown, TXT, JSON, SRT, DOCX, PDF o WAV.
 - Importa audio y vídeo para transcribir, traducir y analizar hablantes, también mediante tu agente local.
 
-![Brevia](assets/showcase/desktop/en/summary.gif)
+![La IA propone añadir una tarea a las notas](assets/showcase/desktop/en/ai-notes.png)
+
+### Cápsula de reunión
+
+Con la ventana principal minimizada, puedes pausar o detener la grabación desde la cápsula flotante. Ábrela para ver los subtítulos bilingües en directo o consultar tus notas.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Cápsula con subtítulos y controles de grabación" />
+
+[![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+
+Acta y diagrama de espina de pescado con referencias a la grabación.
 
 ## Primeros pasos
 
@@ -46,6 +57,8 @@ Los motores de inferencia vienen incluidos. No necesitas instalar Python ni un e
 
 Graba sin conexión, toma notas y marca momentos importantes. Tras subir la grabación y recibir la confirmación del ordenador, puedes salir de la aplicación móvil: la importación y la transcripción continúan en el escritorio. El móvil conserva su copia. También puede funcionar como micrófono o mostrar subtítulos en directo. Empareja ambos dispositivos en la misma red local desde **Ajustes → Conexión de dispositivos**; el modo en directo necesita el ordenador encendido.
 
+![Subtítulos en el teléfono y el ordenador](assets/showcase/desktop/en/phone.png)
+
 ## Conecta tu agente local
 
 En **Ajustes → Agent y MCP**, copia el mensaje de configuración y entrégaselo a tu agente local. Leerá el Skill incluido y utilizará la CLI. Para clientes MCP, copia la configuración MCP de la misma página.
@@ -60,11 +73,15 @@ El agente puede transcribir, traducir, identificar voces, buscar reuniones y con
 
 [CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
+![El agente guarda subtítulos SRT en español e inglés](assets/showcase/desktop/en/agent.png)
+
 ## Tus datos
 
 No requiere cuenta. Grabaciones, reuniones y modelos se guardan en tus dispositivos. La sincronización usa HTTPS local. La IA local funciona sin conexión; si eliges un proveedor en línea, se le enviará el texto correspondiente. [Privacy](https://brevia.work/privacy.html).
 
-El escritorio usa el WebView del sistema (WebKit en macOS y WebView2 en Windows), lógica compartida y motores nativos. El móvil usa Flutter.
+## Tecnologías
+
+El escritorio usa el WebView del sistema (WebKit en macOS y WebView2 en Windows), lógica compartida y motores nativos. El móvil usa Flutter. Brevia usa Tauri y Rust en el escritorio, SQLite para guardar los datos de las reuniones, sherpa-onnx para procesar la voz y llama.cpp para generar las actas.
 
 ## Participar
 

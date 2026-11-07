@@ -20,17 +20,28 @@
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
-v2.0.0은 데스크톱 앱의 주요 업데이트입니다. 녹음을 저장하고 v1.4.5 앱에서 업데이트를 확인해 설치하세요. 기존 회의, 녹음, 다운로드한 모델은 그대로 유지됩니다.
+설치 파일은 Mac용 약 43 MiB(45.5 MB), Windows용 약 38 MB입니다. 언어 모델은 별도로 다운로드합니다.
 
 ## 주요 기능
 
 - 마이크와 시스템 소리를 함께 녹음하고 실시간 전사, 번역, 플로팅 자막과 녹음 컨트롤을 사용하세요.
 - 자막은 먼저 표시하고 화자는 백그라운드에서 식별합니다. 회의 후 전사를 다듬고 이름을 수정하며 음성 프로필을 저장할 수 있습니다.
+- 빠른 전사: M4 Pro에서 **66분 40초** 분량의 녹음을 모두 전사하는 데 **3분 33초**가 걸렸습니다.
 - 직접 메모하며 AI로 결정 사항과 할 일을 정리하세요. 노트에서 원래 발언과 녹음으로 돌아갈 수 있습니다.
 - 작업 공간과 검색으로 회의를 관리하고 Markdown, TXT, JSON, SRT, DOCX, PDF, WAV로 내보내세요.
 - 기존 음성·영상 파일을 가져와 전사, 번역, 화자 분석을 실행하거나 로컬 Agent에 맡기세요.
 
-![Brevia](assets/showcase/desktop/en/summary.gif)
+![AI가 회의 노트에 추가할 할 일을 제안하는 화면](assets/showcase/desktop/en/ai-notes.png)
+
+### 회의 캡슐
+
+메인 창을 최소화한 뒤에도 화면에 떠 있는 캡슐에서 녹음을 일시 정지하거나 종료할 수 있습니다. 캡슐을 펼치면 실시간 이중 언어 자막과 회의 노트를 확인할 수 있습니다.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="자막과 녹음 버튼이 보이는 회의 캡슐" />
+
+[![회의록과 생선뼈 다이어그램에서 원래 발언 확인](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+
+회의록과 생선뼈 다이어그램에서 원래 발언 확인.
 
 ## 시작하기
 
@@ -46,6 +57,8 @@ macOS 14.4 이상에서는 화면 녹화 권한 없이 시스템 오디오 녹�
 
 오프라인에서 녹음하고 메모와 중요 시점을 남기세요. 컴퓨터가 녹음 수신을 확인하면 휴대폰 앱을 떠나도 가져오기와 전사는 컴퓨터에서 계속됩니다. 휴대폰의 복사본도 유지됩니다. 휴대폰을 컴퓨터 마이크로 쓰거나 실시간 자막을 볼 수도 있습니다. 같은 로컬 네트워크에서 **설정 → 기기 연결**로 페어링하세요. 실시간 모드에는 실행 중인 컴퓨터가 필요합니다.
 
+![휴대폰과 컴퓨터에 표시된 실시간 자막](assets/showcase/desktop/en/phone.png)
+
 ## 로컬 Agent 연결
 
 **설정 → Agent 및 MCP**에서 안내문을 복사해 로컬 Agent에 전달하세요. 포함된 Skill을 읽고 CLI로 Brevia를 사용합니다. MCP 클라이언트는 같은 화면에서 MCP 설정을 복사하면 됩니다.
@@ -60,11 +73,15 @@ macOS 14.4 이상에서는 화면 녹화 권한 없이 시스템 오디오 녹�
 
 [CLI / MCP](../DEVELOPMENT.md#本机-agent-接口) · [Brevia Skill](../skills/brevia/SKILL.md)
 
+![Agent가 스페인어 및 영어 SRT 자막을 저장하는 화면](assets/showcase/desktop/en/agent.png)
+
 ## 내 데이터
 
 계정이 필요 없습니다. 녹음, 회의와 모델은 내 기기에 저장되며 휴대폰은 로컬 HTTPS로 동기화합니다. 로컬 AI는 오프라인에서 작동합니다. 온라인 AI를 선택하면 관련 텍스트가 선택한 서비스에 전송됩니다. [Privacy](https://brevia.work/privacy.html).
 
-데스크톱은 시스템 WebView(macOS의 WebKit, Windows의 WebView2), 공통 회의 로직과 네이티브 엔진을 사용합니다. 모바일 앱은 Flutter로 구현됩니다.
+## 기술 스택
+
+데스크톱은 시스템 WebView(macOS의 WebKit, Windows의 WebView2), 공통 회의 로직과 네이티브 엔진을 사용합니다. 모바일 앱은 Flutter로 구현됩니다. 데스크톱 앱은 Tauri와 Rust로 개발했으며 회의 데이터는 SQLite에 저장합니다. 음성 처리는 sherpa-onnx, 회의록 생성은 llama.cpp가 담당합니다.
 
 ## 프로젝트 참여
 

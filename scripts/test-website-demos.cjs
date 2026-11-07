@@ -829,12 +829,10 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
               .length,
             currentStyles: !!app.querySelector('link[href$="/desktop-workspace.css"]'),
             controls: document.querySelectorAll('.motion-toggle,.demo-controls').length,
+            frameWidth: frame.getBoundingClientRect().width,
             fits:
               frame.getBoundingClientRect().top >= 0 &&
-              frame.getBoundingClientRect().bottom <= innerHeight &&
-              document.querySelector('.download-area')?.getBoundingClientRect().bottom <=
-                innerHeight,
-            scrollable: document.documentElement.scrollHeight > innerHeight,
+              frame.getBoundingClientRect().bottom <= document.documentElement.scrollHeight + 1,
             canvas: document.querySelector('.demo-canvas').getBoundingClientRect().height,
             backend: !!frame.contentWindow.brevia,
           };
@@ -844,10 +842,27 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         assert.equal(layout.media, 0, 'Application renders live DOM, not screenshots');
         assert.equal(layout.controls, 0);
         assert.ok(layout.currentStyles && layout.fits && layout.canvas >= 150);
-        assert.equal(layout.scrollable, false, 'The default page fits in the viewport');
+        if (width >= 1000)
+          assert.ok(layout.frameWidth >= 840 - 1, 'The laptop preview stays readable');
         assert.equal(layout.backend, false, 'Demonstration has no native backend');
         for (const platform of ['macos', 'windows', 'ios', 'android']) {
           await win.locator(`label[for="platform-${platform}"]`).click();
+          const currentWidth = await win
+            .locator('.app-frame')
+            .evaluate((el) => el.getBoundingClientRect().width);
+          assert.ok(
+            Math.abs(currentWidth - layout.frameWidth) < 1,
+            `${locale}/${width}/${platform}: download changed preview size`,
+          );
+          if (platform === 'ios' || platform === 'android') {
+            const qr = win.locator('.platform-link:visible img');
+            await qr.scrollIntoViewIfNeeded();
+            const box = await qr.boundingBox();
+            assert.ok(
+              box.y >= 0 && box.y + box.height <= height + 1,
+              'QR is reachable by scrolling',
+            );
+          }
           assert.equal(await win.locator('.platform-link:visible').count(), 1);
           assert.equal(
             await win.locator('.platform-link:visible').getAttribute('data-platform'),
