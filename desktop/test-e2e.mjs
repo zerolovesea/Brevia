@@ -4511,16 +4511,31 @@ try {
       document.body.append(host);
       const spinners=[...host.querySelectorAll('[aria-busy="true"] .summary-generating-icon')];
       await new Promise(requestAnimationFrame);
-      const before=spinners.map(spinner=>getComputedStyle(spinner).transform);
-      await new Promise(resolve=>setTimeout(resolve,80));
-      return spinners.length===1 && spinners.every((spinner,index)=>spinner.closest('button').disabled
-        && getComputedStyle(spinner).animationName==='button-spin'
-        && getComputedStyle(spinner).transform!==before[index]);
+      // 直接取样动画时钟，验证真实旋转，不依赖 CI 的帧率或固定 80ms 等待。
+      return {count:spinners.length,spinners:spinners.map(spinner=>{
+        const animation=spinner.getAnimations().find(item=>item.animationName==='button-spin');
+        if(!animation)return {animation:false};
+        const running=animation.playState==='running',timing=animation.effect.getTiming();
+        animation.pause();animation.currentTime=0;
+        const before=getComputedStyle(spinner).transform;
+        animation.currentTime=Number(timing.duration)/4;
+        const rotated=getComputedStyle(spinner).transform!==before;
+        animation.play();
+        return {disabled:spinner.closest('button').disabled,running,infinite:timing.iterations===Infinity,rotated};
+      })};
     })()`,
     awaitPromise: true,
     returnByValue: true,
   });
-  check(summaryButtonMotion.result?.value === true, '纪要生成按钮：禁用重复提交并持续旋转星星');
+  const buttonMotion = summaryButtonMotion.result?.value;
+  check(
+    buttonMotion?.count === 1 &&
+      buttonMotion.spinners.every(
+        (item) => item.disabled && item.running && item.infinite && item.rotated,
+      ),
+    '纪要生成按钮：禁用重复提交并持续旋转星星 ' +
+      JSON.stringify(buttonMotion || summaryButtonMotion.exceptionDetails),
+  );
   await client.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
   });
