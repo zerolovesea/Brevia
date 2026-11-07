@@ -323,6 +323,21 @@ async function main() {
       '-o',
       path.join(control, 'brevia-audio'),
     ]);
+    // ShipIt clears quarantine attributes on each entry, including copied Swift package resources.
+    run('find', [
+      app,
+      '!',
+      '-type',
+      'l',
+      '!',
+      '-perm',
+      '-0200',
+      '-exec',
+      'chmod',
+      'u+w',
+      '{}',
+      '+',
+    ]);
     for (const binary of await binaries(app)) {
       inspect(binary);
       if (binary.endsWith('/node')) {
