@@ -26,6 +26,8 @@ Diese Seite beschreibt die Neuerungen in main. Die Downloads enthalten noch v1.4
 
 <!-- /native-release-pending -->
 
+v2.0.0 ist ein großes Update der Desktop-App. Speichern Sie Ihre Aufnahme und suchen Sie in v1.4.5 nach Updates. Ihre Meetings, Aufnahmen und heruntergeladenen Modelle bleiben erhalten.
+
 ## Funktionen
 
 - Mikrofon und Systemton gemeinsam aufnehmen, mit Live-Transkription, Übersetzung, schwebenden Untertiteln und Aufnahmesteuerung.

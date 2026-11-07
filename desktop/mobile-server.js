@@ -393,6 +393,8 @@ class MobileServer {
         throw fail(409, '该设备仍有未完成的录音，请先结束并补传');
       await this.saveDevices(this.devices.filter((d) => d.id !== id));
       this.stopDeviceStreams(id);
+      this.lastSeen.delete(id);
+      this.captureReady.delete(id);
       this.captureLevels.delete(id);
       if (this.capturePreview?.deviceId === id) this.capturePreview = null;
       await this.request('mobile.proposal.forget', { device_id: id });
@@ -420,16 +422,16 @@ class MobileServer {
     this.pairBusy = true;
     try {
       const allowed = await this.approve({ name: input.name, verification });
-      if (
-        (allowed !== true && allowed?.allowed !== true) ||
-        this.pairing !== p ||
-        p.expires < Date.now()
-      )
-        throw fail(403, '电脑未允许连接，请重新配对');
       const token = randomBytes(32).toString('hex');
       const id = randomBytes(16).toString('hex');
-      await this.serial(() =>
-        this.saveDevices([
+      await this.serial(async () => {
+        if (
+          (allowed !== true && allowed?.allowed !== true) ||
+          this.pairing !== p ||
+          p.expires < Date.now()
+        )
+          throw fail(403, '电脑未允许连接，请重新配对');
+        await this.saveDevices([
           ...this.devices,
           {
             libraryAccess: true,
@@ -438,9 +440,9 @@ class MobileServer {
             firstConnectedAt: new Date().toISOString(),
             tokenHash: hash(token),
           },
-        ]),
-      );
-      this.pairing = null;
+        ]);
+        if (this.pairing === p) this.pairing = null;
+      });
       return {
         token,
         deviceId: id,
@@ -900,7 +902,11 @@ class MobileServer {
           finished: s.finished,
           samples: s.samples,
         }));
-    const value = req.method === 'POST' || req.method === 'PUT' ? await body(req) : null;
+    let value = null;
+    if (req.method === 'POST' || req.method === 'PUT') {
+      value = await body(req);
+      this.owner(req);
+    }
     if (req.url === '/capture' && req.method === 'POST') {
       const { available, level } = z
         .object({ available: z.boolean(), level: z.number().min(0).max(1).nullable().optional() })
@@ -934,6 +940,7 @@ class MobileServer {
       return this.request('mobile.prepare', createSession.parse(value));
     if (req.url === '/meetings' && req.method === 'POST')
       return this.serial(async () => {
+        this.owner(req);
         const v = createSession.parse(value);
         if (this.sessions.has(v.id)) return this.session(v.id, owner);
         if (
@@ -970,6 +977,7 @@ class MobileServer {
       } catch {
         /* Durable spool can exist before worker creation. */
       }
+      this.assertAccess(owner, s.id);
       // Never expose PC filesystem paths or unrelated meeting data to a phone.
       return {
         id: s.id,
@@ -984,7 +992,7 @@ class MobileServer {
         desiredState: s.desiredState,
         controlVersion: s.controlVersion,
         task: s.task || null,
-        workspace_id: meeting?.workspace_id ?? s.workspace_id ?? null,
+        workspace_id: (meeting ? meeting.workspace_id : s.workspace_id) ?? null,
         error: s.error || s.captureError || s.processingWarning || null,
         marks: s.marks,
         title: meeting?.title || s.title,
@@ -1000,6 +1008,7 @@ class MobileServer {
     }
     return this.serial(async () => {
       // 等待队列时可能已被永久删除，必须重新检查当前会话。
+      this.owner(req);
       const s = this.session(match[1], owner);
       if (match[2] === 'action' && req.method === 'POST') {
         if (s.desktopCapture) throw fail(403, '请在电脑管理这场会议');

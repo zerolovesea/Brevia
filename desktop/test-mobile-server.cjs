@@ -27,6 +27,7 @@ const { MobileServer } = require('./mobile-server');
       if (type === 'meeting.get')
         return {
           notes: 'notes from PC',
+          workspace_id: null,
           segments: [{ id: 'one', text: 'private transcript', translation: 'outdated' }],
           correction: { stale_translations: ['one'] },
           summary: { text: 'private summary' },
@@ -125,7 +126,18 @@ const { MobileServer } = require('./mobile-server');
     await call('GET', '/identity');
     await call('GET', '/identity');
     assert.equal(discoveryPrompts, 1);
+    const oldPair = await server.openPairing();
+    const pairingGate = Promise.withResolvers();
+    server.serial(() => pairingGate.promise);
+    const oldApproval = assert.rejects(
+      server.pair({ name: 'expired', code: oldPair.pin, nonce: 'a'.repeat(32) }),
+      (error) => error.status === 403,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
     const pair = await server.openPairing();
+    pairingGate.resolve();
+    await oldApproval;
+    assert.equal(server.devices.length, 0);
     clearInterval(server.timer);
     assert.equal((await call('GET', '/meetings')).status, 401);
     assert.equal((await call('GET', '/options')).status, 401);
@@ -269,6 +281,7 @@ const { MobileServer } = require('./mobile-server');
     assert.equal(server.sessions.get(id).state, 'paused');
     assert.equal(snapshot.body.stopRequested, true); // Stop survives desktop restart.
     assert.equal(snapshot.body.notes, 'notes from PC');
+    assert.equal(snapshot.body.workspace_id, null);
     assert.equal(snapshot.body.segments[0].translation, null);
     assert.equal(snapshot.body.audio, undefined);
     assert.equal(
@@ -629,7 +642,47 @@ const { MobileServer } = require('./mobile-server');
       server.status().devices.find((device) => device.id === linked.body.deviceId).libraryAccess,
       true,
     );
-    await server.revoke(linked.body.deviceId);
+    const gate = Promise.withResolvers();
+    server.serial(() => gate.promise);
+    const revoking = server.revoke(linked.body.deviceId);
+    const post = (url, payload, beforeBody) =>
+      server.route({
+        method: 'POST',
+        url,
+        headers: { authorization: 'Bearer ' + token },
+        async *[Symbol.asyncIterator]() {
+          await beforeBody;
+          yield Buffer.from(JSON.stringify(payload));
+        },
+      });
+    const newId = randomUUID();
+    const captureDenied = assert.rejects(
+      post('/capture', { available: true }, revoking),
+      (error) => error.status === 401,
+    );
+    const createDenied = assert.rejects(
+      post('/meetings', { ...session, id: newId }),
+      (error) => error.status === 401,
+    );
+    server.request = async (...args) => {
+      if (args[0] === 'meeting.get') await revoking;
+      return sharedRequest(...args);
+    };
+    const snapshotDenied = assert.rejects(
+      server.route({
+        method: 'GET',
+        url: `/meetings/${id}/snapshot`,
+        headers: { authorization: 'Bearer ' + token },
+      }),
+      (error) => error.status === 404,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    gate.resolve();
+    await Promise.all([captureDenied, createDenied, snapshotDenied]);
+    server.request = sharedRequest;
+    assert.equal(server.sessions.has(newId), false);
+    assert.equal(server.captureReady.has(linked.body.deviceId), false);
+    assert.equal(server.lastSeen.has(linked.body.deviceId), false);
     assert.equal((await call('GET', '/meetings', null, token)).status, 401);
     assert.equal((await getShared('/snapshot')).status, 401);
     assert.equal((await getShared('/audio')).status, 401);

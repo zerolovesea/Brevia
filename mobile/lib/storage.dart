@@ -2,12 +2,38 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:uuid/uuid.dart';
+
 import 'i18n.dart';
 
+final _jsonWrites = <String, Future<void>>{};
+
 Future<void> writeJson(File file, Object value) async {
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(jsonEncode(value), flush: true);
-  await tmp.rename(file.path);
+  final contents = jsonEncode(value);
+  final previous = _jsonWrites[file.path] ?? Future<void>.value();
+  // 前次错误由其调用者处理，后续保存仍按提交顺序执行。
+  final current = previous
+      .catchError((_) {})
+      .then((_) => _replaceJson(file, contents));
+  _jsonWrites[file.path] = current;
+  try {
+    await current;
+  } finally {
+    if (identical(_jsonWrites[file.path], current)) {
+      _jsonWrites.remove(file.path);
+    }
+  }
+}
+
+Future<void> _replaceJson(File file, String contents) async {
+  final tmp = File('${file.path}.${const Uuid().v4()}.tmp');
+  try {
+    await tmp.writeAsString(contents, flush: true);
+    await tmp.rename(file.path);
+  } catch (_) {
+    if (await tmp.exists()) await tmp.delete();
+    rethrow;
+  }
 }
 
 class RecordingStore {

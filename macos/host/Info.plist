@@ -4,11 +4,11 @@
   <key>CFBundleIdentifier</key><string>com.brevia.app</string>
   <key>CFBundleName</key><string>Brevia</string>
   <key>CFBundleDisplayName</key><string>Brevia</string>
-  <key>CFBundleExecutable</key><string>brevia-host</string>
+  <key>CFBundleExecutable</key><string>Brevia</string>
   <key>CFBundleIconFile</key><string>icon.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>1.4.5</string>
-  <key>CFBundleShortVersionString</key><string>1.4.5</string>
+  <key>CFBundleVersion</key><string>2.0.0</string>
+  <key>CFBundleShortVersionString</key><string>2.0.0</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
   <key>NSHighResolutionCapable</key><true/>

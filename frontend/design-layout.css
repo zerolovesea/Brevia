@@ -433,31 +433,12 @@ textarea,
   min-height: 64px;
 }
 
-#settings-view .settings-row-action {
-  width: 40px;
-  height: 40px;
-  padding: 8px;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-#settings-view .settings-row-action:hover {
-  background: var(--color-selected);
-}
 #settings-view .settings-preferences > .flow-select {
   top: 50%;
   transform: translateY(-50%);
 }
 .settings-folder-paths {
   margin-bottom: 24px;
-}
-.settings-folder-paths .settings-folder-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--color-line);
 }
 .settings-folder-paths b {
   font-size: 16px;
@@ -553,8 +534,7 @@ textarea,
   background: var(--color-selected);
 }
 
-.settings-page .config-fields label,
-.settings-page .config-select-field {
+.settings-page .config-fields label {
   font-size: 14px;
 }
 
@@ -812,10 +792,6 @@ html[data-theme="dark"] {
   min-height: 48px;
   font-size: 16px;
 }
-.summary-model-modal .model-picker-intro {
-  font-size: 14px;
-  line-height: 1.6;
-}
 .task-paused-status {
   display: flex;
   align-items: center;
@@ -884,9 +860,7 @@ html[data-theme="dark"] {
   font-size: 13px;
 }
 .config-fields label,
-.config-select-field,
-.settings-page .config-fields label,
-.settings-page .config-select-field {
+.settings-page .config-fields label {
   font-size: 16px;
   color: var(--color-text);
 }
@@ -1460,23 +1434,6 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
   gap: 12px;
   font-size: 16px;
 }
-.ai-assist-proactivity {
-  border: 0;
-  padding: 0;
-  margin-top: 24px;
-}
-.ai-assist-proactivity legend {
-  font-size: 16px;
-  margin-bottom: 12px;
-}
-.ai-assist-levels {
-  display: flex;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  padding: 4px;
-  background: var(--color-navigation);
-  gap: 4px;
-}
 .ai-assist-level {
   flex: 1;
   display: flex;
@@ -1500,18 +1457,6 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
 }
 .ai-assist-level:focus-within {
   outline: none;
-}
-.model-picker-intro {
-  font-size: 16px;
-  line-height: 1.6;
-}
-.model-picker-foot {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 20px 0;
 }
 .model-group-heading {
   margin-top: 24px;
@@ -1602,10 +1547,6 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
 }
 .settings-page .model-picker {
   margin-top: 0;
-}
-.settings-page .model-picker-intro,
-.settings-page .model-picker-foot {
-  margin-left: 176px;
 }
 .settings-page .model-picker .flow-select-toggle {
   min-height: 48px;
@@ -1767,32 +1708,6 @@ details.advanced-settings-section[open]::details-content {
   color: var(--color-warning);
 }
 
-.settings-folder-row > span {
-  min-width: 0;
-  display: grid;
-  gap: 8px;
-}
-.settings-folder-row small[data-settings-path] {
-  overflow-wrap: anywhere;
-  font-size: 13px;
-}
-.settings-folder-row .storage-path-size {
-  display: grid;
-  gap: 8px;
-}
-.settings-folder-row .storage-size {
-  font-weight: 600;
-}
-.settings-folder-row small[data-settings-path] {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.settings-folder-row > .storage-folder-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .storage-size {
   color: var(--color-text-muted);
   font-size: 14px;
@@ -1816,17 +1731,6 @@ details.advanced-settings-section[open]::details-content {
   font-size: 17px;
   line-height: 1.4;
   font-weight: 700;
-}
-.storage-settings .settings-folder-row {
-  grid-template-columns: 24px minmax(0, 1fr) minmax(140px, 0.8fr) auto;
-  gap: 16px;
-  padding: 12px 16px;
-  min-height: 76px;
-  margin-bottom: 10px;
-}
-.storage-settings .settings-folder-row > span,
-.storage-settings .settings-folder-row .storage-path-size {
-  gap: 4px;
 }
 .storage-settings .storage-list section {
   min-height: 76px;
@@ -1896,9 +1800,6 @@ details.advanced-settings-section[open]::details-content {
   min-height: 32px;
   padding: 4px 10px;
   font-size: 13px;
-}
-.storage-privacy-heading {
-  margin: 24px 0 12px;
 }
 .storage-privacy summary > span {
   display: grid;
@@ -2088,15 +1989,6 @@ details.advanced-settings-section[open]::details-content {
 }
 .speaker-add {
   margin-block: 28px;
-}
-.speaker-audio-dropzone {
-  display: grid;
-  gap: 16px;
-  justify-items: center;
-  border: 1px dashed var(--color-line);
-  border-radius: 8px;
-  padding: 32px 20px;
-  text-align: center;
 }
 .speaker-sample-list article {
   display: flex;
@@ -2428,9 +2320,6 @@ details.advanced-settings-section[open]::details-content {
   .settings-page > .modal-panel {
     padding: 28px;
   }
-  .settings-folder-row > div {
-    grid-column: 2/-1;
-  }
   .speaker-manager {
     grid-template-columns: 200px minmax(0, 1fr);
   }
@@ -2607,19 +2496,6 @@ details.advanced-settings-section[open]::details-content {
   float: left;
   padding-top: 4px;
 }
-.settings-page .ai-assist-proactivity legend {
-  float: left;
-  width: 176px;
-  margin: 0;
-  padding-top: 16px;
-}
-.settings-page .ai-assist-levels {
-  margin-left: 176px;
-}
-.settings-page .model-picker-intro {
-  font-size: 14px;
-  margin-block: 8px;
-}
 @media (max-width: 850px) {
   #detail-view .player.floating-control-bar {
     grid-template-columns: auto auto auto;
@@ -2636,15 +2512,11 @@ details.advanced-settings-section[open]::details-content {
     align-items: stretch;
     gap: 8px;
   }
-  .settings-page .ai-service-choice legend,
-  .settings-page .ai-assist-proactivity legend {
+  .settings-page .ai-service-choice legend {
     float: none;
     width: auto;
     margin-bottom: 12px;
     padding: 0;
-  }
-  .settings-page .ai-assist-levels {
-    margin-left: 0;
   }
 }
 
@@ -2721,15 +2593,11 @@ details.advanced-settings-section[open]::details-content {
     align-items: stretch;
     gap: 8px;
   }
-  .settings-page .ai-service-choice legend,
-  .settings-page .ai-assist-proactivity legend {
+  .settings-page .ai-service-choice legend {
     float: none;
     width: auto;
     margin-bottom: 12px;
     padding: 0;
-  }
-  .settings-page .ai-assist-levels {
-    margin-left: 0;
   }
 }
 
@@ -3532,20 +3400,8 @@ body:has(.onboarding-page) .summary-model-modal .modal-head {
 body:has(.onboarding-page) .summary-model-modal .modal-body {
   padding: 0;
 }
-body:has(.onboarding-page) .summary-model-modal .model-picker-intro {
-  display: block;
-  overflow-wrap: anywhere;
-  line-height: 20px;
-}
 body:has(.onboarding-page) .summary-model-modal .model-picker {
   margin-top: 0;
-}
-body:has(.onboarding-page) .summary-model-modal .model-picker-foot {
-  margin: 8px 0 0;
-  gap: 12px;
-}
-body:has(.onboarding-page) .summary-model-modal .model-picker-foot .modal-action {
-  margin-left: auto;
 }
 body:has(.onboarding-page) .summary-model-modal .onboarding-privacy-hint {
   margin-block: 16px;
@@ -5046,16 +4902,6 @@ textarea,
   padding: 32px;
   overflow-y: auto;
 }
-#settings-view .settings-general-heading {
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-#settings-view .settings-general-heading h1 {
-  margin: 0;
-}
 #settings-view .desktop-settings-status {
   margin: 0;
   font-size: 12px;
@@ -5259,15 +5105,6 @@ textarea,
   border-bottom: 1px solid var(--color-line);
   min-height: 44px;
   font-size: 16px;
-}
-.settings-folder-row {
-  display: grid !important;
-  grid-template-columns: 32px minmax(0, 1fr) minmax(160px, 0.8fr) auto;
-  gap: 16px;
-  align-items: center;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  margin-bottom: 12px;
 }
 .mobile-device-grid {
   margin-bottom: 0;
@@ -6075,15 +5912,6 @@ textarea,
 .settings-page .config-fields:has(> input[type="hidden"]):not(:has(label)) {
   display: none;
 }
-.settings-page .ai-assist-proactivity {
-  display: block;
-  margin-top: 0;
-  padding-top: 0;
-}
-.settings-page .model-picker-foot {
-  margin-block: 8px;
-  gap: 8px;
-}
 .settings-page .advanced-settings-section summary {
   min-height: 44px;
   padding-block: 10px;
@@ -6166,10 +5994,6 @@ textarea,
   display: grid;
   justify-items: stretch;
   padding: 0;
-  background: transparent;
-}
-.settings-page .speaker-audio-dropzone {
-  padding: 20px;
   background: transparent;
 }
 .settings-page .speaker-sample-form > .modal-action {
@@ -6323,9 +6147,6 @@ textarea,
 .permission-badge {
   background: transparent;
   padding: 0;
-}
-.settings-folder-row {
-  padding: 16px;
 }
 .storage-folder-actions .secondary {
   min-height: 36px;
@@ -6662,21 +6483,8 @@ body:has(.app-shell.is-live-meeting) .export-modal {
     align-items: stretch;
     gap: 8px;
   }
-  .settings-page .model-picker-intro,
-  .settings-page .model-picker-foot {
-    margin-left: 0;
-  }
   .advanced-fields label {
     grid-template-columns: minmax(0, 1fr) 180px;
-  }
-  .settings-folder-row {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
-  }
-  .settings-folder-row .storage-path-size {
-    grid-column: 2;
-  }
-  .settings-folder-row .storage-folder-actions {
-    grid-column: 2 / -1;
   }
 }
 @media (max-height: 700px) {
@@ -9165,7 +8973,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   font-size: 13px;
   padding-block: 6px;
 }
-.ai-assist-modal:not(.settings-page) :is(.ai-service-choice, .ai-assist-proactivity) {
+.ai-assist-modal:not(.settings-page) .ai-service-choice {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -9173,7 +8981,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   padding: 0;
   min-width: 0;
 }
-.ai-assist-modal:not(.settings-page) :is(.ai-service-choice, .ai-assist-proactivity) legend {
+.ai-assist-modal:not(.settings-page) .ai-service-choice legend {
   float: left;
   width: 88px;
   margin: 0 12px 0 0;
@@ -9184,10 +8992,6 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 .ai-assist-modal:not(.settings-page) .ai-service-choice label {
   font-size: 14px;
   gap: 8px;
-}
-.ai-assist-modal:not(.settings-page) .ai-assist-levels {
-  flex: 1;
-  min-width: 0;
 }
 .ai-assist-modal:not(.settings-page) .ai-assist-level {
   padding: 8px;
@@ -10312,7 +10116,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #live-view .transcript-scroll {
   padding: 18px 0 24px;
 }
-#transcript-scroll .segment:not(.segment-text-editing) {
+#transcript-scroll .segment:not(.is-editing) {
   border: 0;
   padding: 14px 0 20px;
   column-gap: 16px;
@@ -10429,17 +10233,13 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #settings-view .settings-grid > [data-desktop-settings] {
   display: contents;
 }
-#settings-view [data-desktop-settings] > .settings-group,
-#settings-view .settings-grid > .settings-basic-group {
+#settings-view [data-desktop-settings] > .settings-group {
   display: block;
   margin: 28px 0 0;
   padding: 0 0 12px;
   font-size: 15px;
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-line);
-}
-#settings-view .settings-grid > .settings-basic-group {
-  margin-top: 4px;
 }
 #settings-view .desktop-preference {
   grid-template-columns: minmax(0, 1fr) auto;
@@ -10493,7 +10293,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #transcript-scroll .segment:not(:has(.segment-text-input)) .segment-copy {
   grid-area: copy;
 }
-#settings-view :is(.settings-general-heading h1, .settings-group) {
+#settings-view .settings-group {
   color: var(--color-text);
 }
 #live-view .live-section-head {

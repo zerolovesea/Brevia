@@ -249,7 +249,7 @@ async function main() {
         process.env.CARGO_TARGET_DIR || path.join(root, 'macos/host/target'),
         'release/brevia-host',
       ),
-      path.join(contents, 'MacOS/brevia-host'),
+      path.join(contents, 'MacOS/Brevia'),
     );
     const plist = path.join(contents, 'Info.plist');
     fs.copyFileSync(path.join(root, 'macos/host/Info.plist'), plist);
@@ -286,10 +286,21 @@ async function main() {
     // shell 留在 Resources 由资源封印覆盖；MacOS 下的裸脚本依赖易丢失的签名扩展属性。
     fs.writeFileSync(
       path.join(control, 'brevia'),
-      '#!/bin/sh\ncontrol="$(CDPATH= cd -- "$(dirname -- "$0")/../Resources/control" && pwd)"\nexec "$control/node" "$control/brevia.cjs" "$@"\n',
+      '#!/bin/sh\ncontrol="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexec "$control/node" "$control/brevia.cjs" "$@"\n',
       { mode: 0o755 },
     );
-    fs.symlinkSync('../Resources/control/brevia', path.join(contents, 'MacOS/brevia'));
+    // Squirrel v1.4.5 reopens this path after replacing the entire old bundle.
+    if (version === '2.0.0') {
+      const launch = path.join(resources, 'legacy-update/Resources');
+      fs.mkdirSync(launch, { recursive: true });
+      fs.copyFileSync(path.join(__dirname, 'legacy-relaunch.sh'), path.join(launch, 'ShipIt'));
+      fs.chmodSync(path.join(launch, 'ShipIt'), 0o755);
+      fs.mkdirSync(path.join(contents, 'Frameworks'));
+      fs.symlinkSync(
+        '../Resources/legacy-update',
+        path.join(contents, 'Frameworks/Squirrel.framework'),
+      );
+    }
     fs.cpSync(path.join(root, 'skills/brevia'), path.join(resources, 'skills/brevia'), {
       recursive: true,
     });

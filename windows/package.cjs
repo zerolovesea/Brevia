@@ -128,11 +128,24 @@ async function main() {
     run('cargo', ['build', '--release', '--locked', '--manifest-path', 'macos/host/Cargo.toml'], {
       env,
     });
-  } else
+  } else {
+    // Run the CPU probe from the installer before removing any older installation.
+    run('rustc', [
+      'windows/check-avx2.rs',
+      '--target',
+      'x86_64-pc-windows-msvc',
+      '-C',
+      'target-feature=+crt-static',
+      '-C',
+      'opt-level=s',
+      '-o',
+      path.join(out, 'check-avx2.exe'),
+    ]);
     run('cargo', ['tauri', 'build', '--bundles', 'nsis', '--config', JSON.stringify(config)], {
       cwd: path.join(root, 'macos/host'),
       env,
     });
+  }
   const target = process.env.CARGO_TARGET_DIR || path.join(root, 'macos/host/target');
   const binary = path.join(
     target,

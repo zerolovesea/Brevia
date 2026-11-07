@@ -152,6 +152,16 @@ class CaptureEngine extends RecordingEngine {
 }
 
 void main() {
+  test('concurrent JSON saves publish complete files', () async {
+    final root = await Directory.systemTemp.createTemp('brevia-json-');
+    addTearDown(() => root.delete(recursive: true));
+    final file = File('${root.path}/snapshot.json');
+    await Future.wait([
+      for (var i = 0; i < 12; i++) writeJson(file, {'writer': i}),
+    ]);
+    expect(jsonDecode(await file.readAsString())['writer'], 11);
+    expect(await root.list().length, 1);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'slow storage interrupts capture with a bounded queue and preserves accepted audio',

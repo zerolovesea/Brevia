@@ -102,25 +102,12 @@ function createAgentHandlers(worker) {
           throw failure('invalid_format', 'Specify TXT, MD, SRT, VTT or JSON');
         if (value.operation === 'voice-match' && format !== 'json')
           throw failure('invalid_format', 'Voice matching requires JSON output');
-        if (
-          fs.existsSync(value.output_path) ||
-          (() => {
-            try {
-              fs.lstatSync(value.output_path);
-              return true;
-            } catch (e) {
-              if (e.code === 'ENOENT') return false;
-              throw e;
-            }
-          })()
-        )
+        if (fs.lstatSync(value.output_path, { throwIfNoEntry: false }))
           throw failure('output_exists', 'Output already exists: ' + value.output_path);
         if (!fs.statSync(path.dirname(value.output_path)).isDirectory())
           throw failure('output_directory_missing', 'Output directory does not exist');
-        if (
-          value.input_path &&
-          (!fs.statSync(value.input_path).isFile() || !fs.statSync(value.input_path).size)
-        )
+        const inputFile = value.input_path && fs.statSync(value.input_path);
+        if (inputFile && (!inputFile.isFile() || !inputFile.size))
           throw failure('invalid_input', 'Input must be a nonempty local file');
         const emit = (stage, completed = 0, total = 1) =>
           worker.emit('agent.progress', { meeting_id, stage, completed, total });
@@ -139,7 +126,7 @@ function createAgentHandlers(worker) {
             if (value.text || ['.txt', '.md', '.srt', '.vtt'].includes(ext)) {
               if (value.operation !== 'translate')
                 throw failure('invalid_input', 'Text and subtitle files support translation');
-              if (value.input_path && fs.statSync(value.input_path).size > 2 * 1024 * 1024)
+              if (inputFile && inputFile.size > 2 * 1024 * 1024)
                 throw failure('input_too_large', 'Text input exceeds 2 MiB');
               const text = value.text ?? fs.readFileSync(value.input_path, 'utf8');
               if (!text.trim()) throw failure('invalid_input', 'Text input is empty');

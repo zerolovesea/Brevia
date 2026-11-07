@@ -673,8 +673,12 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         await Future<void>.delayed(Duration(milliseconds: 50));
       }
       final permissionRecorder = AudioRecorder();
-      final allowed = await permissionRecorder.hasPermission();
-      await permissionRecorder.dispose();
+      final bool allowed;
+      try {
+        allowed = await permissionRecorder.hasPermission();
+      } finally {
+        await permissionRecorder.dispose();
+      }
       if (!allowed) throw StateError(tr("需要麦克风权限，请前往系统设置"));
       if (Platform.isAndroid) {
         await FlutterForegroundTask.requestNotificationPermission();

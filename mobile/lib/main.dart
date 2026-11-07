@@ -1862,7 +1862,7 @@ class _MeetingPageState extends State<MeetingPage> {
   Future<void> mark() async {
     final sample =
         (widget.model.meeting(widget.id)?['samples'] as num?)?.toInt() ?? 0;
-    final text = TextEditingController();
+    var text = '';
     final note = await showModalBottomSheet<String>(
       requestFocus: false,
       context: context,
@@ -1899,7 +1899,7 @@ class _MeetingPageState extends State<MeetingPage> {
             Text(tr("备注（选填）")),
             SizedBox(height: 8),
             TextField(
-              controller: text,
+              onChanged: (value) => text = value,
               maxLength: 200,
               minLines: 4,
               maxLines: 6,
@@ -1910,15 +1910,14 @@ class _MeetingPageState extends State<MeetingPage> {
             ),
             SizedBox(height: 16),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, text.text),
+              onPressed: () => Navigator.pop(ctx, text),
               child: Text(tr("保存重点")),
             ),
           ],
         ),
       ),
     );
-    text.dispose();
-    if (note != null) {
+    if (mounted && note != null) {
       await widget.model.command(widget.id, 'mark', note: note, sample: sample);
       HapticFeedback.selectionClick();
     }
@@ -1931,7 +1930,9 @@ class _MeetingPageState extends State<MeetingPage> {
         setState(() => loadingAudio = true);
         try {
           final wav = await audioFile();
+          if (!mounted) return;
           await player.setFilePath(wav.path);
+          if (!mounted) return;
           loadedAudio = true;
         } finally {
           if (mounted) setState(() => loadingAudio = false);
@@ -1939,20 +1940,20 @@ class _MeetingPageState extends State<MeetingPage> {
       }
       if (milliseconds != null) {
         await player.seek(Duration(milliseconds: milliseconds));
+        if (!mounted) return;
       }
       if (player.playing && milliseconds == null) {
         await player.pause();
       } else {
-        unawaited(player.play());
+        await player.play();
       }
     });
   }
 
   Future<File> audioFile() async {
+    final id = widget.id;
     final root = await recordingsRoot();
-    final store = await RecordingStore.load(
-      Directory('${root.path}/${widget.id}'),
-    );
+    final store = await RecordingStore.load(Directory('${root.path}/$id'));
     if (store.count == 0) throw StateError(tr('本机没有音频'));
     return store.wav(await getTemporaryDirectory());
   }

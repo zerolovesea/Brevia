@@ -62,13 +62,13 @@ function transport(auth, method, params) {
 function launch() {
   let binary = process.env.BREVIA_APP;
   if (!binary) {
-    const bundled = path.resolve(__dirname, '../../MacOS/brevia-host');
+    const bundled = path.resolve(__dirname, '../../MacOS/Brevia');
     const candidates =
       process.platform === 'darwin'
         ? [
             bundled,
-            '/Applications/Brevia.app/Contents/MacOS/brevia-host',
-            path.join(os.homedir(), 'Applications/Brevia.app/Contents/MacOS/brevia-host'),
+            '/Applications/Brevia.app/Contents/MacOS/Brevia',
+            path.join(os.homedir(), 'Applications/Brevia.app/Contents/MacOS/Brevia'),
           ]
         : [
             path.resolve(__dirname, '../../Brevia.exe'),

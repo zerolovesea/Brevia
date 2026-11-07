@@ -169,7 +169,7 @@
   font-weight: 600;
   line-height: 1.4;
 }
-#live-view #transcript-scroll .segment:not(.segment-text-editing) {
+#live-view #transcript-scroll .segment:not(.is-editing) {
   padding: 6px 0 8px 34px;
   row-gap: 1px;
 }

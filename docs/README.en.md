@@ -26,6 +26,8 @@ This page describes the new features on main. Downloads still provide v1.4.5; na
 
 <!-- /native-release-pending -->
 
+v2.0.0 is a major desktop update. Save your recording and check for updates in v1.4.5 to install it. Your meetings, recordings and downloaded models carry over.
+
 ## What you can do
 
 - Record your microphone and system audio together, with live transcription, translation, floating captions and recording controls.

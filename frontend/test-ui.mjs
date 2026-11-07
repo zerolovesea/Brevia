@@ -2559,14 +2559,34 @@ assert.equal(captureSourceContext.captureModeInputs('phone').system, false);
   };
   const micSource = text(app).slice(
     text(app).indexOf('const MIC_DEVICE_KEY ='),
-    text(app).indexOf('async function refreshMicDevices('),
+    text(app).indexOf('async function onMicDeviceChange('),
   );
   runInNewContext(micSource, context);
+  context.renderMicDeviceOptions();
+  assert.equal(
+    preferences.get('brevia-mic-device'),
+    'usb',
+    'startup preserves the selected microphone until enumeration',
+  );
   runInNewContext(
     "cachedMicDevices=[{deviceId:'usb',label:'USB mic'}];renderMicDeviceOptions();",
     context,
   );
   assert.equal(context.selectedMicDeviceId(), 'usb');
+  const pendingDevices = [];
+  context.breviaClient.listMicrophones = () =>
+    new Promise((resolve) => pendingDevices.push(resolve));
+  const older = context.refreshMicDevices();
+  const newer = context.refreshMicDevices();
+  pendingDevices[1]([{ deviceId: 'usb', label: 'USB mic' }]);
+  await newer;
+  pendingDevices[0]([]);
+  await older;
+  assert.equal(
+    preferences.get('brevia-mic-device'),
+    'usb',
+    'stale enumeration cannot reset the microphone',
+  );
   const originalFlow = currentFlow;
   const originalList = currentFlow.list;
   originalList.hidden = false;
@@ -4744,7 +4764,7 @@ for (const [kind, anchorState] of [
       permissions: { read: true, infer: true, record: false },
       status: { ready: true },
       skill_path: '/Applications/Brevia.app/skills/brevia/SKILL.md',
-      cli_path: '/Applications/Brevia.app/control/brevia',
+      cli_path: '/Applications/Brevia.app/Contents/Resources/control/brevia',
       mcp: {
         command: 'brevia',
         args: ['mcp'],

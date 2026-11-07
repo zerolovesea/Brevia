@@ -177,7 +177,7 @@ struct Capture {
       self.active = false;
       self.flush();
       self.queue(
-          {{"type", "error"}, {"message", "Audio storage cannot keep up"}});
+          {{"type", "error"}, {"message", "error.audio_backpressure"}});
       return;
     }
     const auto now = Clock::now();

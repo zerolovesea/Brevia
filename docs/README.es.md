@@ -26,6 +26,8 @@ Esta página describe las novedades de main. Las descargas siguen siendo de v1.4
 
 <!-- /native-release-pending -->
 
+v2.0.0 es una actualización mayor de la aplicación de escritorio. Guarda la grabación y busca actualizaciones desde v1.4.5 para instalarla. Se conservarán tus reuniones, grabaciones y modelos descargados.
+
 ## Qué puedes hacer
 
 - Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.

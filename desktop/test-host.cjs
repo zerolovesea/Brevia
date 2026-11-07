@@ -109,7 +109,12 @@ async function native(method, args) {
   if (method === 'window.create') {
     const page = await context.newPage();
     views.set(args.label, page);
-    await page.setViewportSize({ width: args.width || 1280, height: args.height || 800 });
+    page.nativeSize = { width: args.width || 1280, height: args.height || 800 };
+    await page.setViewportSize(page.nativeSize);
+    await page.exposeFunction('__breviaTestWindowMetrics', () => ({
+      ...page.nativeSize,
+      zoom: page.nativeZoom,
+    }));
     await page.exposeBinding('__breviaInvoke', (_source, channel, payload) =>
       invoke(args.label, channel, payload),
     );
@@ -158,6 +163,15 @@ async function native(method, args) {
     await view?.bringToFront();
     return true;
   }
+  if (method === 'window.setZoom') {
+    view.nativeZoom = args.factor;
+    // 原生页面缩放改变 CSS 视口，测试宿主沿用相同逻辑尺寸。
+    await view.setViewportSize({
+      width: Math.round(view.nativeSize.width / args.factor),
+      height: Math.round(view.nativeSize.height / args.factor),
+    });
+    return true;
+  }
   if (method === 'window.hide') return true;
   if (method === 'dialog.open') return { canceled: true, filePaths: [] };
   if (method === 'dialog.save') return { canceled: true };
@@ -180,7 +194,6 @@ async function native(method, args) {
     [
       'window.focus',
       'window.restore',
-      'window.setZoom',
       'window.setAlwaysOnTop',
       'window.setEnabled',
       'tray.set',

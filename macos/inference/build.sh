@@ -114,6 +114,8 @@ download 'https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v2.0.1/LICENSE' "
 download 'https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/LICENSE' "$cache/onnxruntime-LICENSE" 2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c
 cp "$cache/sherpa-LICENSE" "$cache/onnxruntime-LICENSE" "$output/licenses/"
 node macos/inference/licenses.cjs "$cache" "$output/licenses"
+# ShipIt must remove quarantine attributes even from licenses copied from read-only Swift checkouts.
+chmod u+w "$output/licenses/"*
 for library in "$output/"*.dylib; do
   [[ -L "$library" ]] || codesign --force --sign - "$library"
 done

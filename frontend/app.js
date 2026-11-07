@@ -1777,12 +1777,13 @@ function selectedMicDeviceId() {
   return prepareForm.querySelector('[name="mic-device"]')?.value || '';
 }
 /** 缓存的麦克风设备列表,用于重建下拉选项。@type {Array<{deviceId:string,label:string}>} */
-let cachedMicDevices = [];
+let cachedMicDevices;
+let micDeviceRequest = 0;
 /** 构建麦克风设备下拉的选项数组(首个为「系统默认」)。@returns {Array<[string,string]>} */
 function micDeviceOptions() {
   return [
     ['', t('系统默认')],
-    ...cachedMicDevices.map((device) => [device.deviceId, device.label || t('麦克风设备')]),
+    ...(cachedMicDevices || []).map((device) => [device.deviceId, device.label || t('麦克风设备')]),
   ];
 }
 /** 就地重建麦克风设备下拉:更新选项与选中标签,保留展开/收起状态;若已选设备断开则回退到系统默认。@returns {void} */
@@ -1790,8 +1791,8 @@ function renderMicDeviceOptions() {
   const mount = prepareForm.querySelector('#mic-device-mount');
   if (!mount) return;
   const saved = savedMicDeviceId();
-  const present = new Set(cachedMicDevices.map((device) => device.deviceId));
-  if (saved && !present.has(saved)) saveMicDeviceId('');
+  if (saved && cachedMicDevices && !cachedMicDevices.some((device) => device.deviceId === saved))
+    saveMicDeviceId('');
   const options = micDeviceOptions();
   const flow = mount.querySelector('.flow-select');
   if (!flow) {
@@ -1812,7 +1813,10 @@ function renderMicDeviceOptions() {
 }
 /** 重新枚举系统麦克风设备并重建下拉。@returns {Promise<void>} */
 async function refreshMicDevices() {
-  cachedMicDevices = (await breviaClient?.listMicrophones().catch(() => [])) || [];
+  const request = ++micDeviceRequest;
+  const devices = await breviaClient?.listMicrophones().catch(() => undefined);
+  if (!devices || request !== micDeviceRequest) return;
+  cachedMicDevices = devices;
   renderMicDeviceOptions();
 }
 /** 用户切换麦克风设备后:持久化选择,停止旧预览并立即用新设备重测。@returns {Promise<void>} */

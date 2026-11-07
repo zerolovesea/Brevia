@@ -210,7 +210,8 @@ void brevia_watch_sleep(void (*notify)(void)) {
 int brevia_activate_running_peer(_Bool legacyOnly) {
     @autoreleasepool {
         for (NSRunningApplication *app in [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.brevia.app"]) {
-            if (legacyOnly && [app.executableURL.lastPathComponent isEqual:@"brevia-host"]) continue;
+            if (legacyOnly && ![NSFileManager.defaultManager fileExistsAtPath:
+                [app.bundleURL URLByAppendingPathComponent:@"Contents/Resources/app.asar"].path]) continue;
             if (app.processIdentifier != NSProcessInfo.processInfo.processIdentifier && !app.terminated) {
                 [app activateWithOptions:NSApplicationActivateAllWindows];
                 return 1;

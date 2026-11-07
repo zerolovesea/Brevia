@@ -27,7 +27,7 @@ if (typeof WebSocket === 'undefined') {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
-const defaultWindowScale = 1;
+const testViewportScale = 1;
 const captureStartedAt = Date.now();
 const captureSources = process.env.BREVIA_DESIGN_CAPTURE_DIR
   ? (() => {
@@ -283,7 +283,9 @@ try {
       pageErrors.push(details.exception?.description || details.text || 'unknown exception');
     }
     if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') {
-      consoleErrors.push(message.params.entry.text);
+      consoleErrors.push(
+        [message.params.entry.text, message.params.entry.url].filter(Boolean).join(' '),
+      );
     }
   });
 
@@ -339,21 +341,24 @@ try {
   await delay(300);
 
   const markdownBoundary = await client.send('Runtime.evaluate', {
-    expression: `(()=>{const node=document.createElement('div');node.innerHTML=renderMarkdown('![a](brevia-note://missing/[x](https://invalid onerror=alert))');return ![...node.querySelectorAll('*')].some(element=>[...element.attributes].some(attribute=>attribute.name.startsWith('on')));})()`,
+    expression: `(()=>{const node=document.createElement('template');node.innerHTML=renderMarkdown('![a](brevia-note://missing/[x](https://invalid onerror=alert))');return ![...node.content.querySelectorAll('*')].some(element=>[...element.attributes].some(attribute=>attribute.name.startsWith('on')));})()`,
     returnByValue: true,
   });
   check(markdownBoundary.result?.value === true, 'Markdown 图片地址不能生成事件属性');
 
   const compactWindow = await client.send('Runtime.evaluate', {
-    expression: `({ width:outerWidth, height:outerHeight, scale:outerWidth/innerWidth, viewportWidth:innerWidth, viewportHeight:innerHeight, bodyWidth:document.body.scrollWidth, overflow:document.body.scrollWidth>innerWidth+1 })`,
+    expression: `(async () => ({ ...await window.__breviaTestWindowMetrics(), viewportWidth:innerWidth, viewportHeight:innerHeight, overflow:document.body.scrollWidth>innerWidth+1 }))()`,
+    awaitPromise: true,
     returnByValue: true,
   });
   check(
     Math.abs(compactWindow.result?.value?.viewportWidth - 1280) <= 2 &&
       Math.abs(compactWindow.result.value.viewportHeight - 800) <= 2 &&
-      Math.abs(compactWindow.result.value.scale - defaultWindowScale) < 0.02 &&
+      compactWindow.result.value.width === 1152 &&
+      compactWindow.result.value.height === 720 &&
+      compactWindow.result.value.zoom === 0.9 &&
       !compactWindow.result.value.overflow,
-    `旧缩放配置启动并重载后，应使用 1280×800 原生比例且无横向溢出：${JSON.stringify(compactWindow.result?.value)}`,
+    `主窗口应为 1152×720，并按 90% 显示完整 1280×800 工作区：${JSON.stringify(compactWindow.result?.value)}`,
   );
 
   const probe = `(() => {
@@ -1222,16 +1227,14 @@ try {
   });
   check(captionClose.result?.value === 2, `悬浮字幕关闭通知缺失：${JSON.stringify(captionClose)}`);
   const scaleAfterCaption = await client.send('Runtime.evaluate', {
-    expression: 'outerWidth / innerWidth',
+    expression: 'window.__breviaTestWindowMetrics().then(metrics => metrics.zoom)',
+    awaitPromise: true,
     returnByValue: true,
   });
-  check(
-    Math.abs(scaleAfterCaption.result?.value - defaultWindowScale) < 0.02,
-    '打开及关闭独立字幕窗口后，主应用仍保持默认缩放',
-  );
+  check(scaleAfterCaption.result?.value === 0.9, '打开及关闭独立字幕窗口后，主应用仍保持默认缩放');
   await client.send('Emulation.setDeviceMetricsOverride', {
-    width: Math.round(880 * defaultWindowScale),
-    height: Math.round(720 * defaultWindowScale),
+    width: Math.round(880 * testViewportScale),
+    height: Math.round(720 * testViewportScale),
     deviceScaleFactor: 1,
     mobile: false,
   });
@@ -2524,12 +2527,6 @@ try {
   );
   check(pageErrors.length === 0, `交互期间渲染异常：${pageErrors.join('\n')}`);
 
-  /* 应用自身把可预期的失败写进 console.error（例如临时数据目录里没有模型），
-     这里只报告不判负，避免把"测试环境缺模型"误判成回归。 */
-  if (consoleErrors.length) {
-    console.log(`  · 渲染进程 console.error ${consoleErrors.length} 条（测试环境预期内，未判负）`);
-  }
-
   const languagePicker = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       if (onboardingPage) await dismissOnboardingPage();
@@ -2859,7 +2856,7 @@ try {
       await client.send('Emulation.setDeviceMetricsOverride', {
         width: 0,
         height: 0,
-        deviceScaleFactor: 1 / defaultWindowScale,
+        deviceScaleFactor: 1 / testViewportScale,
         mobile: false,
       });
       const shot = await client.send('Page.captureScreenshot', {
@@ -4074,8 +4071,8 @@ try {
     returnByValue: true,
   });
   await client.send('Emulation.setDeviceMetricsOverride', {
-    width: Math.round(880 * defaultWindowScale),
-    height: Math.round(640 * defaultWindowScale),
+    width: Math.round(880 * testViewportScale),
+    height: Math.round(640 * testViewportScale),
     deviceScaleFactor: 1,
     mobile: false,
   });
@@ -4134,7 +4131,7 @@ try {
   await client.send('Emulation.setDeviceMetricsOverride', {
     width: 0,
     height: 0,
-    deviceScaleFactor: 1 / defaultWindowScale,
+    deviceScaleFactor: 1 / testViewportScale,
     mobile: false,
   });
   await client.send('Runtime.evaluate', {
@@ -4606,7 +4603,7 @@ try {
     await client.send('Emulation.setDeviceMetricsOverride', {
       width: 0,
       height: 0,
-      deviceScaleFactor: 1 / defaultWindowScale,
+      deviceScaleFactor: 1 / testViewportScale,
       mobile: false,
     });
     const evaluate = async (expression) => {
@@ -5406,7 +5403,7 @@ try {
         await client.send('Emulation.setDeviceMetricsOverride', {
           width: 0,
           height: 0,
-          deviceScaleFactor: 1 / defaultWindowScale,
+          deviceScaleFactor: 1 / testViewportScale,
           mobile: false,
         });
       }
@@ -5434,8 +5431,8 @@ try {
           `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(resolve=>setTimeout(resolve,300));closeModal();})()`,
         );
         await resizeNativeWindow(
-          Math.round(880 * defaultWindowScale),
-          Math.round(640 * defaultWindowScale),
+          Math.round(880 * testViewportScale),
+          Math.round(640 * testViewportScale),
         );
         const nativeScenes = [
           [
@@ -5483,8 +5480,8 @@ try {
             imageHeight: png.readUInt32BE(20),
             capturedAt: new Date().toISOString(),
             nativeContent: {
-              width: Math.round(880 * defaultWindowScale),
-              height: Math.round(640 * defaultWindowScale),
+              width: Math.round(880 * testViewportScale),
+              height: Math.round(640 * testViewportScale),
             },
             ...geometry,
           });
@@ -5524,7 +5521,7 @@ try {
       completedAt: new Date().toISOString(),
       checksPassed: failures.length === 0 && pageErrors.length === 0,
       nativeContent: { width: 1280, height: 800 },
-      zoom: defaultWindowScale,
+      zoom: testViewportScale,
       sources: captureSources,
       files: readdirSync(output).filter(
         (name) =>
@@ -5533,6 +5530,7 @@ try {
     };
     writeFileSync(path.join(output, 'capture-run.json'), JSON.stringify(run, null, 2) + '\n');
   }
+  check(consoleErrors.length === 0, `渲染进程控制台错误：${consoleErrors.join('\n')}`);
   check(pageErrors.length === 0, `页面操作期间脚本异常：${pageErrors.join('\n')}`);
   client.close();
   await cleanup();

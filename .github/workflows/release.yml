@@ -30,6 +30,8 @@ jobs:
               dist/native/Brevia-WebKit-*-arm64.dmg
               dist/native/Brevia-WebKit-*-arm64.app.tar.gz
               dist/native/Brevia-WebKit-*-arm64.app.tar.gz.sig
+              dist/native/Brevia-*-arm64-mac.zip
+              dist/native/latest-mac.yml
               dist/native/latest-webkit.json
           - name: Windows x64
             os: windows-latest
@@ -44,6 +46,7 @@ jobs:
             artifact: |
               dist/native-win/Brevia-*-x64-setup.exe
               dist/native-win/Brevia-*-x64-setup.exe.sig
+              dist/native-win/latest.yml
               dist/native-win/latest-windows.json
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -205,6 +208,15 @@ jobs:
           xcrun stapler validate dist/native/Brevia-WebKit-*-arm64.dmg
           test -s dist/native/latest-webkit.json
           test -s dist/native/Brevia-WebKit-*-arm64.app.tar.gz.sig
+      - name: Prepare the v1.4.5 macOS in-app upgrade
+        if: runner.os == 'macOS'
+        run: node scripts/legacy-update.mjs dist/native/image/Brevia.app dist/native
+      - name: Prepare the v1.4.5 Windows in-app upgrade
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          node scripts/legacy-update.mjs "dist/native-win/Brevia-$version-x64-setup.exe"
       - name: Remove Apple signing material
         if: always() && runner.os == 'macOS'
         run: |

@@ -1044,20 +1044,6 @@
     display: grid;
     gap: 20px;
   }
-  .ai-assist-proactivity {
-    padding-top: 20px;
-    display: grid;
-    gap: 12px;
-  }
-  .ai-assist-proactivity > p {
-    margin: 0;
-    font-size: 13px;
-    color: #222222;
-  }
-  .ai-assist-levels {
-    display: grid;
-    gap: 8px;
-  }
   .ai-assist-level {
     display: flex;
     gap: 12px;
@@ -2437,9 +2423,6 @@
   #settings-view .settings-card .secondary {
     @apply absolute right-0 top-1/2 mt-0 -translate-y-1/2 text-[13px];
   }
-  #settings-view .settings-folder-row {
-    @apply col-span-12 flex min-w-0 items-center justify-between gap-4 border border-(--color-line) px-4 py-3;
-  }
   .update-card {
     @apply col-span-12 flex items-center justify-between gap-6 border border-black p-4;
   }
@@ -2611,20 +2594,8 @@
   .model-picker.is-empty {
     @apply justify-items-start;
   }
-  .model-picker .model-picker-intro {
-    @apply m-0 max-w-[42rem] text-[12px] leading-5 text-[#666666];
-  }
-  .model-picker-foot {
-    @apply flex flex-wrap items-center justify-between gap-x-6 gap-y-2;
-  }
-  .model-picker-foot .text-button {
-    @apply shrink-0 text-[12px] text-(--color-link);
-  }
   .summary-model-hint {
     @apply mt-3 text-[11px] leading-5 text-[#767676];
-  }
-  .config-select-field {
-    @apply grid gap-2 text-[12px] text-[#666666];
   }
   .flow-select {
     @apply relative grid min-w-0;
@@ -3056,20 +3027,16 @@
   .onboarding-folder-row:last-child {
     @apply border-b-0;
   }
-  .onboarding-folder-row > span,
-  .settings-folder-row > span {
+  .onboarding-folder-row > span {
     @apply min-w-0 flex-1;
   }
-  .onboarding-folder-row b,
-  .settings-folder-row b {
+  .onboarding-folder-row b {
     @apply block text-[13px] font-semibold;
   }
-  .onboarding-folder-row small,
-  .settings-folder-row small {
+  .onboarding-folder-row small {
     @apply block overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[#767676];
   }
-  .onboarding-folder-row .secondary,
-  .settings-folder-row .secondary {
+  .onboarding-folder-row .secondary {
     @apply m-0 shrink-0;
   }
   .onboarding-model-summary [data-onboarding-guard] {
@@ -3254,9 +3221,6 @@
   }
   .export-format-fixed {
     @apply w-32 text-center text-[12px] text-[#767676];
-  }
-  .share-hint {
-    @apply m-0 text-[12px] leading-5 text-[#767676];
   }
   .share-platforms {
     @apply grid grid-cols-2 gap-3 sm:grid-cols-3;
@@ -4048,7 +4012,6 @@ html[data-theme="dark"] [data-ai-request]:hover {
   background: #363636;
 }
 html[data-theme="dark"] .ai-assist-level b,
-html[data-theme="dark"] .ai-assist-proactivity > p,
 html[data-theme="dark"] .ai-assist-popover strong {
   color: #fff;
 }
@@ -4057,7 +4020,6 @@ html[data-theme="dark"] .ai-assist-popover p {
   color: #b0b0b0;
 }
 html[data-theme="dark"] .ai-assist-level,
-html[data-theme="dark"] .ai-assist-proactivity,
 html[data-theme="dark"] .ai-assist-popover {
   border-color: var(--color-line);
 }
@@ -4223,8 +4185,7 @@ html[data-theme="dark"] .onboarding-setup-page h2,
 html[data-theme="dark"] .onboarding-model-summary strong {
   color: #fff;
 }
-html[data-theme="dark"] .onboarding-folder-row,
-html[data-theme="dark"] .settings-folder-row {
+html[data-theme="dark"] .onboarding-folder-row {
   border-color: var(--color-line);
 }
 html[data-theme="dark"] .onboarding-ai-ways label,
@@ -4266,12 +4227,6 @@ html[data-theme="dark"] .config-fields select {
   border-color: #666666;
   background: #191919;
   color: #fff;
-}
-html[data-theme="dark"] .model-picker .model-picker-intro {
-  color: #b0b0b0;
-}
-html[data-theme="dark"] .config-select-field {
-  color: #b0b0b0;
 }
 html[data-theme="dark"] .flow-select-toggle,
 html[data-theme="dark"] .flow-select-options {
@@ -4795,7 +4750,6 @@ html[data-theme="dark"] .export-content-name b {
 }
 html[data-theme="dark"] .export-selection-summary,
 html[data-theme="dark"] .export-content-name small,
-html[data-theme="dark"] .share-hint,
 html[data-theme="dark"] .share-platform small {
   color: #9a9a9a;
 }

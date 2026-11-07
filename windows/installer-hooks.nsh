@@ -16,6 +16,8 @@ Var BreviaLegacyInvalid
 Var BreviaDirectorySuggested
 Var BreviaUninstallerHandle
 
+LangString BreviaAvx2Required 1033 "Brevia 2 requires an x64 processor with AVX2. Setup cannot continue."
+LangString BreviaAvx2Required 2052 "Brevia 2 需要支持 AVX2 的 x64 处理器，安装程序无法继续。"
 LangString BreviaCloseFirst 1033 "Save your recording and quit Brevia, then retry. Installation will not close the app for you."
 LangString BreviaCloseFirst 2052 "请先保存录音并退出 Brevia，然后重试。安装程序不会替你关闭应用。"
 LangString BreviaMigrationFailed 1033 "The previous installation could not be migrated. Repair or uninstall the old version while keeping app data, then retry."
@@ -131,6 +133,16 @@ FunctionEnd
 
 ; Tauri 在 include hooks 后才注册自定义插件；留到安装段展开才能解析 RunAsUser。
 !macro NSIS_HOOK_PREINSTALL
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\check-avx2.exe" "${BREVIA_HOOK_DIR}\..\dist\native-win\check-avx2.exe"
+  ClearErrors
+  ExecWait '"$PLUGINSDIR\check-avx2.exe"' $0
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+    MessageBox MB_ICONSTOP|MB_OK "$(BreviaAvx2Required)" /SD IDOK
+    SetErrorLevel 1633
+    Abort "$(BreviaAvx2Required)"
+  ${EndIf}
   ${If} $BreviaDirectorySuggested != 1
     Call BreviaRestoreLegacyDirectory
   ${Else}

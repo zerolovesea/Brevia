@@ -15,7 +15,7 @@ async function main() {
   const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
   fs.writeFileSync(
     launcher,
-    `#!/bin/sh\nprintf '%s' "$$" > ${quote(pidFile)}\nexec ${quote(path.join(bundle, 'Contents/MacOS/brevia-host'))} "$@"\n`,
+    `#!/bin/sh\nprintf '%s' "$$" > ${quote(pidFile)}\nexec ${quote(path.join(bundle, 'Contents/MacOS/Brevia'))} "$@"\n`,
     { mode: 0o700 },
   );
   const env = {
@@ -25,7 +25,7 @@ async function main() {
     BREVIA_MOBILE_PORT: '0',
     BREVIA_APP: launcher,
   };
-  const cli = path.join(bundle, 'Contents/MacOS/brevia');
+  const cli = path.join(bundle, 'Contents/Resources/control/brevia');
   async function call(method, payload, noStart = false) {
     const { stdout } = await run(
       cli,

@@ -11,6 +11,7 @@ const KEYS: &[&str] = &[
     "brevia-preferred-refined-model",
     "brevia-onboarding-complete",
     "brevia-update-policy",
+    "brevia-whatsnew-seen",
     "brevia-china-model-source",
     "brevia-active-workspace",
 ];
@@ -136,6 +137,8 @@ mod tests {
             db.put(b"_file://\0\x01brevia-theme", b"\x01dark").unwrap();
             db.put(b"_file://\0\x01brevia-language", b"\x00e\0n\0")
                 .unwrap();
+            db.put(b"_file://\0\x01brevia-whatsnew-seen", b"\x011.4.5")
+                .unwrap();
             db.put(b"_file://\0\x01brevia-summary-config", b"\x01test-only")
                 .unwrap();
             db.put(
@@ -153,7 +156,8 @@ mod tests {
         }
         let original = fs::read(dir.path().join("CURRENT")).unwrap();
         let values = snapshot(dir.path()).unwrap();
-        assert_eq!(values.len(), 2);
+        assert_eq!(values.len(), 3);
+        assert_eq!(values["brevia-whatsnew-seen"], "1.4.5");
         assert_eq!(values["brevia-theme"], "dark");
         assert_eq!(values["brevia-language"], "en");
         assert_eq!(fs::read(dir.path().join("CURRENT")).unwrap(), original);

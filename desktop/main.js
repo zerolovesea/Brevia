@@ -1264,7 +1264,7 @@ function registerIpc() {
   const agentSettings = () => {
     const cli =
       process.platform === 'darwin'
-        ? path.resolve(process.resourcesPath, '../MacOS/brevia')
+        ? path.join(process.resourcesPath, 'control/brevia')
         : path.resolve(process.resourcesPath, '../brevia.cmd');
     const mcp =
       process.platform === 'darwin'
@@ -2448,7 +2448,7 @@ async function installUpdate() {
 function createWindow() {
   const appUrl = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const windowScale = Math.min(1, width / 1280, height / 800);
+  const windowScale = Math.min(0.9, width / 1280, height / 800);
   const window = new NativeWindow({
     width: Math.round(1280 * windowScale),
     height: Math.round(800 * windowScale),
@@ -2459,7 +2459,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      // 紧凑控件使用原生 CSS 尺度；仅小屏幕缩放，避免继承旧版整体缩小后的细小文字。
+      // 窗口与内容同比缩小，保留原有工作面的布局比例。
       zoomFactor: windowScale,
       backgroundThrottling: false,
       contextIsolation: true,

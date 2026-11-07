@@ -8,6 +8,51 @@ const { runInNewContext } = require('node:vm');
 const prettier = require('prettier');
 
 const root = path.resolve(__dirname, '..');
+test('desktop package, release notes and current bilingual changelog agree', () => {
+  const { version } = require('../package.json');
+  const window = {};
+  runInNewContext(fs.readFileSync(path.join(root, 'frontend/changelog.js'), 'utf8'), { window });
+  const [current, previous] = window.BreviaChangelog;
+  assert.equal(current.version, version);
+  assert.equal(current.previousVersion, previous.version);
+  const notes = fs.readFileSync(path.join(root, 'docs/releases', 'v' + version + '.md'), 'utf8');
+  for (const locale of ['zh', 'en']) assert.ok(notes.includes(current[locale].summary));
+  if (process.env.GITHUB_REF_TYPE === 'tag')
+    assert.equal(process.env.GITHUB_REF_NAME, 'v' + version);
+});
+
+test('the Electron migration feed describes the complete installer and stays pinned to 2.0.0', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-legacy-update-'));
+  try {
+    const scriptDir = path.join(dir, 'scripts');
+    fs.mkdirSync(scriptDir);
+    const script = path.join(scriptDir, 'legacy-update.mjs');
+    fs.copyFileSync(path.join(root, 'scripts/legacy-update.mjs'), script);
+    const filename = 'Brevia-2.0.0-x64-setup.exe';
+    const installer = path.join(dir, filename);
+    const bytes = Buffer.from('installer test fixture');
+    fs.writeFileSync(installer, bytes);
+    const run = (version) => {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ version }));
+      const result = spawnSync(process.execPath, [script, installer], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+    };
+    run('2.0.0');
+    const manifest = path.join(dir, 'latest.yml');
+    const content = fs.readFileSync(manifest, 'utf8');
+    const feed = JSON.parse(content);
+    const sha512 = require('node:crypto').createHash('sha512').update(bytes).digest('base64');
+    assert.equal(feed.version, '2.0.0');
+    assert.deepEqual(feed.files, [{ url: filename, sha512, size: bytes.length }]);
+    assert.equal(feed.path, filename);
+    assert.equal(feed.sha512, sha512);
+    run('2.0.1');
+    assert.equal(fs.readFileSync(manifest, 'utf8'), content);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('release links migrate Electron filenames and keep formatting through later native updates', async () => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-release-links-'));
   const formatOptions = await prettier.resolveConfig(path.join(root, 'README.md'));

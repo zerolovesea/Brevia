@@ -90,7 +90,7 @@
     pause.disabled = busy || saving || inactive || !state.canPause || state.phase === 'failed';
     pause.hidden = saving || inactive || state.phase === 'failed';
     stop.innerHTML = icon(state.phase === 'failed' ? 'retry' : 'stop');
-    stop.title = t(state.phase === 'failed' ? '重试保存' : '结束');
+    stop.title = t(state.phase === 'failed' ? '重试保存' : '结束会议');
     stop.setAttribute('aria-label', stop.title);
     stop.disabled = busy || saving || inactive;
     stop.hidden = saving || inactive;

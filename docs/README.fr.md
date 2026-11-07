@@ -26,6 +26,8 @@ Cette page présente les nouveautés de main. Les téléchargements proposent en
 
 <!-- /native-release-pending -->
 
+La version 2.0.0 est une mise à jour majeure de l’application de bureau. Terminez et sauvegardez votre enregistrement, puis recherchez les mises à jour dans la version 1.4.5 pour l’installer. Vos réunions, enregistrements et modèles téléchargés seront conservés.
+
 ## Fonctionnalités
 
 - Enregistrez le microphone et le son du système, avec transcription, traduction, sous-titres flottants et commandes d’enregistrement.

@@ -3,7 +3,7 @@ name: brevia
 description: Use the locally running Brevia application to transcribe or translate local media, search meetings, match voices, and control explicitly requested computer or connected-phone recordings through its authenticated CLI or MCP.
 ---
 
-Use the installed `Brevia.app/Contents/MacOS/brevia` CLI on macOS, `brevia.cmd` in the Brevia installation directory on Windows, or the configured Brevia MCP tools. Both packages include their runtime; do not require a separate Node installation. In the source checkout, use `node scripts/brevia.cjs`. Do not open Brevia databases, invoke Worker scripts or start inference engines yourself.
+Use the installed `Brevia.app/Contents/Resources/control/brevia` CLI on macOS, `brevia.cmd` in the Brevia installation directory on Windows, or the configured Brevia MCP tools. Both packages include their runtime; do not require a separate Node installation. In the source checkout, use `node scripts/brevia.cjs`. Do not open Brevia databases, invoke Worker scripts or start inference engines yourself.
 
 - Check `status --no-start` without launching. Other calls automatically start the installed application in the background and wait for readiness. Set `BREVIA_APP` only when the application executable cannot be found alongside the CLI or in a standard installation directory.
 - Query `models.list` and `devices.list` before choosing models or recording targets. Missing models and unsupported decoding are explicit errors; do not switch to cloud inference or download models without the user's instruction.

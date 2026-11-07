@@ -15,7 +15,7 @@ async function smoke() {
   const resources = path.join(bundle, windows ? 'resources' : 'Contents/Resources');
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-webkit-smoke-')));
   const contents = path.join(temp, windows ? 'Host' : 'Host/Contents');
-  const hostName = windows ? `BreviaSmoke-${path.basename(temp)}.exe` : 'MacOS/brevia-host';
+  const hostName = windows ? `BreviaSmoke-${path.basename(temp)}.exe` : 'MacOS/Brevia';
   const host = path.join(contents, hostName);
   const data = path.join(temp, 'data');
   let child;
@@ -64,7 +64,7 @@ async function smoke() {
     } else {
       fs.mkdirSync(path.join(contents, 'Resources'));
       fs.copyFileSync(path.join(bundle, 'Contents/Info.plist'), path.join(contents, 'Info.plist'));
-      fs.copyFileSync(path.join(bundle, 'Contents/MacOS/brevia-host'), host);
+      fs.copyFileSync(path.join(bundle, 'Contents/MacOS/Brevia'), host);
       fs.chmodSync(host, 0o755);
     }
     const env = {

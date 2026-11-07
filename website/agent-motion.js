@@ -1,7 +1,7 @@
 // All displayed calls are scripted examples; the demo has no host bridge or clipboard access.
 function createAgentDemo(pick) {
   const app = '/Applications/Brevia.app/Contents';
-  const cli = `${app}/MacOS/brevia`;
+  const cli = `${app}/Resources/control/brevia`;
   const skill = `${app}/Resources/skills/brevia/SKILL.md`;
   const settings = {
     enabled: true,
