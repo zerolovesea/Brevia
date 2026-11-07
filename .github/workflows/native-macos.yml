@@ -2,28 +2,27 @@ name: Native macOS validation
 
 on:
   pull_request:
-    paths:
+    paths: &native-macos-paths
       - 'macos/**'
       - 'desktop/**'
       - 'frontend/**'
-      - 'backend/*.json'
+      - 'backend/**'
       - 'scripts/**'
       - 'skills/brevia/**'
       - 'package*.json'
       - '.github/workflows/native-macos.yml'
       - '.github/workflows/release.yml'
+      - '!macos/**/*.md'
+      - '!macos/host/src/windows.rs'
+      - '!desktop/**/*.md'
+      - '!frontend/**/*.md'
+      - '!backend/**/*.md'
+      - '!scripts/**/*.md'
+      - '!scripts/ci-mobile-changes.py'
+      - '!scripts/test-ci-mobile-changes.py'
   push:
     branches: [main]
-    paths:
-      - 'macos/**'
-      - 'desktop/**'
-      - 'frontend/**'
-      - 'backend/*.json'
-      - 'scripts/**'
-      - 'skills/brevia/**'
-      - 'package*.json'
-      - '.github/workflows/native-macos.yml'
-      - '.github/workflows/release.yml'
+    paths: *native-macos-paths
   workflow_dispatch:
 
 permissions:
@@ -50,6 +49,25 @@ jobs:
           xcodebuild -version
           xcrun swift --version
           xcodebuild -downloadComponent MetalToolchain
+      - name: Identify native cache image
+        id: native-cache-image
+        shell: bash
+        run: echo "version=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+      # 只缓存编译依赖；安装包、签名材料及宿主最终可执行文件不进入缓存。
+      - name: Cache native compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/native/inference-sources
+            macos/inference/.build
+            macos/host/target/release/deps/*
+            macos/host/target/release/build
+            macos/host/target/release/.fingerprint
+            ~/.cargo/registry
+            !macos/host/target/release/deps/brevia_host-*
+          key: native-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-cache-image.outputs.version }}-${{ hashFiles('.github/workflows/native-macos.yml', '.github/workflows/windows-backend.yml', '.github/workflows/release.yml', 'macos/host/Cargo.lock', 'macos/inference/Package.swift', 'macos/inference/Package.resolved', 'macos/inference/build.sh', 'macos/inference/*.patch', 'windows/build.cjs', 'windows/CMakeLists.txt') }}-${{ github.sha }}
+          restore-keys: |
+            native-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-cache-image.outputs.version }}-${{ hashFiles('.github/workflows/native-macos.yml', '.github/workflows/windows-backend.yml', '.github/workflows/release.yml', 'macos/host/Cargo.lock', 'macos/inference/Package.swift', 'macos/inference/Package.resolved', 'macos/inference/build.sh', 'macos/inference/*.patch', 'windows/build.cjs', 'windows/CMakeLists.txt') }}-
       - name: Restore native bundler
         id: tauri-cli-cache
         uses: actions/cache/restore@v4

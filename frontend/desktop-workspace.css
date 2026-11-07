@@ -170,8 +170,68 @@
   line-height: 1.4;
 }
 #live-view #transcript-scroll .segment:not(.segment-text-editing) {
-  padding: 10px 0 42px;
-  column-gap: 10px;
+  padding: 6px 0 8px 34px;
+  row-gap: 1px;
+}
+#live-view #transcript-scroll .segment-meta {
+  min-height: 24px;
+  gap: 6px;
+}
+#live-view #transcript-scroll .segment-meta .speaker-avatar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 6px;
+  width: 26px;
+  height: 26px;
+}
+#live-view #transcript-scroll .segment-meta .segment-speaker {
+  flex: 0 1 auto;
+  font-weight: 600;
+}
+#live-view #transcript-scroll .segment-meta time {
+  margin: 0;
+  font-size: 11px;
+}
+#live-view #transcript-scroll .segment .segment-tools {
+  top: 1px;
+  bottom: auto;
+  max-width: 100%;
+}
+#live-view #transcript-scroll .segment:has(.segment-tools) .segment-meta {
+  padding-inline-end: calc(var(--segment-tool-count) * 30px + 14px);
+}
+@container (max-width: 490px) {
+  #live-view
+    #transcript-scroll
+    .segment-tools
+    :is([data-segment-tool="speaker"], [data-segment-tool="note"], [data-segment-tool="profile"]) {
+    display: none;
+  }
+  #live-view #transcript-scroll .segment:has(.segment-tools) .segment-meta {
+    padding-inline-end: 104px;
+  }
+}
+#live-view .back-to-latest {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+.summary-participants-popover {
+  width: min(230px, calc(100vw - 16px));
+  padding: 10px 12px;
+}
+.summary-participants-popover .summary-participant-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.summary-participants-popover h3 {
+  font-size: 13px;
+}
+.summary-participants-popover .speaker-avatar {
+  width: 24px;
+  height: 24px;
 }
 #live-view #transcript-scroll .segment :is(time, .translation) {
   font-size: 12px;
@@ -275,8 +335,15 @@
 }
 #live-view .live-control-bar #pause,
 #live-view .live-control-bar #mark-important {
+  color: var(--color-text);
   border: 0;
   background: var(--color-navigation);
+}
+#live-view .ai-suggestion-accept {
+  color: var(--color-text-inverse);
+}
+#live-view .ai-suggestion-star {
+  color: var(--color-text-muted);
 }
 #live-view .live-control-bar #end-meeting {
   color: var(--color-text-inverse);
@@ -1601,10 +1668,7 @@ html:lang(zh) #mobile-dialog .mobile-page-intro h1 {
   font-size: 15px;
   font-weight: 500;
 }
-.onboarding-page .onboarding-permission-copy small {
-  margin-top: 4px;
-  font-size: 12px;
-}
+
 .onboarding-page .onboarding-actions :is(.modal-action, .secondary) {
   min-height: 36px;
   height: 36px;
@@ -2266,28 +2330,36 @@ body .workspace-create-popover.term-editor {
 }
 
 .speaker-avatar[data-speaker-color="0"] {
-  --speaker-ink: #436c7b;
-  --speaker-tint: #e9f2f5;
+  --speaker-ink: #006a9c;
+  --speaker-tint: #cceeff;
 }
 .speaker-avatar[data-speaker-color="1"] {
-  --speaker-ink: #7b5c89;
-  --speaker-tint: #f1ebf5;
+  --speaker-ink: #883db3;
+  --speaker-tint: #f1dafa;
 }
 .speaker-avatar[data-speaker-color="2"] {
-  --speaker-ink: #55745d;
-  --speaker-tint: #eaf2eb;
+  --speaker-ink: #087346;
+  --speaker-tint: #c9f3da;
 }
 .speaker-avatar[data-speaker-color="3"] {
-  --speaker-ink: #8a6740;
-  --speaker-tint: #f7efe3;
+  --speaker-ink: #994d00;
+  --speaker-tint: #ffe4b8;
 }
 .speaker-avatar[data-speaker-color="4"] {
-  --speaker-ink: #92616a;
-  --speaker-tint: #f7ecee;
+  --speaker-ink: #b03062;
+  --speaker-tint: #ffdae9;
 }
 .speaker-avatar[data-speaker-color="5"] {
-  --speaker-ink: #5c668f;
-  --speaker-tint: #eceef7;
+  --speaker-ink: #414cb6;
+  --speaker-tint: #dfe4ff;
+}
+.speaker-avatar[data-speaker-color="unknown"] {
+  --speaker-ink: var(--color-text-muted);
+  --speaker-tint: var(--color-selected);
+}
+.speaker-avatar[style*="--speaker-hue"] {
+  --speaker-ink: hsl(var(--speaker-hue) 66% 32%);
+  --speaker-tint: hsl(var(--speaker-hue) 77% 90%);
 }
 .speaker-avatar[data-speaker-color] {
   color: var(--speaker-ink);
@@ -2596,16 +2668,16 @@ brevia-cause-tree {
   pointer-events: none;
 }
 brevia-cause-tree [data-ink] {
-  --branch-ink: #62828a;
+  --branch-ink: #007c9e;
 }
 brevia-cause-tree [data-ink="1"] {
-  --branch-ink: #9c7753;
+  --branch-ink: #bd650e;
 }
 brevia-cause-tree [data-ink="2"] {
-  --branch-ink: #67816b;
+  --branch-ink: #23865b;
 }
 brevia-cause-tree [data-ink="3"] {
-  --branch-ink: #87718d;
+  --branch-ink: #914eb5;
 }
 .cause-tree-links path {
   fill: none;
@@ -2626,7 +2698,7 @@ brevia-cause-tree [data-ink="3"] {
   padding: 9px 10px 9px 14px;
   border: 1px solid color-mix(in srgb, var(--branch-ink) 28%, var(--color-surface));
   border-radius: 7px;
-  background: color-mix(in srgb, var(--branch-ink) 6%, var(--color-surface));
+  background: color-mix(in srgb, var(--branch-ink) 12%, var(--color-surface));
 }
 #detail-view brevia-cause-tree .evidence-claim:is(:hover, [open]) > summary {
   background: color-mix(in srgb, var(--branch-ink) 12%, var(--color-surface));

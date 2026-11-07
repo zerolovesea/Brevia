@@ -63,6 +63,181 @@ private struct InputDevice {
 private let targetFormat = AVAudioFormat(
   commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: false)!
 
+// Core Audio 回调返回后会重用输入内存，必须先复制再交给重采样队列。
+func copyAudioBuffer(_ source: UnsafePointer<AudioBufferList>, format: AVAudioFormat) throws
+  -> AVAudioPCMBuffer
+{
+  let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: source))
+  let bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
+  guard bytesPerFrame > 0, let first = buffers.first else {
+    throw CaptureError("无法获取系统音频，请检查系统权限后重试")
+  }
+  let frames = first.mDataByteSize / UInt32(bytesPerFrame)
+  guard frames > 0, let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else {
+    throw CaptureError("无法获取系统音频，请检查系统权限后重试")
+  }
+  copy.frameLength = frames
+  let destinations = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+  guard buffers.count == destinations.count else {
+    throw CaptureError("无法获取系统音频，请检查系统权限后重试")
+  }
+  for (from, to) in zip(buffers, destinations) {
+    guard from.mDataByteSize == to.mDataByteSize, let input = from.mData, let output = to.mData
+    else { throw CaptureError("无法获取系统音频，请检查系统权限后重试") }
+    memcpy(output, input, Int(to.mDataByteSize))
+  }
+  return copy
+}
+
+// Tap 在未授权时也可能交付静音；仅实际声音可以确认本次探测成功。
+func containsSystemSound(_ buffer: AVAudioPCMBuffer) -> Bool {
+  guard buffer.format.commonFormat == .pcmFormatFloat32 else { return false }
+  for channel in UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList) {
+    guard let data = channel.mData else { continue }
+    let samples = UnsafeBufferPointer(
+      start: data.assumingMemoryBound(to: Float.self),
+      count: Int(channel.mDataByteSize) / MemoryLayout<Float>.stride)
+    if samples.contains(where: { $0.isFinite && abs($0) > 0.000001 }) { return true }
+  }
+  return false
+}
+
+@available(macOS 14.4, *)
+private final class SystemAudioTap {
+  private var tap: AudioObjectID = 0
+  private var device: AudioObjectID = 0
+  private var io: AudioDeviceIOProcID?
+  private var formatListener: AudioObjectPropertyListenerBlock?
+  private var format: AVAudioFormat?
+  private let delivery: DispatchQueue
+
+  init(delivery: DispatchQueue) { self.delivery = delivery }
+
+  private func check(_ status: OSStatus) throws {
+    guard status == noErr else {
+      fputs("Core Audio tap error: \(status)\n", stderr)
+      throw CaptureError("无法获取系统音频，请检查系统权限后重试")
+    }
+  }
+
+  private func readFormat() throws -> AVAudioFormat {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioTapPropertyFormat, mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain)
+    var description = AudioStreamBasicDescription()
+    var size = UInt32(MemoryLayout.size(ofValue: description))
+    try check(AudioObjectGetPropertyData(tap, &address, 0, nil, &size, &description))
+    guard let format = AVAudioFormat(streamDescription: &description) else {
+      throw CaptureError("无法获取系统音频，请检查系统权限后重试")
+    }
+    return format
+  }
+
+  func start(
+    receive: @escaping (AVAudioPCMBuffer, Double) -> Void, fail: @escaping (Error) -> Void
+  ) throws {
+    do {
+      // 排除归属于本应用的音频进程，避免将其回放再次录入系统音轨。
+      var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyProcessObjectList, mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+      var size: UInt32 = 0
+      let system = AudioObjectID(kAudioObjectSystemObject)
+      try check(AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size))
+      var processes = [AudioObjectID](
+        repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+      if !processes.isEmpty {
+        try check(AudioObjectGetPropertyData(system, &address, 0, nil, &size, &processes))
+      }
+      let excluded = processes.filter { process in
+        var property = AudioObjectPropertyAddress(
+          mSelector: kAudioProcessPropertyBundleID, mScope: kAudioObjectPropertyScopeGlobal,
+          mElement: kAudioObjectPropertyElementMain)
+        var bundle: Unmanaged<CFString>?
+        var count = UInt32(MemoryLayout.size(ofValue: bundle))
+        guard AudioObjectGetPropertyData(process, &property, 0, nil, &count, &bundle) == noErr
+        else { return false }
+        return (bundle?.takeRetainedValue() as String?) == "com.brevia.app"
+      }
+      let description = CATapDescription(stereoGlobalTapButExcludeProcesses: excluded)
+      description.name = "Brevia System Audio"
+      description.isPrivate = true
+      description.muteBehavior = .unmuted
+      try check(AudioHardwareCreateProcessTap(description, &tap))
+      format = try readFormat()
+      // 不绑定物理输出设备，让全局混音 Tap 跟随系统输出，也不改用户的音频路由。
+      let aggregate: [String: Any] = [
+        kAudioAggregateDeviceNameKey: "Brevia System Audio",
+        kAudioAggregateDeviceUIDKey: UUID().uuidString,
+        kAudioAggregateDeviceIsPrivateKey: true,
+        kAudioAggregateDeviceIsStackedKey: false,
+        // true 会等到某个应用播放声音才启动，会议开始前的安静状态也必须能录音。
+        kAudioAggregateDeviceTapAutoStartKey: false,
+        kAudioAggregateDeviceSubDeviceListKey: [],
+        kAudioAggregateDeviceTapListKey: [
+          [
+            kAudioSubTapUIDKey: description.uuid.uuidString,
+            kAudioSubTapDriftCompensationKey: true,
+          ]
+        ],
+      ]
+      try check(AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &device))
+      let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        guard let self else { return }
+        do { self.format = try self.readFormat() } catch { fail(error) }
+      }
+      address.mSelector = kAudioTapPropertyFormat
+      try check(AudioObjectAddPropertyListenerBlock(tap, &address, delivery, listener))
+      formatListener = listener
+      try check(
+        AudioDeviceCreateIOProcIDWithBlock(&io, device, delivery) {
+          [weak self] _, input, time, _, _ in
+          guard let self, let format = self.format,
+            input.pointee.mNumberBuffers > 0, input.pointee.mBuffers.mDataByteSize > 0
+          else { return }
+          do {
+            let timestamp =
+              time.pointee.mFlags.contains(.hostTimeValid)
+              ? time.pointee.mHostTime : mach_absolute_time()
+            receive(
+              try copyAudioBuffer(input, format: format),
+              AVAudioTime.seconds(forHostTime: timestamp))
+          } catch { fail(error) }
+        })
+      try check(AudioDeviceStart(device, io))
+    } catch {
+      stop()
+      throw error
+    }
+  }
+
+  func stop() {
+    if device != 0, let io {
+      AudioDeviceStop(device, io)
+      AudioDeviceDestroyIOProcID(device, io)
+      self.io = nil
+    }
+    if tap != 0, let listener = formatListener {
+      var address = AudioObjectPropertyAddress(
+        mSelector: kAudioTapPropertyFormat, mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+      AudioObjectRemovePropertyListenerBlock(tap, &address, delivery, listener)
+      formatListener = nil
+    }
+    delivery.sync {}
+    if device != 0 {
+      AudioHardwareDestroyAggregateDevice(device)
+      device = 0
+    }
+    if tap != 0 {
+      AudioHardwareDestroyProcessTap(tap)
+      tap = 0
+    }
+  }
+
+  deinit { stop() }
+}
+
 // 保留连续重采样器和采样时钟；小帧合并到约 160 ms 再交付，暂停和结束立即冲刷。
 final class Track {
   let name: String
@@ -171,6 +346,8 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
   private let mic = Track("mic"), system = Track("system")
   private var engine: AVAudioEngine?
   private var stream: SCStream?
+  // AnyObject 使 macOS 14.0 仍能加载宿主；仅在 14.4+ 构造 Tap。
+  private var systemTap: AnyObject?
   private var configurationObserver: NSObjectProtocol?
   private let firstMicBuffer = DispatchSemaphore(value: 0)
   private var microphoneFlowing = false
@@ -278,22 +455,32 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
       ) { [weak self] _ in self?.fail(CaptureError("麦克风设备配置已更改，请重新开始录音")) }
     }
     if desktop {
-      let content = try await SCShareableContent.excludingDesktopWindows(
-        true, onScreenWindowsOnly: false)
-      guard let display = content.displays.first else { throw CaptureError("未检测到可用显示器") }
-      let filter = SCContentFilter(display: display, excludingWindows: [])
-      let config = SCStreamConfiguration()
-      config.width = 2
-      config.height = 2
-      config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-      config.capturesAudio = true
-      config.sampleRate = 48000
-      config.channelCount = 1
-      config.excludesCurrentProcessAudio = true
-      let stream = SCStream(filter: filter, configuration: config, delegate: self)
-      try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: delivery)
-      self.stream = stream
-      try await stream.startCapture()
+      if #available(macOS 14.4, *) {
+        let tap = SystemAudioTap(delivery: delivery)
+        systemTap = tap
+        try tap.start(
+          receive: { [weak self] buffer, timestamp in
+            guard let self else { return }
+            self.submit(self.system, timestamp: timestamp) { buffer }
+          }, fail: { [weak self] error in self?.fail(error) })
+      } else {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+          true, onScreenWindowsOnly: false)
+        guard let display = content.displays.first else { throw CaptureError("未检测到可用显示器") }
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let config = SCStreamConfiguration()
+        config.width = 2
+        config.height = 2
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        config.capturesAudio = true
+        config.sampleRate = 48000
+        config.channelCount = 1
+        config.excludesCurrentProcessAudio = true
+        let stream = SCStream(filter: filter, configuration: config, delegate: self)
+        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: delivery)
+        self.stream = stream
+        try await stream.startCapture()
+      }
     }
     queue.sync {
       if preview {
@@ -338,6 +525,10 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
         try await stream.stopCapture()
         delivery.sync {}
       }
+      if #available(macOS 14.4, *), let tap = systemTap as? SystemAudioTap {
+        tap.stop()
+        systemTap = nil
+      }
     }
     try queue.sync {
       switch command {
@@ -374,15 +565,50 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
           case .restricted: microphone = "restricted"
           default: microphone = "denied"
           }
+          let audioOnly: Bool
+          if #available(macOS 14.4, *) { audioOnly = true } else { audioOnly = false }
           emit([
             "microphone": microphone,
-            "screen": CGPreflightScreenCaptureAccess() ? "granted" : "denied",
+            // 沿用 screen 协议字段；公开 API 无法静默查询 Tap 授权，不能用录屏权限代替。
+            "screen": audioOnly
+              ? "unknown" : CGPreflightScreenCaptureAccess() ? "granted" : "denied",
+            "systemAudioCapture": audioOnly ? "core-audio-tap" : "screen-capture-kit",
             "systemAudioSupported": true,
           ])
           return
         }
         if args == ["request-screen"] {
-          emit(CGRequestScreenCaptureAccess())
+          if #available(macOS 14.4, *) {
+            let delivery = DispatchQueue(label: "brevia.audio.permission")
+            let tap = SystemAudioTap(delivery: delivery)
+            let finished = DispatchSemaphore(value: 0)
+            var audible = false
+            var failure: Error?
+            try tap.start(
+              receive: { buffer, _ in
+                if !audible && containsSystemSound(buffer) {
+                  audible = true
+                  finished.signal()
+                }
+              },
+              fail: { error in
+                failure = error
+                finished.signal()
+              })
+            await withCheckedContinuation { continuation in
+              DispatchQueue.global().async {
+                _ = finished.wait(timeout: .now() + 3)
+                continuation.resume()
+              }
+            }
+            tap.stop()
+            if let failure { throw failure }
+            if audible { emit(true) } else { emit(NSNull()) }
+          } else {
+            _ = CGRequestScreenCaptureAccess()
+            // 系统设置可能尚未打开，false 不等于用户已经拒绝。
+            emit(CGPreflightScreenCaptureAccess() ? true : NSNull())
+          }
           return
         }
         if args == ["request-microphone"] {

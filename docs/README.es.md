@@ -42,6 +42,8 @@ Esta página describe las novedades de main. Las descargas siguen siendo de v1.4
 2. Inicia una reunión con el micrófono, el audio del sistema o un teléfono conectado; también puedes importar un archivo.
 3. Toma notas, refina la transcripción y edita o exporta los resultados.
 
+En macOS 14.4 y posteriores, la grabación del audio del sistema solo necesita permiso de audio, sin acceso a la pantalla. macOS 14.0–14.3 sigue usando el permiso de pantalla y audio del sistema. Si denegaste el acceso, actívalo de nuevo en Ajustes del Sistema.
+
 Los motores de inferencia vienen incluidos. No necesitas instalar Python ni un entorno de inferencia adicional. En Windows, el instalador descarga WebView2 solo si falta. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
 
 ## Graba con el móvil

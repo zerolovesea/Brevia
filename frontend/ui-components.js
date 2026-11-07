@@ -158,6 +158,44 @@ function renderSettingsNavigation(kind) {
   const current = ['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind;
   return `<nav class="settings-navigation preferences-navigation" aria-label="${escapeHtml(t('设置'))}"><header class="preferences-navigation-heading"><button type="button" class="settings-workspace-back" data-view="home" aria-label="${escapeHtml(t('返回会议库'))}">${interfaceIcon('back')}</button><h2>${escapeHtml(t('设置'))}</h2></header><div class="preferences-navigation-search"><label class="settings-search">${interfaceIcon('search')}<input type="search" data-settings-search placeholder="${escapeHtml(t('搜索设置'))}" aria-label="${escapeHtml(t('搜索设置'))}" autocomplete="off" spellcheck="false" /></label></div><div class="settings-nav-sections">${groups.map(([heading, items]) => `<section class="settings-nav-group"><h3>${escapeHtml(t(heading))}</h3><div class="preferences-navigation-items">${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === current ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</div></section>`).join('')}<p class="settings-search-empty" role="status" hidden>${escapeHtml(t('未找到设置'))}</p></div></nav>`;
 }
+const settingsModalMarkup = () =>
+  `<section class="modal-panel ui-surface" role="dialog" aria-modal="true"><header class="modal-head ui-surface-heading"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="关闭">${interfaceIcon('close')}</button></header><div class="modal-body"></div></section>`;
+function renderAgentSetupGuide(agentSettings) {
+  return [
+    t(
+      '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
+    ),
+    '',
+    `${t('Skill 文件')}: ${agentSettings.skill_path}`,
+    `${t('CLI 路径')}: ${agentSettings.cli_path}`,
+    `BREVIA_DATA_DIR: ${agentSettings.mcp.env.BREVIA_DATA_DIR}`,
+    '',
+    'status --no-start',
+  ].join('\n');
+}
+function renderAgentSettingsPage(value, agentSettingsBusy = false, agentSettingsError = '') {
+  const needsEnable =
+    !value.enabled || ['read', 'infer', 'record'].some((key) => !value.permissions[key]);
+  const status = !value.enabled ? t('服务已停用') : value.status?.ready ? t('就绪') : t('准备中');
+  const examples = [
+    ['search', '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。'],
+    ['captions', '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。'],
+    ['microphone', '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。'],
+  ];
+  return `<div class="preferences-content agent-settings">
+    <section class="preferences-section agent-connection">
+      <header class="agent-access-heading"><span class="agent-access-icon">${interfaceIcon('laptop')}</span><h3>Skill + CLI</h3><span class="agent-status" data-state="${!value.enabled ? 'off' : value.status?.ready ? 'ready' : 'pending'}" data-agent-status role="status">${escapeHtml(status)}</span></header>
+      <p class="agent-intro">${t('适合 Codex、Claude Code 等能操作本机的 Agent。')}</p>
+      ${needsEnable ? `<div class="agent-enable"><p>${t('本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。')}</p><button type="button" class="secondary" data-agent-enable${agentSettingsBusy ? ' disabled' : ''}>${t('启用本机接入')}</button></div>` : ''}
+      <ol class="agent-steps">
+        <li><span class="agent-step-number" aria-hidden="true">1</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('连接你的 Agent')}</h3></div><p>${t('把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。')}</p><div class="agent-guide-block"><pre class="agent-guide">${escapeHtml(renderAgentSetupGuide(value))}</pre><button type="button" class="icon-button agent-guide-copy" data-agent-copy="guide" title="${t('复制引导语')}" aria-label="${t('复制引导语')}"><span data-copy-icon>${interfaceIcon('copy')}</span></button></div></div></li>
+        <li><span class="agent-step-number" aria-hidden="true">2</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('试着这样提问')}</h3></div><div class="agent-examples">${examples.map(([icon, prompt]) => `<button type="button" class="agent-example" data-agent-copy="prompt" data-agent-prompt="${escapeHtml(t(prompt))}" title="${t('复制到剪贴板')}">${interfaceIcon(icon)}<span>${escapeHtml(t(prompt))}</span><span data-copy-icon>${interfaceIcon('copy')}</span></button>`).join('')}</div></div></li>
+      </ol>
+    </section>
+    <section class="preferences-section agent-connection"><div class="agent-step-heading"><h3>MCP</h3><button type="button" class="secondary" data-agent-copy="mcp">${interfaceIcon('copy')}${t('复制 MCP 配置')}</button></div><p class="agent-intro">${t('用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。')}</p><details class="agent-cli"><summary>${interfaceIcon('chevron-right')}${t('CLI 路径')}</summary><div class="agent-cli-path"><code title="${escapeHtml(value.cli_path)}">${escapeHtml(value.cli_path)}</code><button type="button" class="secondary" data-agent-copy="cli" title="${t('复制路径')}">${interfaceIcon('copy')}<span>${t('复制路径')}</span></button></div></details></section>
+    <p class="settings-inline-error" data-agent-error role="status"${agentSettingsError || value.status?.error ? '' : ' hidden'}>${escapeHtml(agentSettingsError || value.status?.error || '')}</p>
+  </div>`;
+}
 function filterSettingsNavigation(input) {
   const navigation = input.closest('.settings-navigation');
   const query = input.value.trim().toLocaleLowerCase();
@@ -301,12 +339,54 @@ function formatSpeakerName(speaker) {
   }
   return name;
 }
-function renderSpeakerAvatar(speaker) {
+// 同场会议优先分配尚未使用的颜色；改名仍沿用身份 ID。
+let livePaletteMeetingId;
+const liveSpeakerPalette = new Map();
+function speakerColor(identity, palette) {
+  let hash = 0;
+  for (const letter of identity) hash = (hash * 31 + letter.codePointAt(0)) >>> 0;
+  let color = hash % 6;
+  if (!palette) return color;
+  if (palette.has(identity)) return palette.get(identity);
+  const used = new Set(palette.values());
+  if (used.size >= 6) color = used.size;
+  else while (used.has(color)) color = (color + 1) % 6;
+  palette.set(identity, color);
+  return color;
+}
+function renderSpeakerAvatar(speaker, palette) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name || '';
   const identity = typeof speaker === 'object' ? speaker?.id || name : name;
-  let color = 0;
-  for (const letter of identity) color = (color * 31 + letter.codePointAt(0)) >>> 0;
-  return `<span class="speaker-avatar" data-speaker-color="${color % 6}" aria-hidden="true">${interfaceIcon('person')}</span>`;
+  const color = identity ? speakerColor(identity, palette) : 'unknown';
+  const hue = color >= 6 ? ` style="--speaker-hue:${Math.round(color * 137.508) % 360}"` : '';
+  return `<span class="speaker-avatar" data-speaker-color="${color}"${hue} aria-hidden="true">${interfaceIcon('person')}</span>`;
+}
+function renderLibraryMetricsItems(libraryMetrics, tag) {
+  const compactNumber = new Intl.NumberFormat(tag, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+  const minutes = Math.round(libraryMetrics.meeting_duration_ms / 60000);
+  const duration = new Intl.NumberFormat(tag, {
+    style: 'unit',
+    unit: 'minute',
+    unitDisplay: 'narrow',
+  });
+  const items = [
+    ['folder', '会议总数', libraryMetrics.meeting_count],
+    ['clock', '录音总时长', minutes],
+    ['waveform', '转写字数', libraryMetrics.subtitle_characters],
+    ['notes', '纪要字数', libraryMetrics.summary_characters],
+  ];
+  return items
+    .map(([icon, label, count]) => {
+      const description = escapeHtml(
+        t(label) + ' · ' + (icon === 'clock' ? duration.format(count) : count.toLocaleString(tag)),
+      );
+      const display = icon === 'clock' ? duration.format(count) : compactNumber.format(count);
+      return `<span role="img" aria-label="${description}" title="${description}">${interfaceIcon(icon)}${escapeHtml(display)}</span>`;
+    })
+    .join('');
 }
 /** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
 function rectanglesIntersect(first, second) {
@@ -354,6 +434,8 @@ function renderTranscriptSegment({
   text,
   translation,
   showSpeaker = true,
+  live = false,
+  palette = live ? liveSpeakerPalette : undefined,
   segmentId,
   textEditable = false,
   textModified = false,
@@ -405,9 +487,11 @@ function renderTranscriptSegment({
   // 右键菜单按段落 id 定位：详情页（原始/精修稿）只带顶层 segmentId，实时条目只带 speaker.segmentId。
   const contextSegmentId = segmentId || speaker.segmentId;
   const segmentToolActions = [
-    ...(segmentId && timing && endSeconds > startSeconds ? [['play', 'play', '播放此段']] : []),
-    ...(segmentId && translationAvailable ? [['translate', 'translate', '翻译']] : []),
-    ...(!showSpeaker ? [['edit', 'edit', '编辑']] : []),
+    ...(!live && segmentId && timing && endSeconds > startSeconds
+      ? [['play', 'play', '播放此段']]
+      : []),
+    ...(!live && segmentId && translationAvailable ? [['translate', 'translate', '翻译']] : []),
+    ...(live || !showSpeaker ? [['edit', 'edit', '编辑']] : []),
     ['speaker', 'person', '标记说话人'],
     ['note', 'notes', '加入笔记'],
     ['highlight', 'bookmark', '重点'],
@@ -424,7 +508,11 @@ function renderTranscriptSegment({
             '',
           )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
       : '';
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `${renderSpeakerAvatar(speaker)}` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
+  const liveName = live ? escapeHtml(showSpeaker && speaker.name ? speaker.name : t('说话人')) : '';
+  const identity = live
+    ? `${renderSpeakerAvatar(showSpeaker ? speaker : '', palette)}${contextSegmentId ? `<button type="button" class="segment-speaker" data-live-speaker title="${escapeHtml(t('标记说话人'))}">${liveName}</button>` : `<span class="segment-speaker">${liveName}</span>`}`
+    : `${showSpeaker && speaker.name ? renderSpeakerAvatar(speaker, palette) : ''}${label}`;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${identity}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
@@ -1692,17 +1780,18 @@ function renderMeetingSummary({
   generating = false,
   editing = false,
   participants = [],
+  palette,
 }) {
   const people = participants.length
     ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
         .slice(0, 3)
         .map(
           (person) =>
-            `<span class="summary-participant-preview-person">${renderSpeakerAvatar(person)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
+            `<span class="summary-participant-preview-person">${renderSpeakerAvatar(person, palette)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
         )
         .join(
           '',
-        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span>${renderSpeakerAvatar(person)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
+        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="summary-participant-list">${participants.map((person) => `<span>${renderSpeakerAvatar(person, palette)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div></div></section>`
     : '';
   return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? `<div class="summary-empty" role="status"><span class="summary-empty-mark"><span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span></span><h2>${escapeHtml(t('正在生成会议纪要'))}</h2></div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
@@ -1712,7 +1801,9 @@ function renderStaticViews() {
     .map(renderNavigationMeeting)
     .join('');
   document.querySelector('#transcript-scroll').innerHTML = uiData.live.transcript
-    .map((entry) => renderTranscriptSegment({ ...entry, showSpeaker: false }))
+    .map((entry) =>
+      renderTranscriptSegment({ ...entry, live: true, showSpeaker: Boolean(entry.speaker?.name) }),
+    )
     .join('');
   renderSettingsView();
 }
@@ -1857,6 +1948,10 @@ function renderMeetingDetail() {
     d.acceptedClaims || [],
     hasRefined && d.transcriptVersion === 'original' ? d.originalTranscript : null,
   );
+  const palette =
+    currentMeetingDetail?.id === livePaletteMeetingId ? liveSpeakerPalette : new Map();
+  for (const person of currentMeetingDetail?.speakers || [])
+    speakerColor(person.id || person.name, palette);
   let transcriptBody;
   if (fulltextMode) {
     transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${d.refinedTranscript.map((entry) => `<div data-segment-id="${escapeHtml(entry.segmentId)}">${escapeHtml(entry.speaker.name)}：${escapeHtml(entry.text)}${evidenceLinks.get(entry.segmentId) || ''}</div>`).join('')}</div></div>`;
@@ -1874,6 +1969,7 @@ function renderMeetingDetail() {
     )
       .map((entry) => ({
         ...entry,
+        palette,
         text: draft[entry.segmentId] ?? entry.text,
         backlinks: d.transcriptEditing ? '' : evidenceLinks.get(entry.segmentId) || '',
         textEditable: Boolean(d.transcriptEditing),
@@ -1952,6 +2048,7 @@ function renderMeetingDetail() {
     editing: d.summaryEditing,
     saveState: d.summarySaveState,
     participants: currentMeetingDetail?.speakers || [],
+    palette,
   });
   syncDetailSummaryPanel();
   const summaryBody = reading.querySelector('.summary-body');

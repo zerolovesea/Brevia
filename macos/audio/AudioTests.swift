@@ -12,9 +12,35 @@
       for channel in 0..<2 {
         for frame in 0..<2400 { buffer.floatChannelData![channel][frame] = 0.25 }
       }
+      precondition(containsSystemSound(buffer))
+      let quiet = AVAudioPCMBuffer(pcmFormat: input, frameCapacity: 32)!
+      quiet.frameLength = 32
+      for channel in 0..<2 {
+        for frame in 0..<32 { quiet.floatChannelData![channel][frame] = 0 }
+      }
+      precondition(!containsSystemSound(quiet))
+      let copy = try copyAudioBuffer(buffer.audioBufferList, format: input)
+      buffer.floatChannelData![0][0] = 0.5
+      precondition(copy.frameLength == 2400 && copy.floatChannelData![0][0] == 0.25)
+      precondition(copy.floatChannelData![1][2399] == 0.25)
+      // 交错声道同样复制全部数据；损坏或不完整的帧拒绝进入重采样队列。
+      let interleaved = AVAudioFormat(
+        commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 2, interleaved: true)!
+      let packed = AVAudioPCMBuffer(pcmFormat: interleaved, frameCapacity: 100)!
+      packed.frameLength = 100
+      for index in 0..<200 { packed.floatChannelData![0][index] = Float(index) / 200 }
+      let packedCopy = try copyAudioBuffer(packed.audioBufferList, format: interleaved)
+      packed.floatChannelData![0][199] = 0
+      precondition(packedCopy.floatChannelData![0][199] == 199.0 / 200)
+      var malformed = packed.audioBufferList.pointee
+      malformed.mBuffers.mDataByteSize -= 1
+      do {
+        _ = try copyAudioBuffer(&malformed, format: interleaved)
+        preconditionFailure("不完整的音频帧必须被拒绝")
+      } catch {}
       let track = Track("system")
       track.minimumFrame = 640
-      try track.append(buffer, position: 320)
+      try track.append(copy, position: 320)
       precondition(track.startFrame == 640)
       precondition(track.nextFrame == 1120)
       precondition(track.samples.count == 480 * 2)

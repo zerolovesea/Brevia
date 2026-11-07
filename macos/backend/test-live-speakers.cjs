@@ -45,8 +45,8 @@ async function setup(t, durationMs = 4000) {
   const pcm = Buffer.alloc(durationMs * 32);
   for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(4000, i);
   worker.store.appendAudio('live', 'mic', pcm, 16000, 0);
-  const publish = (id = 'first', voiceSpans = [{ start: 0, end: durationMs }]) =>
-    worker.session.subtitles.publish(
+  const publish = (id = 'first', voiceSpans = [{ start: 0, end: durationMs }]) => {
+    worker.session.subtitles.push(
       {
         meeting_id: 'live',
         segment_id: id,
@@ -55,10 +55,12 @@ async function setup(t, durationMs = 4000) {
         start_ms: 0,
         end_ms: durationMs,
         speaker: 'local-user',
-        text: 'The transcript arrives first.',
       },
+      'The transcript arrives first.',
       voiceSpans,
     );
+    worker.session.subtitles.flush();
+  };
   t.after(async () => {
     await worker.close();
     fs.rmSync(root, { recursive: true, force: true });

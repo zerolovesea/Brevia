@@ -22,3 +22,5 @@ package-lock.json
 
 # 引导动效复用的第三方发行文件保留原始字节。
 frontend/assets/vendor/
+
+website/mobile-preview/

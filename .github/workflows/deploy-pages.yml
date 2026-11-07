@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - 'website/**'
+      - 'mobile/lib/**'
+      - 'mobile/web/**'
+      - 'mobile/assets/**'
+      - 'mobile/pubspec.*'
       - 'frontend/**'
       - 'docs/assets/**'
       - '.github/workflows/deploy-pages.yml'
@@ -27,6 +31,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Build mobile product demo
+        working-directory: mobile
+        run: flutter build web --target=web/preview.dart --output=../website/mobile-preview --no-web-resources-cdn --no-tree-shake-icons
       - uses: actions/configure-pages@v5
       - name: Assemble static site
         run: |

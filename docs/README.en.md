@@ -42,6 +42,8 @@ This page describes the new features on main. Downloads still provide v1.4.5; na
 2. Start a meeting with your microphone, system audio or connected phone. You can also import a file.
 3. Take notes during the meeting, refine the transcript afterward, and edit or export the results.
 
+On macOS 14.4 and later, system audio recording needs only audio permission, without screen recording access. macOS 14.0–14.3 still uses screen and system audio permission. If access was denied, enable it again in System Settings.
+
 Inference engines come with the app. No Python installation or separate inference runtime is needed. On Windows, the installer downloads WebView2 only if it is missing. Download the model weights you want once, then use local models offline. Available models include FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen and Hy-MT; availability depends on your platform.
 
 ## Record on your phone

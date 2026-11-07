@@ -207,6 +207,12 @@ test('AI 建议解析兼容噪声、转义括号、旧格式且一次仅返回�
     [{ type: 'action', text: '提交预算[含税]"复核"' }],
   );
   assert.deepEqual(parseSuggestions('invalid [{oops} then {"type":"none"}'), []);
+  assert.deepEqual(
+    parseSuggestions(
+      JSON.stringify({ type: 'topic', text: '普工培训创业项目\n## 普工培训创业项目' }),
+    ),
+    [],
+  );
   assert.equal(similarity('abxcd', 'abcd'), 8 / 9);
 });
 

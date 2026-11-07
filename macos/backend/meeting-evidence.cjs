@@ -205,6 +205,10 @@ function parseClaims(markdown, segments, seekable = true) {
           .at(-1)
           .replace(/^[ ：:，,。.]+|[ ：:，,。.]+$/g, '') || section;
     }
+    if (kind === 'cause' && /^cause\s*[:：]\s*\S/i.test(text)) {
+      text = text.replace(/^cause\s*[:：]\s*/i, '');
+      cleaned = prefix + text;
+    }
     const line = cleaned + suffix;
     claims.push({ ...claimRecord(text, kind, sources, problem), line, prefix, suffix });
     output.push(line);

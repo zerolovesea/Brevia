@@ -38,12 +38,11 @@
   gap: calc(var(--spacing) * 3);
 }
 
-/* 标题区压扁：隐藏眉题与元信息，标题字号收窄，操作按钮垂直居中 */
+/* 标题区压扁：隐藏眉题，保留会议元信息，标题字号收窄，操作按钮垂直居中 */
 #detail-view.is-header-collapsed .detail-head {
   padding-block: 0;
 }
-#detail-view.is-header-collapsed .detail-head .eyebrow,
-#detail-view.is-header-collapsed .detail-head .detail-meta {
+#detail-view.is-header-collapsed .detail-head .eyebrow {
   max-height: 0;
   margin: 0;
   opacity: 0;

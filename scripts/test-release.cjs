@@ -14,6 +14,7 @@ test('release links migrate Electron filenames and keep formatting through later
   try {
     fs.mkdirSync(path.join(scratch, 'docs'));
     fs.mkdirSync(path.join(scratch, 'website'));
+    fs.mkdirSync(path.join(scratch, 'dist'));
     const readmes = [
       'README.md',
       ...fs
@@ -24,6 +25,14 @@ test('release links migrate Electron filenames and keep formatting through later
     for (const file of [...readmes, 'website/index-zh.html', 'website/index-en.html'])
       fs.copyFileSync(path.join(root, file), path.join(scratch, file));
     for (const version of ['9.8.7', '9.8.8']) {
+      fs.writeFileSync(
+        path.join(scratch, 'dist', `Brevia-WebKit-${version}-arm64.dmg`),
+        Buffer.alloc(100000),
+      );
+      fs.writeFileSync(
+        path.join(scratch, 'dist', `Brevia-${version}-x64-setup.exe`),
+        Buffer.alloc(200000),
+      );
       const result = spawnSync(
         process.execPath,
         [path.join(root, 'scripts/update-release-links.mjs')],
@@ -42,6 +51,10 @@ test('release links migrate Electron filenames and keep formatting through later
         assert.ok(!content.includes('native-release-pending'), file);
         if (file.endsWith('.md'))
           assert.ok(await prettier.check(content, { ...formatOptions, filepath: file }), file);
+        else {
+          assert.ok(content.includes('data-size="macos">0.1 MB'), file);
+          assert.ok(content.includes('data-size="windows">0.2 MB'), file);
+        }
       }
     }
   } finally {

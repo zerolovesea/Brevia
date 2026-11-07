@@ -1,4 +1,7 @@
 /** 引文展示始终使用生成时的快照；只有后端确认了当前段落，才展示反向链接。 */
+function evidenceDisplayText(claim) {
+  return claim.kind === 'cause' ? claim.text.replace(/^\s*cause\s*[:：]\s*/i, '') : claim.text;
+}
 function transcriptEvidenceLinks(claims, accepted, historicalRows) {
   const history = historicalRows && new Map(historicalRows.map((row) => [row.segmentId, row]));
   const links = new Map();
@@ -24,7 +27,7 @@ function transcriptEvidenceLinks(claims, accepted, historicalRows) {
           segments.add(src.segment_id);
       }
       for (const id of segments) {
-        const link = `<button type="button" class="evidence-backlink" data-evidence-back="${escapeHtml(claim.id)}" data-evidence-document="${group}" title="${escapeHtml(claim.text)}">${interfaceIcon('notebook')}<span>${escapeHtml(claim.text)}</span>${interfaceIcon('chevron-right')}</button>`;
+        const link = `<button type="button" class="evidence-backlink" data-evidence-back="${escapeHtml(claim.id)}" data-evidence-document="${group}" title="${escapeHtml(evidenceDisplayText(claim))}">${interfaceIcon('notebook')}<span>${escapeHtml(evidenceDisplayText(claim))}</span>${interfaceIcon('chevron-right')}</button>`;
         links.set(id, (links.get(id) || '') + link);
       }
     }
@@ -65,7 +68,7 @@ function renderEvidenceClaim(claim, accepted, branch = null, inline = false) {
     ? ` name="cause-${escapeHtml(branch.group)}" data-ink="${branch.index % 4}"`
     : '';
   const stem = branch || inline ? '' : '<span class="claim-stem" aria-hidden="true"></span>';
-  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}" data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(claim.text)}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
+  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}" data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(evidenceDisplayText(claim))}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
 }
 
 // 使用实际排版后的端点。长段落换行、展开引文和窗口缩放都可能改变相邻分支的位置。
@@ -225,10 +228,19 @@ function renderEvidenceNotebook(claims, markdown) {
   for (const { lines } of summaryDocumentSections(markdown))
     for (const line of lines) occurrences.set(line, (occurrences.get(line) || 0) + 1);
   const references = new Map();
+  const displayLines = new Map();
   const history = [];
   for (const claim of claims) {
     if (claim.detached) history.push(claim);
-    else if (claim.kind !== 'cause') {
+    else if (claim.kind === 'cause') {
+      const text = evidenceDisplayText(claim);
+      if (
+        text !== claim.text &&
+        occurrences.get(claim.line) === 1 &&
+        claim.line === claim.prefix + claim.text + claim.suffix
+      )
+        displayLines.set(claim.line, claim.prefix + text + claim.suffix);
+    } else {
       if (claim.line && occurrences.get(claim.line) === 1)
         references.set(
           claim.line,
@@ -241,7 +253,13 @@ function renderEvidenceNotebook(claims, markdown) {
     items.length
       ? `<details class="evidence-document"><summary>${interfaceIcon('notebook')}${escapeHtml(t(label))}${interfaceIcon('chevron-down')}</summary>${renderClaimGroups(items)}</details>`
       : '';
-  return `<div class="evidence-notebook"><div class="summary-document">${renderSummaryDocument(markdown, references)}</div>${disclosure(history, '生成时的结论')}</div>`;
+  return `<div class="evidence-notebook"><div class="summary-document">${renderSummaryDocument(
+    markdown
+      .split(/\r?\n/)
+      .map((line) => displayLines.get(line) ?? line)
+      .join('\n'),
+    references,
+  )}</div>${disclosure(history, '生成时的结论')}</div>`;
 }
 function seekEvidence(source, play = false) {
   if (!source || source.seekable === false || !Number.isFinite(source.start_ms) || !playerAudio.src)
@@ -427,7 +445,7 @@ function openLiveNoteEvidence(claims, title) {
         return `<blockquote><div>${stamp}<span>${escapeHtml(formatSpeakerName(source.speaker))}</span>${locate}</div><p>${escapeHtml(source.text)}</p></blockquote>`;
       })
       .join('');
-    return `<section><h3>${escapeHtml(claim.text)}</h3>${claim.detached ? `<small>${escapeHtml(t('与当前笔记待核对'))}</small>` : ''}<div class="evidence-quotes">${quotes || escapeHtml(t('缺少原文依据'))}</div></section>`;
+    return `<section><h3>${escapeHtml(evidenceDisplayText(claim))}</h3>${claim.detached ? `<small>${escapeHtml(t('与当前笔记待核对'))}</small>` : ''}<div class="evidence-quotes">${quotes || escapeHtml(t('缺少原文依据'))}</div></section>`;
   });
   dialog.innerHTML = `<header><h2>${escapeHtml(title)}</h2><form method="dialog"><button class="icon-button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></form></header>${sections.join('')}`;
   dialog.addEventListener('click', (event) => {

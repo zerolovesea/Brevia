@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 
 const tag = process.env.VERSION;
 if (!/^v\d+(?:\.\d+)+$/.test(tag || ''))
@@ -18,6 +18,16 @@ for (const [file, baseUrl] of updates) {
     .replace(/href="[^"]*Brevia-[^"]*-arm64\.dmg"/, `href="${macUrl}"`)
     .replace(/href="[^"]*Brevia-[^"]*-x64-setup\.exe"/, `href="${windowsUrl}"`)
     .replace(/(<[^>]*data-release-version[^>]*>)[^<]*(<\/)/g, `$1${tag}$2`);
+  for (const [platform, url] of [
+    ['macos', macUrl],
+    ['windows', windowsUrl],
+  ]) {
+    const bytes = statSync(`dist/${url.split('/').pop()}`).size;
+    html = html.replace(
+      new RegExp(`(data-size="${platform}">)[^<]*`),
+      `$1${(bytes / 1e6).toFixed(1)} MB`,
+    );
+  }
   if (!html.includes(macUrl) || !html.includes(windowsUrl) || !html.includes(`>${tag}<`)) {
     throw new Error(`Could not update all release links in ${file}`);
   }

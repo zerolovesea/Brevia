@@ -420,14 +420,10 @@
                   <div class="compose-processing-fields" data-prepare-processing></div>
                 </section>
               </aside>
-              <details class="prepare-options compose-advanced">
-                <summary
-                  ><span data-interface-icon="settings" aria-hidden="true"></span
-                  ><span>更多设置</span
-                  ><span data-interface-icon="chevron-down" aria-hidden="true"></span
-                ></summary>
+              <section class="prepare-options compose-advanced">
+                <header class="compose-section-header"><h2>处理选项</h2></header>
                 <div class="compose-extra-fields" data-prepare-extra-settings></div>
-              </details>
+              </section>
             </div>
             <footer class="compose-footer">
               <p class="prepare-error compose-error" data-prepare-error role="alert" hidden></p>
@@ -516,10 +512,17 @@
               ><header class="live-section-head"
                 ><p class="eyebrow"><span data-interface-icon="waveform"></span>实时转写</p></header
               ><div class="transcript-scroll" id="transcript-scroll"></div
-              ><button class="back-to-latest" id="back-to-latest" type="button" hidden
-                ><span>↓</span> <span>回到最新</span></button
-              ></section
-            ></div
+              ><button
+                class="back-to-latest"
+                id="back-to-latest"
+                type="button"
+                aria-label="回到最新"
+                title="回到最新"
+                hidden
+                ><span
+                  data-interface-icon="arrow-down"
+                  aria-hidden="true"
+                ></span></button></section></div
           ><div class="floating-control-bar live-control-bar"
             ><div class="control-secondary live-caption-controls"
               ><button

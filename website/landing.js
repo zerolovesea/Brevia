@@ -1,253 +1,182 @@
 (() => {
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const compact = matchMedia('(max-width: 639px)');
-  const header = document.querySelector('.site-header');
-  const motions = new Map();
   const zh = document.documentElement.lang.startsWith('zh');
-  let scheduled = false;
+  const pick = (cn, en) => (zh ? cn : en);
+  const demo = document.querySelector('.demo');
+  const canvas = document.querySelector('.demo-canvas');
+  const toggle = demo;
+  const description = demo.getAttribute('aria-label');
+  const frame = document.createElement('iframe');
+  frame.className = 'app-frame';
+  frame.title = pick('Brevia 应用演示', 'Brevia application demo');
+  frame.tabIndex = -1;
+  frame.setAttribute('aria-hidden', 'true');
+  const url = new URL('./app-motion.html', location.href);
+  url.searchParams.set('lang', zh ? 'zh' : 'en');
+  url.searchParams.set('version', document.querySelector('[data-release-version]').textContent);
+  frame.src = url.href;
+  canvas.append(frame);
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
+  demo.addEventListener('pointermove', (event) => {
+    if (reduced.matches || !finePointer.matches) return;
+    const rect = demo.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    demo.style.setProperty('--rim', String(0.035 + 0.05 * (1 - y)));
+    demo.style.setProperty('--drift-x', `${(x - 0.5) * 6}px`);
+    demo.style.setProperty('--drift-y', `${(y - 0.5) * 6}px`);
+  });
+  demo.addEventListener('pointerleave', () => {
+    for (const name of ['rim', 'drift-x', 'drift-y']) demo.style.removeProperty(`--${name}`);
+  });
+  let paused = reduced.matches;
+  let elapsed = reduced.matches ? 28000 : 0;
+  let previous = null;
+  let animation;
+  let ready = false;
 
-  function syncMotions() {
-    motions.forEach((state, element) => {
-      const running = state.inView && !document.hidden;
-      if (!state.ready) return;
-      const command = JSON.stringify({
-        type: 'brevia-motion-state',
-        running,
-        reduced: reducedMotion.matches,
-      });
-      if (command === state.command) return;
-      state.command = command;
-      state.frame.contentWindow.postMessage(JSON.parse(command), location.origin);
-    });
+  const features = [
+    ['live', pick('转写与 AI 笔记', 'Transcription & AI notes'), 0, 14800, 11200],
+    ['fishbone', pick('鱼骨图', 'Fishbone diagram'), 22200, 32000, 28000],
+    ['phone', pick('手机协作', 'Phone pairing'), 32000, 40000, 32500],
+    ['agent', pick('Agent 与 MCP', 'Agent & MCP'), 40000, 56000, 54500],
+    ['capsule', pick('会议胶囊', 'Meeting capsule'), 14800, 20000, 17500],
+  ];
+  let clip = features[0];
+  const tabs = document.createElement('fieldset');
+  tabs.className = 'feature-tabs';
+  const legend = document.createElement('legend');
+  legend.className = 'sr-only';
+  legend.textContent = pick('选择演示功能', 'Choose a feature');
+  tabs.append(legend);
+  function select(feature) {
+    clip = feature;
+    elapsed = paused ? clip[4] : clip[2];
+    previous = null;
+    render();
+    if (paused && ready) sync(true);
   }
-
-  function configureMotion(element, state) {
-    const phone = element.dataset.motionScene.startsWith('phone-');
-    const pairing = element.dataset.motionScene.startsWith('pair-');
-    const width = pairing
-      ? compact.matches
-        ? 420
-        : 1000
-      : phone
-        ? 390
-        : element.dataset.motionScene === 'live'
-          ? 1152
-          : 1280;
-    const height = pairing ? (compact.matches ? 780 : 600) : phone ? 844 : 800;
-    state.frame.style.width = `${width}px`;
-    state.frame.style.height = `${height}px`;
-    const scale = Math.min(element.clientWidth / width, element.clientHeight / height);
-    state.frame.style.transform = `scale(${scale})`;
-    const mode = `${pairing && compact.matches}`;
-    if (state.mode === mode) return;
-    state.mode = mode;
-    state.ready = false;
-    state.command = '';
-    element.classList.remove('is-ready');
-    const source = new URL('./product-motion.html?v=20261018-strict-final', location.href);
-    source.searchParams.set('scene', element.dataset.motionScene);
-    source.searchParams.set('shot', element.dataset.motionShot || 'overview');
-    source.searchParams.set('lang', zh ? 'zh' : 'en');
-    source.searchParams.set(
-      'version',
-      document.querySelector('[data-release-version]').textContent,
-    );
-    state.frame.src = source.href;
+  for (const feature of features) {
+    const [id, label] = feature;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.className = 'sr-only';
+    input.name = 'feature';
+    input.id = `feature-${id}`;
+    input.checked = id === 'live';
+    const caption = document.createElement('label');
+    caption.htmlFor = input.id;
+    caption.textContent = label;
+    input.addEventListener('change', () => select(feature));
+    tabs.append(input, caption);
   }
-
-  function mountMotion(element) {
-    if (motions.has(element)) return;
-    const frame = document.createElement('iframe');
-    frame.title = element.getAttribute('aria-label');
-    frame.tabIndex = -1;
-    frame.setAttribute('aria-hidden', 'true');
-    const state = { frame, ready: false, inView: false };
-    motions.set(element, state);
-    element.append(frame);
-    new ResizeObserver(() => configureMotion(element, state)).observe(element);
-    configureMotion(element, state);
+  document.querySelector('.intro').append(tabs);
+  select(features[0]);
+  document.querySelector('[data-language]').search = location.search;
+  function fit() {
+    const compact = matchMedia('(max-width: 640px)').matches;
+    const width = compact ? 600 : 1200;
+    const height = compact ? 760 : 800;
+    frame.style.width = `${width}px`;
+    frame.style.height = `${height}px`;
+    const scale = Math.min(canvas.clientWidth / width, canvas.clientHeight / height, 0.78);
+    frame.style.left = '50%';
+    frame.style.transform = `translate(-50%,-50%) scale(${scale})`;
   }
-
-  const motionObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) mountMotion(entry.target);
-        const state = motions.get(entry.target);
-        if (state) state.inView = entry.isIntersecting;
-      });
-      syncMotions();
-    },
-    { threshold: 0.05 },
-  );
-  document
-    .querySelectorAll('[data-motion-scene]')
-    .forEach((element) => motionObserver.observe(element));
-
-  addEventListener('message', (event) => {
-    if (event.origin !== location.origin || event.data?.type !== 'brevia-motion-ready') return;
-    motions.forEach((state, element) => {
-      if (event.source !== state.frame.contentWindow) return;
-      state.ready = true;
-      state.command = '';
-      configureMotion(element, state);
-      const initial = Number(element.dataset.start || 1800);
-      state.frame.contentWindow.postMessage(
+  new ResizeObserver(fit).observe(canvas);
+  function render() {
+    if (!ready) return;
+    const phase = String(frame.contentWindow.appMotion.render(elapsed));
+    if (demo.dataset.phase !== phase) demo.dataset.phase = phase;
+  }
+  function tick(now) {
+    if (previous !== null) elapsed += now - previous;
+    previous = now;
+    if (elapsed >= clip[3]) elapsed = clip[2] + ((elapsed - clip[2]) % (clip[3] - clip[2]));
+    render();
+    animation = requestAnimationFrame(tick);
+  }
+  function sync(settle = false) {
+    cancelAnimationFrame(animation);
+    previous = null;
+    const label = paused ? pick('播放动画', 'Play animation') : pick('暂停动画', 'Pause animation');
+    toggle.setAttribute('aria-label', `${description} · ${label}`);
+    toggle.title = label;
+    demo.classList.toggle('is-paused', paused || document.hidden);
+    if (ready)
+      frame.contentWindow.postMessage(
         {
-          type: 'brevia-motion-state',
-          running: false,
-          reduced: reducedMotion.matches,
-          seek: initial,
+          type: 'brevia-landing-frame',
+          paused: paused || document.hidden,
+          settle: settle === true,
         },
         location.origin,
       );
-      element.classList.add('is-ready');
-    });
-    syncMotions();
-  });
-
-  function updateScroll() {
-    scheduled = false;
-    header.classList.toggle('is-scrolled', scrollY > 8);
-    const sections = [...document.querySelectorAll('[data-nav-section]')];
-    let active = '';
-    sections.forEach((section) => {
-      if (section.getBoundingClientRect().top <= header.offsetHeight + innerHeight * 0.35)
-        active = section.id;
-    });
-    if (active === 'library') active = 'features';
-    document.querySelectorAll('[data-section-link]').forEach((link) => {
-      if (link.hash === `#${active}`) link.setAttribute('aria-current', 'location');
-      else link.removeAttribute('aria-current');
-    });
+    if (ready && !paused && !document.hidden) animation = requestAnimationFrame(tick);
   }
-  function requestScroll() {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(updateScroll);
-  }
-  addEventListener('scroll', requestScroll, { passive: true });
-  addEventListener('resize', requestScroll);
-  reducedMotion.addEventListener('change', () => {
-    requestScroll();
-    syncMotions();
-  });
-  compact.addEventListener('change', () => {
-    motions.forEach((state, element) => configureMotion(element, state));
-    requestScroll();
-  });
-  document.addEventListener('visibilitychange', syncMotions);
-  updateScroll();
-
-  const software = document.querySelector('.software-section');
-  software.querySelectorAll('.software-group').forEach((group) => {
-    const duplicate = group.cloneNode(true);
-    duplicate.setAttribute('aria-hidden', 'true');
-    duplicate.inert = true;
-    group.after(duplicate);
-  });
-  let softwareVisible = false;
-  function syncSoftware() {
-    software.classList.toggle(
-      'is-scrolling',
-      softwareVisible && !document.hidden && !reducedMotion.matches,
-    );
-  }
-  new IntersectionObserver(
-    ([entry]) => {
-      softwareVisible = entry.isIntersecting;
-      syncSoftware();
-    },
-    { threshold: 0.05 },
-  ).observe(software);
-  document.addEventListener('visibilitychange', syncSoftware);
-  reducedMotion.addEventListener('change', syncSoftware);
-  document.documentElement.classList.add('has-motion');
-
-  const disclosures = [...document.querySelectorAll('.disclosure')];
-  const menuAnimations = new Map();
-  function setDisclosure(details, open) {
-    const panel = details.querySelector('.disclosure-panel');
-    const wasOpen = details.open;
-    const { opacity, transform } = getComputedStyle(panel);
-    menuAnimations.get(details)?.cancel();
-    menuAnimations.delete(details);
-    delete details.dataset.closing;
-    panel.inert = !open;
-    if (open) {
-      disclosures.forEach((other) => {
-        if (other !== details && other.open) setDisclosure(other, false);
-      });
-      details.open = true;
-    } else if (!details.open) return;
-    if (reducedMotion.matches || document.hidden) {
-      details.open = open;
-      return;
+  addEventListener('message', (event) => {
+    if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+    if (event.data?.type === 'brevia-landing-ready') {
+      ready = true;
+      render();
+      sync(paused);
     }
-    if (!open) details.dataset.closing = 'true';
-    const animation = panel.animate(
-      open
-        ? [
-            { opacity: wasOpen ? opacity : 0, transform: wasOpen ? transform : 'translateY(-4px)' },
-            { opacity: 1, transform: 'translateY(0)' },
-          ]
-        : [
-            { opacity, transform },
-            { opacity: 0, transform },
-          ],
-      {
-        duration: open ? 160 : 100,
-        easing: open ? 'cubic-bezier(0.16, 1, 0.3, 1)' : 'cubic-bezier(0.4, 0, 1, 1)',
-      },
-    );
-    menuAnimations.set(details, animation);
-    animation.finished.then(
-      () => {
-        if (menuAnimations.get(details) !== animation) return;
-        details.open = open;
-        delete details.dataset.closing;
-        menuAnimations.delete(details);
-      },
-      () => {},
-    );
-  }
-  function settleMenus() {
-    if (!document.hidden && !reducedMotion.matches) return;
-    menuAnimations.forEach((animation) => animation.finish());
-  }
-  document.addEventListener('visibilitychange', settleMenus);
-  reducedMotion.addEventListener('change', settleMenus);
-  disclosures.forEach((details) => {
-    details.querySelector('summary').addEventListener('click', (event) => {
+    if (event.data?.type === 'brevia-landing-error') {
+      const message = document.createElement('p');
+      message.className = 'demo-fallback';
+      message.textContent = pick('演示暂时无法加载', 'The demo could not load');
+      canvas.replaceChildren(message);
+    }
+  });
+  toggle.addEventListener('click', () => {
+    paused = !paused;
+    sync();
+  });
+  toggle.addEventListener('keydown', (event) => {
+    if (event.key === ' ' || event.key === 'Enter') {
       event.preventDefault();
-      setDisclosure(details, !details.open || details.dataset.closing === 'true');
-    });
-    details
-      .querySelectorAll('a')
-      .forEach((link) => link.addEventListener('click', () => setDisclosure(details, false)));
+      paused = !paused;
+      sync();
+    }
   });
-  document.addEventListener('click', (event) => {
-    disclosures.forEach((details) => {
-      if (!details.contains(event.target) && !details.dataset.closing && details.open)
-        setDisclosure(details, false);
-    });
+  document.addEventListener('visibilitychange', sync);
+  reduced.addEventListener('change', () => {
+    paused = reduced.matches;
+    if (paused) elapsed = clip[4];
+    render();
+    sync(paused);
   });
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    disclosures.forEach((details) => {
-      if (!details.open) return;
-      setDisclosure(details, false);
-      details.querySelector('summary').focus();
-    });
-  });
-  document.querySelectorAll('[data-language]').forEach((link) => {
-    if (link.dataset.language === (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en'))
-      link.setAttribute('aria-current', 'page');
-    // 浏览器禁止存储时，普通语言链接仍可正常导航。
-    link.addEventListener('click', () => {
-      try {
-        sessionStorage.setItem('lang-selected', link.dataset.language);
-      } catch {}
-      link.hash = location.hash;
-    });
+  render();
+  sync();
+  const platform = /Android/i.test(navigator.userAgent)
+    ? 'android'
+    : /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (/Mac/i.test(navigator.platform) && navigator.maxTouchPoints > 1)
+      ? 'ios'
+      : /Win/i.test(navigator.platform)
+        ? 'windows'
+        : 'macos';
+  document.getElementById(`platform-${platform}`).checked = true;
+  const android = document.querySelector('[data-platform="android"]');
+  const readAndroidSize = async () => {
+    try {
+      const response = await fetch(new URL('latest.json', android.href));
+      if (!response.ok) return;
+      const { size, version } = await response.json();
+      if (Number.isSafeInteger(size) && size > 0 && typeof version === 'string')
+        android.querySelector('[data-size]').textContent =
+          `v${version} · ${(size / 1e6).toFixed(1)} MB`;
+    } catch {}
+  };
+  if (platform === 'android') readAndroidSize();
+  else
+    document
+      .querySelector('#platform-android')
+      .addEventListener('change', readAndroidSize, { once: true });
+  document.querySelector('[data-language]').addEventListener('click', (event) => {
+    try {
+      sessionStorage.setItem('lang-selected', event.currentTarget.dataset.language);
+    } catch {}
+    event.currentTarget.hash = location.hash;
   });
 })();

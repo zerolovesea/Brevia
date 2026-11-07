@@ -25,3 +25,4 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: npm run format:check
       - run: npm run lint:python
+      - run: node --test scripts/test-ci.cjs

@@ -1388,6 +1388,15 @@ assert.doesNotMatch(
   /Speaker 1/,
 );
 // 逐句编辑只替换正文：读态是 <p>，编辑态是可输入的文本域，两者都按 id 定位段落。
+assert.match(
+  componentContext.renderTranscriptSegment({
+    live: true,
+    speaker: { name: '陈' },
+    text: '你好',
+    time: '00:02',
+  }),
+  /class="segment-speaker">陈<\/span>/,
+);
 const readonlySegment = componentContext.renderTranscriptSegment({
   time: '00:00',
   speaker: { name: 'A' },
@@ -4210,7 +4219,7 @@ assert.match(text(js), /onboarding-permission\$\{granted \? ' is-granted'/);
 assert.match(text(js), /data-onboarding-mic-level/);
 assert.match(text(js), /breviaClient\?\.previewMic\(\)/);
 assert.match(text(js), /const granted = permissionGranted\(permission\);/);
-assert.match(text(js), /data-open-screen-settings/);
+assert.match(text(js), /data-permission-settings/);
 assert.match(text(css), /\.onboarding-permission-title\{[^}]*align-items:center/);
 assert.match(text(css), /\.onboarding-mic-meter\{[^}]*width:calc\(var\(--spacing\) \* 32\)/);
 assert.match(text(js), /const permissionPoll = window\.setInterval/);
@@ -4601,7 +4610,7 @@ assert.match(text(css), /\.selection-marquee\{/);
 assert.match(text(css), /\.meeting-row\.is-selected\{/);
 assert.match(text(html), /ui-data\.js[\s\S]*ui-components\.js[\s\S]*app\.js/);
 // 纪要模态框的真实渲染产物：字段可见性、内置模型清单、凭据回填、转义和八语言标签。
-const summaryAppSource = text(providerSource) + '\n' + text(app);
+const summaryAppSource = text(providerSource) + '\n' + text(app) + '\n' + text(components);
 const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
@@ -4775,7 +4784,11 @@ for (const [kind, anchorState] of [
     },
   };
   runInNewContext(
-    summaryFn('agentSetupGuide') +
+    summaryFn('renderAgentSetupGuide') +
+      '\n' +
+      summaryFn('renderAgentSettingsPage') +
+      '\n' +
+      summaryFn('agentSetupGuide') +
       '\n' +
       summaryFn('renderAgentSettings') +
       '\nasync ' +
@@ -6173,6 +6186,11 @@ assert.equal(
 // 说话人颜色跨字符串／对象和重绘保持一致，显示文字仍需要转义。
 {
   const render = summaryContext.renderSpeakerAvatar;
+  const palette = new Map();
+  const distinct = ['A', 'G', 'M', 'S', 'Y', 'e', 'k'].map((name) => render(name, palette));
+  assert.equal(new Set(distinct).size, 7);
+  assert.equal(render('A', palette), distinct[0]);
+  assert.match(render(''), /data-speaker-color="unknown"/);
   const first = render('陈');
   const second = render('林');
   assert.equal(first, render({ name: '陈' }));
@@ -6753,6 +6771,55 @@ assert.match(
 assert.ok((text(app).match(/resetAiNoteSuggestions\(\);/g) || []).length >= 3);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
+// 同一建议事件重放、延迟写入与同文新 ID 都只落一笔，金额变化仍可新增。
+{
+  let markdown = '';
+  const handlers = {};
+  const context = {
+    meetingActive: true,
+    breviaClient: { state: { meeting: { id: 'live' } } },
+    aiAssistConfig: { proactivity: 'auto' },
+    aiNoteUserTyping: true,
+    currentNotesMarkdown: () => markdown,
+    liveNotesEditor: {
+      appendMarkdown(line) {
+        markdown += line + '\n';
+      },
+    },
+    scheduleNotesSave() {},
+    liveNotesSaveTimer: {},
+    window: {
+      brevia: {
+        on: (type, fn) => {
+          handlers[type] = fn;
+        },
+        aiNote: { dismiss: async () => {} },
+      },
+    },
+  };
+  const start = summaryAppSource.indexOf('let pendingAutoSuggestions = [];');
+  const end = summaryAppSource.indexOf(
+    "if (window.brevia?.on)\n  window.brevia.on('ai-note.evidence'",
+    start,
+  );
+  runInNewContext(summaryAppSource.slice(start, end), context);
+  const send = (id, type, text) =>
+    handlers['ai-note.suggestion']({ id, type, text, meeting_id: 'live', source_tracked: true });
+  send('a', 'topic', '普工培训创业项目');
+  send('a', 'topic', '普工培训创业项目');
+  send('b', 'topic', '普工培训创业项目。');
+  context.aiNoteUserTyping = false;
+  runInNewContext('flushAutoSuggestions()', context);
+  send('c', 'number', '在鹤岗花5万元买房');
+  send('d', 'number', '在鹤岗花5万元买房');
+  send('e', 'number', '在鹤岗花5.5万元买房');
+  assert.equal(markdown, '## 普工培训创业项目\n- 在鹤岗花5万元买房\n- 在鹤岗花5.5万元买房\n');
+  assert.deepEqual(Array.from(runInNewContext("pendingNoteSources.get('live')", context)), [
+    'a',
+    'c',
+    'e',
+  ]);
+}
 // 树的主题来自原小节，只连接该节明确标记的原因；决定、已采纳笔记和缺少原因的会议独立展示。
 {
   const { renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook } =
@@ -6860,6 +6927,15 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
     linked.map((claim) => ({ ...claim, kind: 'decision' })),
     markdown,
   );
+  const oldCause = {
+    ...cause,
+    line: '- cause: 等待验收',
+    prefix: '- ',
+    text: 'cause: 等待验收',
+    suffix: '',
+  };
+  assert.doesNotMatch(renderEvidenceNotebook([oldCause], oldCause.line), /cause:/);
+  assert.doesNotMatch(renderDetailCauseRail([oldCause], oldCause.line, 'm'), /cause:/);
   const [body, history] = notebook.split('<details class="evidence-document">');
   assert.match(body, /<li>已完成设计<details[^>]*data-evidence-id="first"/);
   assert.match(body, /<li>等待验收<details[^>]*data-evidence-id="subheading"/);
@@ -7682,6 +7758,7 @@ const liveElement = () => ({
   remove() {},
 });
 const liveCacheContext = {
+  segmentSpeakerDraft: null,
   correctionDraft: null,
   correctionPanel: { hidden: true },
   liveSegments: new Map(),
@@ -7698,7 +7775,7 @@ const liveCacheContext = {
   renderTranscriptSegment: () => '',
   transcript: { querySelectorAll: () => [], insertBefore() {} },
 };
-const liveRenderStart = summaryAppSource.indexOf('  const renderLiveEvent = (payload) => {');
+const liveRenderStart = summaryAppSource.indexOf('  const renderLiveEvent = ');
 runInNewContext(
   summaryAppSource.slice(liveRenderStart, summaryAppSource.indexOf('\n  };', liveRenderStart) + 5) +
     '\nthis.renderLiveEvent = renderLiveEvent;',
@@ -7713,6 +7790,18 @@ for (let index = 0; index < 505; index++)
     end_ms: index + 1,
     text: 'test',
   });
+liveCacheContext.segmentSpeakerDraft = { segmentId: 's504' };
+liveCacheContext.isAtLiveBottom = () => true;
+liveCacheContext.renderLiveEvent({
+  segment_id: 's505',
+  revision: 1,
+  speaker: 'spk-1',
+  text: 'new',
+  start_ms: 505,
+  end_ms: 506,
+});
+liveCacheContext.segmentSpeakerDraft = null;
+liveCacheContext.isAtLiveBottom = () => false;
 assert.equal(liveCacheContext.liveSegments.size, 500);
 assert.equal(
   liveCacheContext.liveSegmentData.size,
@@ -8131,6 +8220,7 @@ const stableDraft = {
 const activeDrafts = new Map([['mic', stableDraft]]);
 const draftContext = {
   correctionDraft: null,
+  segmentSpeakerDraft: null,
   correctionPanel: { hidden: true },
   window: {
     brevia: {
@@ -9204,6 +9294,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
     breviaClient: { state: { meeting: { id: 'live-b' } } },
     liveSegments: new Map([['same-id', liveElement]]),
     correctionDraft: null,
+    segmentSpeakerDraft: null,
     correctionPanel: { hidden: true },
     followLiveTranscript: true,
     floatingCaptionMode: null,
@@ -9302,6 +9393,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
     clearTimeout() {},
     appendAiSuggestion() {
       appended++;
+      return true;
     },
     currentNotesMarkdown: () => '- 保留阅读位置',
     persistNotes: async () => {
@@ -9523,6 +9615,7 @@ for (const failure of ['notes', 'request', null]) {
     clearTimeout() {},
     appendAiSuggestion() {
       appended++;
+      return true;
     },
     currentNotesMarkdown: () => '- 保留阅读位置',
     persistNotes: async () => {
@@ -9727,6 +9820,7 @@ const liveSpeakerLabel = { dataset: {}, textContent: '', insertAdjacentHTML() {}
 let liveSpeakerAdded = 0;
 const liveSpeakerRow = {
   querySelector(selector) {
+    if (selector === '.segment-speaker' && liveSpeakerAdded) return liveSpeakerLabel;
     if (selector === '.segment-meta')
       return {
         append() {
@@ -9757,6 +9851,8 @@ const liveSpeakerContext = {
     },
   },
   formatSpeakerName: (name) => name,
+  t: (value) => value,
+  liveSpeakerPalette: new Map(),
   renderSpeakerAvatar: () => '<span></span>',
 };
 const speakerHandlerStart = text(app).indexOf("  window.brevia.on('transcript.refined',");
@@ -9796,6 +9892,7 @@ liveSpeakerHandlers['transcript.refined']({
   speaker_name: 'Editing',
 });
 assert.equal(liveSpeakerAdded, 1);
+assert.equal(liveSpeakerLabel.textContent, 'Editing', 'identity updates during text editing');
 
 // 手动标注与声纹绑定复用同一身份同步，不能将显示名写成 ID。
 liveSpeakerContext.correctionDraft = null;
@@ -9805,7 +9902,7 @@ liveSpeakerContext.updateLiveSpeaker('other', {
   speaker_name: 'Other',
   revision: 4,
 });
-assert.equal(liveSpeakerLabel.textContent, 'Alice');
+assert.equal(liveSpeakerLabel.textContent, 'Editing');
 liveSpeakerContext.updateLiveSpeaker('meeting', {
   id: 'segment',
   speaker: 'manual-42',

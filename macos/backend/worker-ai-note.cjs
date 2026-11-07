@@ -95,9 +95,9 @@ function parseSuggestions(raw) {
           .trim()
           .toLowerCase()
       ];
-    const text = String(item?.text || item?.suggestion || '')
-      .trim()
-      .slice(0, 64);
+    const line = String(item?.text || item?.suggestion || '').trim();
+    if (/[\r\n\u2028\u2029]/.test(line)) return [];
+    const text = line.slice(0, 64);
     return type && text
       ? [{ type, text, importance: String(item.importance || 'medium'), evidence: item.evidence }]
       : [];

@@ -42,6 +42,8 @@ Diese Seite beschreibt die Neuerungen in main. Die Downloads enthalten noch v1.4
 2. Ein Meeting mit Mikrofon, Systemton oder verbundenem Smartphone starten oder eine Datei importieren.
 3. Notizen machen, das Transkript nachbearbeiten und Ergebnisse bearbeiten oder exportieren.
 
+Ab macOS 14.4 wird nur die Berechtigung zur Systemaudioaufnahme angefragt, ohne Zugriff auf den Bildschirm. macOS 14.0–14.3 verwendet weiterhin die Berechtigung für Bildschirm und Systemaudio. Nach einer Ablehnung lässt sich der Zugriff in den Systemeinstellungen wieder erlauben.
+
 Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Inferenz-Laufzeitumgebung werden nicht benötigt. Unter Windows lädt das Installationsprogramm WebView2 nur bei Bedarf herunter. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
 
 ## Mit dem Smartphone aufnehmen

@@ -10,7 +10,7 @@ test('Live subtitles preserve original tail-only holding, seam repair and paragr
       subtitles = new LiveSubtitles((value) => emitted.push(clean(value))),
       steps = [];
     for (const [event, text] of group) {
-      subtitles.push(event, text);
+      subtitles.push(event, text, [{ start: event.start_ms, end: event.end_ms }]);
       steps.push({ emitted: [...emitted], draft: subtitles.draft(event.track) });
     }
     assert.deepEqual(steps, fixture.results[index].steps);
@@ -21,41 +21,28 @@ test('Live subtitles preserve original tail-only holding, seam repair and paragr
 test('Seam alignment preserves pauses and repairs partial re-decoding', () => {
   for (const [input, expected] of fixture.seams) assert.equal(joinPending(...input), expected);
 });
-test('Independent recognition units keep natural repetition and original time bounds', () => {
-  const emitted = [],
-    subtitles = new LiveSubtitles((value, spans) => emitted.push({ value, spans })),
-    first = { segment_id: 'first', track: 'mic', start_ms: 0, end_ms: 3000, boundary: 'cut' },
-    spans = [{ start: 3000, end: 6000 }];
-  subtitles.publishUnit(first, '请确认。');
-  subtitles.publishUnit(
-    { ...first, segment_id: 'next', start_ms: 3000, end_ms: 6000 },
-    '确认以后继续。',
-    spans,
+test('Semantic paragraphs retain only complete voice evidence from their own track', () => {
+  const emitted = [];
+  const subtitles = new LiveSubtitles((event, spans) =>
+    emitted.push([event.track, event.text, spans]),
   );
-  subtitles.publishUnit(
-    { ...first, segment_id: 'system', track: 'system', start_ms: 5600, end_ms: 9000 },
-    '继续继续。',
-  );
-  assert.deepEqual(
-    emitted.map(({ value }) => value.text),
-    ['请确认。', '确认以后继续。', '继续继续。'],
-  );
-  assert.equal(emitted[1].value.start_ms, 3000);
-  assert.equal(emitted[1].value.end_ms, 6000);
-  assert.deepEqual(emitted[1].spans, spans);
-});
-test('A duplicate-only lookback produces no punctuation caption and preserves the next seam', () => {
-  const emitted = [],
-    subtitles = new LiveSubtitles((value) => emitted.push(value)),
-    event = { track: 'mic', start_ms: 0, end_ms: 20000, boundary: 'cut' };
-  subtitles.publishUnit(event, '确认。');
-  subtitles.publishUnit({ ...event, start_ms: 19600, end_ms: 20400 }, '确认。');
-  assert.equal(emitted.length, 1);
-  subtitles.publishUnit({ ...event, start_ms: 20000, end_ms: 22000 }, '确认后开始。');
-  assert.deepEqual(
-    emitted.map((value) => value.text),
-    ['确认。', '后开始。'],
-  );
+  const event = { track: 'mic', start_ms: 0, end_ms: 3000, boundary: 'endpoint' };
+  const first = { start: 100, end: 2900 },
+    second = { start: 3200, end: 5900 };
+  subtitles.push(event, '确认计划。', [first]);
+  subtitles.push({ ...event, track: 'system', boundary: 'cut' }, '开场。发言。', [first]);
+  subtitles.push({ ...event, start_ms: 3000, end_ms: 6000 }, '之后开始测试。', [second]);
+  subtitles.flush();
+  assert.deepEqual(emitted, [
+    ['system', '开场。', []],
+    ['mic', '确认计划。之后开始测试。', [first, second]],
+    ['system', '发言。', []],
+  ]);
+  assert.equal(subtitles.voiceSpans.size, 0);
+  subtitles.push(event, '确认计划。', []);
+  subtitles.push({ ...event, start_ms: 3000, end_ms: 6000 }, '之后开始测试。', [second]);
+  subtitles.flush();
+  assert.deepEqual(emitted.at(-1)[2], []);
 });
 test('Sentence splitting and word anchors match previous Unicode timing and refinement rules', () => {
   for (const [event, text, merge, expected] of fixture.sentences)

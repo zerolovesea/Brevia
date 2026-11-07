@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'design_icons.dart';
@@ -76,9 +76,11 @@ Widget breviaPageLayout(Widget? current, List<Widget> previous) => Stack(
 );
 
 // 桌面与手机使用同一语义色板，控件大小遵循原生触控约定。
-ThemeData breviaTheme(Brightness brightness) {
+ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
   final dark = brightness == Brightness.dark;
-  final fontFamily = Platform.isIOS ? '.SF Pro Text' : 'Roboto';
+  fontFamily ??= defaultTargetPlatform == TargetPlatform.iOS
+      ? '.SF Pro Text'
+      : 'Roboto';
   final ink = dark ? Color(0xfff2f2f2) : Color(0xff222222);
   final canvas = dark ? Color(0xff191919) : Color(0xffffffff);
   final muted = dark ? Color(0xffb0b0b0) : Color(0xff666666);

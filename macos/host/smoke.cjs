@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const { once } = require('node:events');
+const { randomUUID } = require('node:crypto');
 const { waitForWebViewExit } = require('../../windows/test-processes.cjs');
 
 async function smoke() {
@@ -171,6 +172,9 @@ async function proxy() {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   const pending = new Map();
+  const mainAction = randomUUID();
+  const capsuleAction = randomUUID();
+  const routed = Promise.withResolvers();
   let id = 0;
   let published = false;
   let loaded = false;
@@ -191,6 +195,16 @@ async function proxy() {
   async function probe() {
     if (started || !loaded || !published) return;
     started = true;
+    // 两个窗口的定向事件只有一份属于主窗口；旧的全局订阅会回执两次。
+    for (const [target, requestId] of [
+      ['recording-capsule', capsuleAction],
+      ['main', mainAction],
+    ])
+      write(process.stdout, {
+        target,
+        event: { type: 'desktop.action', payload: { action: 'flush', requestId } },
+      });
+    await routed.promise;
     const initial = await command('app.initialize');
     assert.ok(initial.meetings.length && initial.models.length, 'worker initialization');
     const meeting = initial.meetings[0];
@@ -235,6 +249,9 @@ async function proxy() {
     assert.equal(bytes.toString('ascii', 0, 5), '%PDF-');
     const permissions = await command('permissions.status');
     assert.ok(permissions && !permissions.__brevia_error);
+    if (permissions.systemAudioCapture === 'core-audio-tap') {
+      assert.equal(permissions.screen, 'unknown', 'audio-only status must not query screen access');
+    }
     fs.writeFileSync(path.join(data, 'smoke-passed'), 'ok\n');
     console.error(
       'Native webview smoke passed: renderer IPC, packaged worker, example transcript, scoped media URL, PDF, permission status and quit.',
@@ -246,6 +263,11 @@ async function proxy() {
       const message = JSON.parse(line);
       if (message.host === 'window.loaded' && message.label === 'main') loaded = true;
       if (message.channel === 'desktop.publish' && message.label === 'main') published = true;
+      if (message.channel === 'desktop.complete' && message.label === 'main') {
+        if (message.payload.requestId === capsuleAction)
+          return fail(new Error('Main window received capsule event'));
+        if (message.payload.requestId === mainAction) routed.resolve();
+      }
       write(worker.stdin, message);
       void probe().catch(fail);
     })

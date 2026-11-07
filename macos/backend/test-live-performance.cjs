@@ -123,6 +123,22 @@ test('First speech produces one provisional draft after two seconds without chan
   );
 });
 
+test('Pending tails use the language VAD cap and wait at least six seconds', async (t) => {
+  const { worker } = await setup(t);
+  for (const [cap, hold] of [
+    [8, 10000],
+    [3, 6000],
+  ]) {
+    worker.settings.vad.zh = { ...worker.settings.vad.default, max_speech_duration: cap };
+    const recognition = await worker.loadRecognition({
+      language: 'zh',
+      refined_model_id: 'funasr-nano-int8',
+    });
+    assert.equal(recognition.maximum, cap);
+    assert.equal(recognition.tailHoldMs, hold);
+    recognition.recognizer.close();
+  }
+});
 test('Preview excludes initial silence and bounds snapshots without consuming VAD state', async (t) => {
   const { worker } = await setup(t),
     vad = new SentenceVAD(worker, { language: 'zh' }, 20, 10000);
@@ -160,7 +176,7 @@ test('VAD preserves separate speech spans while retaining merged ASR audio and l
   vad.close();
 });
 
-test('Voiceprint captions retain hard-cut lookback deduplication without merging ASR units', async (t) => {
+test('Voiceprint captions repair hard-cut seams across ASR units', async (t) => {
   const { worker, events, engines } = await setup(t);
   await start(worker);
   worker.session.previewed.add('mic');
@@ -173,21 +189,18 @@ test('Voiceprint captions retain hard-cut lookback deduplication without merging
   };
   await audio(worker, 0, 20000);
   await audio(worker, 20000, 20000);
-  const finals = events.filter((event) => event.type === 'transcript.final').map((e) => e.payload);
-  assert.equal(finals.length, 2);
-  assert.deepEqual(
-    finals.map((event) => event.text),
-    ['先确认发布计划。', '之后开始测试。'],
-  );
-  assert.ok(finals[1].start_ms < finals[0].end_ms, 'Actual VAD hard cuts retain lookback audio');
-  assert.notEqual(finals[0].segment_id, finals[1].segment_id);
   assert.equal(recognizer.calls.filter((call) => call === 'asr.decode').length, 2);
   await worker.handlers['meeting.stop']({ meeting_id: 'early', duration_ms: 40000 });
-  assert.equal(worker.store.getMeeting('early', true).segments.length, 2);
+  const finals = events.filter((event) => event.type === 'transcript.final').map((e) => e.payload);
+  assert.deepEqual(
+    finals.map((event) => event.text),
+    ['先确认发布计划之后开始测试。'],
+  );
+  assert.equal(worker.store.getMeeting('early', true).segments.length, 1);
 });
 
 for (const installed of [true, false])
-  test(`ASR units preserve source boundaries with voiceprints ${installed ? 'installed' : 'absent'} and drain once on pause/stop`, async (t) => {
+  test(`Semantic drafts and paragraphs match with voiceprints ${installed ? 'installed' : 'absent'} and drain once on pause/stop`, async (t) => {
     const { worker, events, engines } = await setup(t);
     worker.models.isReady = (id) => id !== EMBEDDING_MODEL || installed;
     await start(worker);
@@ -216,21 +229,25 @@ for (const installed of [true, false])
     await audio(worker, 0, 3000);
     await audio(worker, 3000, 3000);
     let finals = events.filter((event) => event.type === 'transcript.final');
-    assert.equal(finals.length, installed ? 2 : 0);
-    if (installed)
-      assert.deepEqual(
-        finals.map((e) => [e.payload.start_ms, e.payload.end_ms]),
-        [
-          [0, 3000],
-          [3000, 6000],
-        ],
-      );
+    assert.equal(finals.length, 0);
+    assert.equal(
+      events
+        .filter((event) => event.type === 'transcript.draft' && event.payload.track === 'mic')
+        .at(-1).payload.text,
+      '今天确认发布计划。今天确认发布计划。',
+    );
     await worker.handlers['meeting.pause']({ meeting_id: 'early', paused: true });
     await worker.handlers['meeting.pause']({ meeting_id: 'early', paused: false });
     await audio(worker, 6000, 3000);
     await worker.handlers['meeting.stop']({ meeting_id: 'early', duration_ms: 9000 });
     finals = events.filter((event) => event.type === 'transcript.final');
-    assert.equal(finals.length, installed ? 3 : 2);
+    assert.deepEqual(
+      finals.map(({ payload }) => [payload.text, payload.start_ms, payload.end_ms]),
+      [
+        ['今天确认发布计划。今天确认发布计划。', 0, 6000],
+        ['今天确认发布计划。', 6000, 9000],
+      ],
+    );
     assert.equal(notes.length, finals.length);
     assert.equal(new Set(notes).size, notes.length);
     assert.equal(

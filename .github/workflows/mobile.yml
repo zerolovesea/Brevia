@@ -2,10 +2,16 @@ name: Mobile CI and distribution
 
 on:
   pull_request:
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+    paths: &mobile-paths
+      - 'mobile/**'
+      - '!mobile/**/*.md'
+      - '!mobile/web/**'
+      - 'scripts/ci-mobile-changes.py'
+      - 'scripts/test-ci-mobile-changes.py'
+      - '.github/workflows/mobile.yml'
   push:
     branches: [main]
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+    paths: *mobile-paths
   workflow_dispatch:
     inputs:
       channel:
@@ -21,6 +27,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 # Never interrupt an upload. Serialize releases across refs and channels.
@@ -39,11 +46,21 @@ jobs:
     timeout-minutes: 20
     outputs:
       build: ${{ steps.version.outputs.build }}
+      android: ${{ steps.changes.outputs.android }}
+      ios: ${{ steps.changes.outputs.ios }}
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select changed mobile platforms
+        id: changes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 ../scripts/ci-mobile-changes.py
+      - run: python3 ../scripts/test-ci-mobile-changes.py
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -62,7 +79,7 @@ jobs:
 
   android:
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && needs.check.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -122,7 +139,7 @@ jobs:
 
   ios:
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && needs.check.outputs.ios == 'true'
     runs-on: macos-26
     timeout-minutes: 90
     defaults:

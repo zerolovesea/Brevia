@@ -4,12 +4,20 @@ import { runInNewContext } from 'node:vm';
 
 const app = await readFile(new URL('./app.js', import.meta.url), 'utf8');
 const permissionSource = app.slice(
-  app.indexOf('function permissionSettingsPath('),
+  app.indexOf('let screenProbe ='),
   app.indexOf('const modelDownloads ='),
 );
 const permissionRequests = new Set();
 let requested = [];
+const notices = [];
+const storage = new Map();
+const localStorage = {
+  getItem: (key) => storage.get(key) ?? null,
+  setItem: (key, value) => storage.set(key, value),
+  removeItem: (key) => storage.delete(key),
+};
 const context = {
+  localStorage,
   window: {
     brevia: {
       platform: 'darwin',
@@ -30,6 +38,7 @@ const context = {
   interfaceIcon: () => '',
   escapeHtml: (value) => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;'),
   permissionRequests,
+  showToast: (message) => notices.push(message),
   permissionStatus: { microphone: 'denied', screen: 'denied', systemAudioSupported: true },
 };
 runInNewContext(permissionSource, context);
@@ -77,6 +86,54 @@ await assert.rejects(
   context.requestPermissionAccess('screen'),
   /隐私与安全性 → 屏幕与系统音频录制/,
 );
+
+// Tap 权限无法被动查询；请求已发起不代表允许，更不能把静音当作拒绝。
+context.permissionStatus = {
+  microphone: 'granted',
+  screen: 'unknown',
+  systemAudioCapture: 'core-audio-tap',
+  systemAudioSupported: true,
+};
+assert.match(context.permissionSettingsPath('screen'), /仅系统音频录制/);
+const audioOnlyRow = context.permissionRow(
+  'screen',
+  '系统音频',
+  '',
+  false,
+  false,
+  false,
+  false,
+  true,
+);
+assert.match(audioOnlyRow, /录音时确认/);
+assert.match(audioOnlyRow, /data-request-permission="screen"/);
+assert.doesNotMatch(audioOnlyRow, /已允许|未授权|is-denied/);
+assert.match(context.renderPermissionSettings(), /<b>系统音频<\/b>/);
+assert.match(context.renderPermissionSettings(), /录音时确认/);
+context.window.brevia.permissions.requestScreen = async () => null;
+assert.equal(await context.requestPermissionAccess('screen'), null);
+assert.deepEqual(notices, ['已发起权限申请']);
+assert.match(context.renderPermissionSettings(), /已发起权限申请/);
+assert.match(context.renderPermissionSettings(), /重新检测/);
+context.window.brevia.permissions.requestScreen = async () => true;
+await context.requestPermissionAccess('screen');
+assert.match(context.renderPermissionSettings(), /已允许/);
+assert.doesNotMatch(
+  context.renderPermissionSettings(),
+  /重新检测|data-request-permission="screen"/,
+);
+const restarted = { ...context };
+runInNewContext(permissionSource, restarted);
+assert.match(restarted.renderPermissionSettings(), /已允许/, 'confirmation survives app restart');
+assert.equal(restarted.systemAudioAllowed({ screen: 'denied' }), false);
+assert.equal(
+  restarted.systemAudioAllowed({ screen: 'unknown', systemAudioCapture: 'screen-capture-kit' }),
+  false,
+);
+restarted.window.brevia.permissions.requestScreen = async () => null;
+await restarted.requestPermissionAccess('screen');
+assert.match(restarted.renderPermissionSettings(), /data-request-permission="screen"/);
+assert.equal(storage.size, 0, 'an inconclusive explicit recheck clears the previous confirmation');
 
 // Polling cannot overlap a system prompt, duplicate itself, or redraw a page after navigation.
 const timers = new Map();

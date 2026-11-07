@@ -17,7 +17,7 @@
   max-width: 740px;
   min-height: 36px;
   gap: 12px;
-  margin: 36px auto 28px;
+  margin: 22px auto 18px;
   padding: 0;
 }
 #prepare-view.compose-page .compose-back {
@@ -78,14 +78,14 @@
   min-width: 0;
   min-height: 0;
   height: auto;
-  gap: 24px;
+  gap: 16px;
   margin: 0;
   padding: 0;
 }
 #prepare-view.compose-page .compose-editor {
   display: grid;
   min-width: 0;
-  gap: 24px;
+  gap: 16px;
 }
 #prepare-view.compose-page .compose-section-header {
   margin-bottom: 12px;
@@ -149,47 +149,14 @@
   margin: 0;
   padding: 0;
 }
-#prepare-view.compose-page .compose-advanced {
-  margin: -8px 0 0;
-  border: 0;
-}
-#prepare-view.compose-page .compose-advanced > summary {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  gap: 8px;
-  min-height: 32px;
-  padding: 5px 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 20px;
-  list-style: none;
-  cursor: pointer;
-}
-#prepare-view.compose-page .compose-advanced > summary:hover {
-  color: var(--color-text);
-}
-#prepare-view.compose-page .compose-advanced > summary::-webkit-details-marker {
-  display: none;
-}
-#prepare-view.compose-page .compose-advanced > summary .interface-icon {
-  width: 14px;
-  height: 14px;
-}
-#prepare-view.compose-page .compose-advanced > summary > :last-child {
-  transition: transform 180ms ease;
-}
-#prepare-view.compose-page .compose-advanced[open] > summary > :last-child {
-  transform: rotate(180deg);
-}
 #prepare-view.compose-page .compose-extra-fields,
 #prepare-view.compose-page .compose-processing .compose-processing-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
   gap: 14px;
   margin: 0;
-  padding: 12px 0 0;
+  padding: 0;
 }
 #prepare-view.compose-page .compose-inspector {
   min-width: 0;
@@ -199,8 +166,8 @@
 #prepare-view.compose-page .compose-record-inspector {
   display: grid;
   min-width: 0;
-  gap: 18px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px;
   border: 1px solid color-mix(in srgb, var(--color-line) 65%, transparent);
   border-radius: 14px;
   background: var(--color-navigation);
@@ -214,7 +181,7 @@
 }
 #prepare-view.compose-page .compose-source-mount {
   display: block;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 #prepare-view.compose-page .compose-source-switch {
   min-width: 0;
@@ -235,14 +202,13 @@
 }
 #prepare-view.compose-page .compose-source-switch [role="radio"] {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 76px;
+  min-height: 40px;
   height: auto;
-  gap: 9px;
+  gap: 6px;
   padding: 10px 8px;
   border: 1px solid transparent;
   border-radius: 9px;
@@ -272,8 +238,8 @@
     0 1px 2px #00000004;
 }
 #prepare-view.compose-page .compose-source-switch [role="radio"] .interface-icon {
-  width: 19px;
-  height: 19px;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 #prepare-view.compose-page .compose-device-routes {
@@ -316,8 +282,8 @@
   border: 0;
 }
 #prepare-view.compose-page .compose-input-monitor .capture-status {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 20px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -328,7 +294,7 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 12px;
+  gap: 6px;
 }
 #prepare-view.compose-page .capture-status b {
   flex: none;
@@ -339,15 +305,15 @@
   display: flex;
   align-items: center;
   flex: 1;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-width: 0;
   gap: 8px;
   font-size: 11px;
   font-weight: 400;
 }
 #prepare-view.compose-page .capture-status .input-meter {
-  flex: 1;
-  min-width: 40px;
+  flex: 0 1 64px;
+  min-width: 32px;
   width: auto;
   height: 10px;
 }
@@ -529,6 +495,11 @@
   font-size: 12px;
   line-height: 18px;
 }
+@container (min-width: 620px) {
+  #prepare-view.compose-page .compose-extra-fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 @container (max-width: 580px) {
   #prepare-view.compose-page .compose-extra-fields,
   #prepare-view.compose-page .compose-processing .compose-processing-fields {
@@ -561,12 +532,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #prepare-view.compose-page
-    :is(
-      .compose-back,
-      .compose-drop-target,
-      .compose-source-switch [role="radio"],
-      .compose-advanced > summary > :last-child
-    ) {
+    :is(.compose-back, .compose-drop-target, .compose-source-switch [role="radio"]) {
     transition: none;
   }
 }

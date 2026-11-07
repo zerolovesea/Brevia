@@ -81,32 +81,10 @@ let metricsRefreshTimer;
 
 function renderLibraryMetrics() {
   if (!libraryMetrics) return;
-  const tag = BreviaI18n.localeTag(locale);
-  const compactNumber = new Intl.NumberFormat(tag, {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  });
-  const minutes = Math.round(libraryMetrics.meeting_duration_ms / 60000);
-  const duration = new Intl.NumberFormat(tag, {
-    style: 'unit',
-    unit: 'minute',
-    unitDisplay: 'narrow',
-  });
-  const items = [
-    ['folder', '会议总数', libraryMetrics.meeting_count],
-    ['clock', '录音总时长', minutes],
-    ['waveform', '转写字数', libraryMetrics.subtitle_characters],
-    ['notes', '纪要字数', libraryMetrics.summary_characters],
-  ];
-  document.querySelector('[data-library-metrics]').innerHTML = items
-    .map(([icon, label, count]) => {
-      const description = escapeHtml(
-        t(label) + ' · ' + (icon === 'clock' ? duration.format(count) : count.toLocaleString(tag)),
-      );
-      const display = icon === 'clock' ? duration.format(count) : compactNumber.format(count);
-      return `<span role="img" aria-label="${description}" title="${description}">${interfaceIcon(icon)}${escapeHtml(display)}</span>`;
-    })
-    .join('');
+  document.querySelector('[data-library-metrics]').innerHTML = renderLibraryMetricsItems(
+    libraryMetrics,
+    BreviaI18n.localeTag(locale),
+  );
 }
 
 // 在内容落盘后合并刷新，实时字幕逐段到达时不扫描整个会议库。

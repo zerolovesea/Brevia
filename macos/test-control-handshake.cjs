@@ -96,7 +96,7 @@ test('note images keep their bytes across the native JSON bridge and reject malf
     __BREVIA_PLATFORM__: 'win32',
     __TAURI__: {
       core: { invoke: (_name, value) => request(value.payload) },
-      event: { listen: async () => () => {} },
+      webviewWindow: { getCurrentWebviewWindow: () => ({ listen: async () => () => {} }) },
     },
   };
   window.top = window;

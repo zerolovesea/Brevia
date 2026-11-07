@@ -1730,10 +1730,7 @@ try {
           const popover=section.querySelector('[popover]'),rect=popover.getBoundingClientRect(),list=popover.querySelector('.summary-participant-list');
           if(!popover.matches(':popover-open')||Math.abs(body.getBoundingClientRect().top-bodyTop)>1)errors.push(code+': roster moves summary');
           if(rect.left<0||rect.right>innerWidth+1||rect.bottom>innerHeight+1||popover.scrollWidth>popover.clientWidth+1||list.scrollHeight<=list.clientHeight)errors.push(code+': roster overflow or missing internal scroll');
-          const search=popover.querySelector('input');search.value='Alexandria';search.dispatchEvent(new Event('input',{bubbles:true}));
-          if([...list.children].filter(row=>!row.hidden).length!==1||list.textContent.indexOf('Participant <1>')<0)errors.push(code+': roster search or escaped names');
-          search.value='__absent__';search.dispatchEvent(new Event('input',{bubbles:true}));
-          if(popover.querySelector('[data-participant-empty]').hidden)errors.push(code+': roster missing empty state');
+          if(popover.querySelector('input')||list.children.length!==50||!list.textContent.includes('Participant <1>'))errors.push(code+': compact participant list');
           document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
           if(popover.matches(':popover-open')||document.activeElement!==toggle)errors.push(code+': roster Escape or focus return');
         }
@@ -2578,6 +2575,18 @@ try {
           else if(kind==='setup') await openOnboardingSetup();
           else if(kind==='ai') openOnboardingAi();
           else openOnboardingMobile();
+          if(kind==='permissions') {
+            const section=onboardingPage.querySelector('[data-onboarding-permissions]');
+            const actions=section.querySelectorAll('button');
+            if(actions.length!==2 || section.querySelector('small,.permission-optional,[data-open-microphone-settings],[data-open-screen-settings]')) errors.push(code+': permission page has redundant controls/copy');
+            if(!section.querySelector('[data-request-onboarding-permission="microphone"][data-permission-settings]')) errors.push(code+': denied microphone recovery missing');
+          }
+          if(kind==='phone') {
+            for(const qr of onboardingPage.querySelectorAll('.mobile-install-qr img')) {
+              await qr.decode();
+              if(!qr.naturalWidth) errors.push(code+': download QR missing');
+            }
+          }
           const handle=onboardingMotion;
           const rail=onboardingPage.querySelector('.onboarding-rail');
           const paper=rail.querySelector('[data-motion="paper"]');
@@ -3397,10 +3406,10 @@ try {
       }
       setPrepareMode('record');await showView('prepare');
       const primaryFields=[...prepareForm.querySelectorAll('.form-grid label')];
-      if(primaryFields.length!==2||primaryFields.some(field=>field.getBoundingClientRect().width<=0)||!prepareForm.querySelector('details.prepare-options [name=meeting-speakers]'))errors.push('record: core fields or expandable options missing');
+      if(primaryFields.length!==2||primaryFields.some(field=>field.getBoundingClientRect().width<=0)||!visible(prepareForm.querySelector('section.prepare-options [name=meeting-speakers]').closest('label')))errors.push('record: core fields or visible processing options missing');
       const speakerInput=prepareForm.querySelector('[name="meeting-speakers"]');
       const previousSpeakers=speakerInput.value;
-      prepareForm.querySelector('details.prepare-options [data-flow-select-choice="summary-template"][data-value=interview]').click();
+      prepareForm.querySelector('section.prepare-options [data-flow-select-choice="summary-template"][data-value=interview]').click();
       speakerInput.value='4';renderPrepareSelects();setPrepareMode('import');
       if(new FormData(prepareForm).get('meeting-speakers')!=='4' || !prepareForm.querySelector('[data-prepare-processing] [name="meeting-speakers"]')) errors.push('prepare: processing values lost when moving fields');
       if(new FormData(prepareForm).get('summary-template')!=='interview'||!prepareForm.querySelector('[data-prepare-processing] [name="summary-template"]')) errors.push('prepare: meeting template missing from import');
@@ -3453,13 +3462,14 @@ try {
           if(sources.filter(radio=>radio.getAttribute('aria-checked')==='true').length!==1)errors.push(code+': recording source selection is ambiguous');
           const meter=prepareForm.querySelector('.capture-status');
           const start=prepareForm.querySelector('.primary-action');
-          const overlaps=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;const mr=meter.getBoundingClientRect(),sr=start.getBoundingClientRect(),sourceBounds=prepareForm.querySelector('fieldset').getBoundingClientRect();if(!visible(meter)||!visible(start)||overlaps(mr,sr)||overlaps(sourceBounds,mr)||overlaps(sourceBounds,sr))errors.push(code+'/'+mode+': sources, audio levels or start button overlap');
+          const overlaps=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;const mr=meter.getBoundingClientRect(),sr=start.getBoundingClientRect(),sourceBounds=prepareForm.querySelector('fieldset').getBoundingClientRect();if(!visible(meter)||!visible(start)||overlaps(mr,sr)||overlaps(sourceBounds,mr)||overlaps(sourceBounds,sr))errors.push(code+'/'+mode+': sources, audio levels or start button overlap '+JSON.stringify({meter:mr,start:sr,source:sourceBounds,meterVisible:visible(meter),startVisible:visible(start)}));
         }
       }
       applyLanguage('zh');
       updateCapturePhones([]);renderCaptureMode('phone');
       if(!prepareForm.querySelector('.primary-action').disabled||!prepareForm.querySelector('#phone-device-mount .flow-select-toggle').disabled) errors.push('phone: empty device list permits recording');
       if(!prepareForm.querySelector('.compose-device-routes [data-capture-phone]')) errors.push('phone: connection entry missing without connected devices');
+      if(!prepareForm.querySelector('#capture-mode-hint').hidden || prepareForm.querySelector('#capture-mode-hint').textContent) errors.push('phone: empty list repeats device status below the selector');
       setPrepareMode('record');
       if(currentCaptureMode!=='both'||!prepareForm.querySelector('#phone-device-setting').hidden) errors.push('capture: starting another meeting did not restore the default source');
       const data=await window.brevia.initialize();const meeting=await window.brevia.meeting.get({meeting_id:data.meetings[0].id});
@@ -4499,6 +4509,39 @@ try {
     '引导全步骤、异步准备连续性和控件反馈：' +
       JSON.stringify(onboardingHandoff.result?.value || onboardingHandoff.exceptionDetails),
   );
+  const audioOnlyPermissions = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const previous=permissionStatus,errors=[];
+      const status={microphone:'denied',screen:'unknown',systemAudioSupported:true,systemAudioCapture:'core-audio-tap'};
+      try {
+        for(const language of ['zh','en','es','ja','ko','fr','de','ru']) {
+          applyLanguage(language);
+          openOnboardingPermissions(status);
+          const row=onboardingPage.querySelector('[data-request-onboarding-permission="screen"]').closest('.onboarding-permission');
+          if(row.querySelector('.permission-status').textContent!==t('录音时确认')||row.classList.contains('is-granted')||row.querySelector('.permission-status.is-denied'))errors.push(language+' unknown permission misrepresented');
+          if(row.querySelectorAll('button').length!==1 || row.querySelector('[data-open-screen-settings]'))errors.push(language+' redundant permission actions');
+          const mic=onboardingPage.querySelector('[data-request-onboarding-permission="microphone"][data-permission-settings]');
+          if(!mic || mic.title!==permissionSettingsPath('microphone',status))errors.push(language+' denied microphone recovery missing');
+          await dismissOnboardingPage();
+        }
+        await openModal('advanced-settings');
+        permissionStatus=status;refreshPermissionSettings();
+        const row=settingsModal.querySelector('[data-request-permission="screen"]').closest('.preferences-permission-row');
+        if(row.querySelector('.permission-badge').textContent!==t('录音时确认'))errors.push('settings badge');
+        if(row.querySelector('[data-open-permission-settings="screen"]').title!==permissionSettingsPath('screen',status))errors.push('settings destination');
+      } finally {
+        closeModal();permissionStatus=previous;applyLanguage('zh');await showView('home');
+      }
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(audioOnlyPermissions.result?.value) && !audioOnlyPermissions.result.value.length,
+    '音频专用授权的八语种引导和设置状态：' +
+      JSON.stringify(audioOnlyPermissions.result?.value || audioOnlyPermissions.exceptionDetails),
+  );
   check(
     Array.isArray(motionChecks.result?.value) && !motionChecks.result.value.length,
     '公共动效、快速导航和退出重入：' +
@@ -4623,7 +4666,7 @@ try {
       ],
       [
         'desktop-live',
-        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); meetingActive=true; breviaClient.state.meeting={...breviaClient.state.meeting,tags:[]};breviaClient.state.inputs={mic:true,system:true};document.querySelector('#pause').disabled=false;document.querySelector('#pause').innerHTML=interfaceIcon('pause')+'<span>'+t('暂停')+'</span>'; document.querySelector('#live-name').textContent='产品周会'; uiData.live.transcript=[['10:02','我们先回顾一下上周的进展。整体来说，核心功能已经稳定，当前重点是提升会议纪要的准确性和可用性。接下来会重点看真实使用场景。'],['10:04','我们建议优先邀请 3 个有代表性的客户，结合他们的真实会议内容，收集使用反馈和典型问题，再决定后续的扩展节奏。'],['10:06','另外，关于数据存储方式，我们需要向客户解释清楚：录音和文字内容优先保存在本地，在线服务需要明确确认。'],['10:08','本周先完成测试版本，下周开始试点。各负责人同步准备使用指南和反馈入口。']].map(([time,text],i)=>({time,text,speaker:{name:''},translation:i===2?'In addition, regarding the storage method, we need to explain it clearly to customers: prioritize local storage of audio and text.':undefined}));document.querySelector('#transcript-scroll').innerHTML=uiData.live.transcript.map(entry=>renderTranscriptSegment({...entry,showSpeaker:false})).join(''); await showView('live'); liveNotesEditor?.setMarkdown('## 一、试点范围\\n\\n- 先在产品团队与 3 个核心客户中进行试点\\n- 覆盖会议场景：周会、需求评审、客户访谈\\n- 试点周期 4 周，收集使用反馈并评估效果\\n- 重点验证：转写准确性、会议纪要、行动项提取\\n\\n## 二、待办事项\\n\\n- [ ] 优化会议纪要生成效果（负责人：张伟）\\n- [ ] 准备试点使用指南与 FAQ（负责人：李娜）\\n- [ ] 整理客户反馈入口（4 月 28 日）');latestAiSuggestion={id:'visual-suggestion',type:'conclusion',text:'本周先完成测试版本，下周开始小范围试点，随后汇总使用反馈并评估效果。'};aiNoteUserTyping=false;renderAiSuggestion();clearTimeout(aiSuggestionAutoFadeTimer); })()`,
+        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); meetingActive=true; breviaClient.state.meeting={...breviaClient.state.meeting,tags:[]};breviaClient.state.inputs={mic:true,system:true};document.querySelector('#pause').disabled=false;document.querySelector('#pause').innerHTML=interfaceIcon('pause')+'<span>'+t('暂停')+'</span>'; document.querySelector('#live-name').textContent='产品周会'; uiData.live.transcript=[['10:02','我们先回顾一下上周的进展。整体来说，核心功能已经稳定，当前重点是提升会议纪要的准确性和可用性。接下来会重点看真实使用场景。'],['10:04','我们建议优先邀请 3 个有代表性的客户，结合他们的真实会议内容，收集使用反馈和典型问题，再决定后续的扩展节奏。'],['10:06','另外，关于数据存储方式，我们需要向客户解释清楚：录音和文字内容优先保存在本地，在线服务需要明确确认。'],['10:08','本周先完成测试版本，下周开始试点。各负责人同步准备使用指南和反馈入口。']].map(([time,text],i)=>({time,text,speaker:{name:''},translation:i===2?'In addition, regarding the storage method, we need to explain it clearly to customers: prioritize local storage of audio and text.':undefined}));document.querySelector('#transcript-scroll').innerHTML=uiData.live.transcript.map((entry,i)=>renderTranscriptSegment({...entry,live:true,showSpeaker:i>0,speaker:{name:i===2?'陈明':'王琳'},palette:liveSpeakerPalette})).join(''); await showView('live'); liveNotesEditor?.setMarkdown('## 一、试点范围\\n\\n- 先在产品团队与 3 个核心客户中进行试点\\n- 覆盖会议场景：周会、需求评审、客户访谈\\n- 试点周期 4 周，收集使用反馈并评估效果\\n- 重点验证：转写准确性、会议纪要、行动项提取\\n\\n## 二、待办事项\\n\\n- [ ] 优化会议纪要生成效果（负责人：张伟）\\n- [ ] 准备试点使用指南与 FAQ（负责人：李娜）\\n- [ ] 整理客户反馈入口（4 月 28 日）');latestAiSuggestion={id:'visual-suggestion',type:'conclusion',text:'本周先完成测试版本，下周开始小范围试点，随后汇总使用反馈并评估效果。'};aiNoteUserTyping=false;renderAiSuggestion();clearTimeout(aiSuggestionAutoFadeTimer); })()`,
       ],
       ['desktop-live-dark', `applyTheme('dark')`],
       [
@@ -4810,7 +4853,7 @@ try {
       ],
       [
         'desktop-component-states',
-        `(async()=>{persistNotes=window.visualPersistNotes;document.querySelector('[data-notes-cancel]').click();await showView('prepare');prepareForm.querySelector('details.prepare-options').open=true;prepareForm.querySelector('[name="meeting-speakers"]').closest('.flow-select').querySelector('.flow-select-toggle').click();})()`,
+        `(async()=>{persistNotes=window.visualPersistNotes;document.querySelector('[data-notes-cancel]').click();await showView('prepare');prepareForm.querySelector('[name="meeting-speakers"]').closest('.flow-select').querySelector('.flow-select-toggle').click();})()`,
       ],
       [
         'desktop-live-expanded',

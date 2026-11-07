@@ -3111,9 +3111,6 @@
   .onboarding-permission b {
     @apply block text-[14px] font-medium text-black;
   }
-  .onboarding-permission small {
-    @apply mt-1 block text-[12px] text-[#666666];
-  }
 
   .onboarding-page .onboarding-permission-action {
     @apply px-3 py-2 text-[12px];
@@ -4380,8 +4377,7 @@ html[data-theme="dark"] .markdown-content code {
 }
 html[data-theme="dark"] .onboarding-intro small,
 html[data-theme="dark"] .onboarding-model-summary p,
-html[data-theme="dark"] .model-source-switch small,
-html[data-theme="dark"] .onboarding-permission small {
+html[data-theme="dark"] .model-source-switch small {
   color: #767676;
 }
 html[data-theme="dark"] .model-source-switch label,

@@ -58,13 +58,17 @@ function attachRecording(worker) {
         hotwords: worker.store.asrTermOptions(meeting).hotwords || [],
         threads: 2,
       });
+      const vad = worker.settings.vad[meeting.language] || worker.settings.vad.default;
+      const maximum = Math.min(
+        info.max_speech_seconds || 20,
+        worker.settings.live_asr.max_speech_seconds || 22,
+        vad.max_speech_duration,
+      );
       return {
         recognizer,
         vads,
-        maximum: Math.min(
-          info.max_speech_seconds || 20,
-          worker.settings.live_asr.max_speech_seconds || 22,
-        ),
+        maximum,
+        tailHoldMs: Math.max(6, maximum + 2) * 1000,
         meeting,
       };
     } catch (error) {
@@ -146,16 +150,19 @@ function attachRecording(worker) {
   worker.requireActive = (id) => {
     if (worker.active !== id) throw new Error('Meeting is not active');
   };
-  function draft(session, track, extra = '') {
-    const settled = session.subtitles.draft(track),
-      value = settled.text || extra ? settled : session.previews.get(track) || settled;
+  function draft(session, track, partial) {
+    const settled = session.subtitles.draft(track);
+    const value = partial?.text
+      ? { ...partial, text: [settled.text, partial.text].filter(Boolean).join(' ') }
+      : settled.text
+        ? settled
+        : session.previews.get(track) || settled;
     worker.emit('transcript.draft', {
       meeting_id: session.meeting.id,
       segment_id: 'draft-' + track,
       track,
       speaker: track === 'mic' ? 'local-user' : 'spk-1',
       ...value,
-      ...(extra ? { text: settled.text + extra } : {}),
     });
   }
   function queuePreview(session, track, segment, recognition) {
@@ -227,7 +234,11 @@ function attachRecording(worker) {
           { pcm: fs.readFileSync(file).toString('base64'), sample_rate: 16000 },
           {
             onEvent: (message) =>
-              draft(session, track, cleanText(message.text || message.payload?.text)),
+              draft(session, track, {
+                start_ms: event.start_ms,
+                end_ms: event.end_ms,
+                text: cleanText(message.text || message.payload?.text),
+              }),
           },
         );
         const text = cleanText(result.text);
@@ -239,15 +250,8 @@ function attachRecording(worker) {
             start_ms: event.start_ms + word.start_ms,
             end_ms: event.start_ms + word.end_ms,
           }));
-        if (session.liveSpeakers.hasModel()) {
-          // 已装声纹时保留真实识别单元，避免把不同人的 ASR 结果合成一段。
-          // 推理输入与调用次数不变，也不按字数猜测说话人或拆分文字时间线。
-          session.subtitles.flush();
-          session.subtitles.publishUnit(event, text, segment.voiceSpans);
-        } else {
-          session.subtitles.push(event, text);
-          session.subtitles.flush(event.end_ms, (recognition.maximum + 2) * 1000);
-        }
+        session.subtitles.push(event, text, segment.voiceSpans || []);
+        session.subtitles.flush(event.end_ms, recognition.tailHoldMs);
       } catch (error) {
         worker.emit('worker.warning', {
           meeting_id: session.meeting.id,
@@ -351,10 +355,7 @@ function attachRecording(worker) {
           if (payload.start_ms >= session.subtitleExpiryMs) {
             session.subtitleExpiryMs = payload.start_ms + 1000;
             session.decode = session.decode.then(() => {
-              session.subtitles.flush(
-                payload.start_ms,
-                (session.recognition?.maximum || 20) * 1000 + 2000,
-              );
+              session.subtitles.flush(payload.start_ms, session.recognition?.tailHoldMs);
               for (const track of ['mic', 'system', 'mix']) draft(session, track);
             });
           }

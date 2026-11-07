@@ -14,6 +14,6 @@
   <key>NSHighResolutionCapable</key><true/>
   <key>NSLocalNetworkUsageDescription</key><string>Brevia connects to your phone on the local network for meeting recording.</string>
   <key>NSBonjourServices</key><array><string>_brevia._tcp</string></array>
-  <key>NSAudioCaptureUsageDescription</key><string>Brevia captures system audio to transcribe meetings locally.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>Brevia records audio played by other apps to transcribe meeting participants locally. Your screen is not recorded.</string>
   <key>NSMicrophoneUsageDescription</key><string>Brevia captures microphone audio to transcribe meetings locally.</string>
 </dict></plist>

@@ -1615,17 +1615,18 @@ class ConnectionHelpPage extends StatelessWidget {
 }
 
 class ScannerPage extends StatefulWidget {
-  const ScannerPage({super.key});
+  final Widget? camera;
+  const ScannerPage({super.key, this.camera});
   @override
   State<ScannerPage> createState() => _ScannerPageState();
 }
 
 class _ScannerPageState extends State<ScannerPage> {
   bool found = false;
-  final scanner = MobileScannerController();
+  MobileScannerController? scanner;
   @override
   void dispose() {
-    unawaited(scanner.dispose());
+    unawaited(scanner?.dispose());
     super.dispose();
   }
 
@@ -1647,44 +1648,47 @@ class _ScannerPageState extends State<ScannerPage> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Theme(
-                  data: breviaTheme(Brightness.dark),
+                  data: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context)
+                      : breviaTheme(Brightness.dark),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      MobileScanner(
-                        controller: scanner,
-                        errorBuilder: (_, error) => Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(tr("无法使用相机。可以返回并输入配对码。")),
-                                TextButton(
-                                  onPressed: openAppSettings,
-                                  child: Text(tr("前往系统设置")),
+                      widget.camera ??
+                          MobileScanner(
+                            controller: scanner ??= MobileScannerController(),
+                            errorBuilder: (_, error) => Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(tr("无法使用相机。可以返回并输入配对码。")),
+                                    TextButton(
+                                      onPressed: openAppSettings,
+                                      child: Text(tr("前往系统设置")),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
-                        onDetect: (capture) {
-                          for (final barcode in capture.barcodes) {
-                            final raw = barcode.rawValue;
-                            if (!found && raw != null) {
-                              try {
-                                final v = jsonDecode(raw);
-                                if (v is Map &&
-                                    v['v'] == 1 &&
-                                    v['secret'] is String) {
-                                  found = true;
-                                  Navigator.pop(context, raw);
+                            onDetect: (capture) {
+                              for (final barcode in capture.barcodes) {
+                                final raw = barcode.rawValue;
+                                if (!found && raw != null) {
+                                  try {
+                                    final v = jsonDecode(raw);
+                                    if (v is Map &&
+                                        v['v'] == 1 &&
+                                        v['secret'] is String) {
+                                      found = true;
+                                      Navigator.pop(context, raw);
+                                    }
+                                  } catch (_) {}
                                 }
-                              } catch (_) {}
-                            }
-                          }
-                        },
-                      ),
+                              }
+                            },
+                          ),
                       Center(
                         child: IgnorePointer(
                           child: SizedBox.square(
@@ -3661,6 +3665,10 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
     offline = !widget.upload && widget.options.isEmpty;
     title.text = widget.initial['title'] ?? defaultMeetingTitle();
     language = widget.initial['language'] ?? 'zh';
+    final target = widget.initial['target_language'];
+    if (target is String && target != 'auto' && languages.containsKey(target)) {
+      translation = target;
+    }
     final count = widget.initial['num_speakers'] as int? ?? -1;
     participants.text = count > 0 ? '$count' : '';
     selectDefault();

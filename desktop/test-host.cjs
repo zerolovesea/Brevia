@@ -124,12 +124,14 @@ async function native(method, args) {
           core: {
             invoke: (_method, { channel, payload }) => window.__breviaInvoke(channel, payload),
           },
-          event: {
-            listen: async (_name, fn) => {
-              const id = Math.random();
-              listeners.set(id, fn);
-              return () => listeners.delete(id);
-            },
+          webviewWindow: {
+            getCurrentWebviewWindow: () => ({
+              listen: async (_name, fn) => {
+                const id = Math.random();
+                listeners.set(id, fn);
+                return () => listeners.delete(id);
+              },
+            }),
           },
         };
         (0, eval)(bridge);

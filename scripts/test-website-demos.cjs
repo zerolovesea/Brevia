@@ -88,6 +88,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         '.js': 'text/javascript; charset=utf-8',
         '.css': 'text/css; charset=utf-8',
         '.svg': 'image/svg+xml',
+        '.wasm': 'application/wasm',
         '.png': 'image/png',
       };
       response
@@ -762,499 +763,302 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       assert.equal(shots.notes[3].layoutToggle, false);
       console.log(`PASS differentiated transcription and AI review ${locale}`);
     }
-    const captures = join(root, 'output/playwright/affine-implementation');
+    const captures = join(root, 'output/playwright/landing');
     mkdirSync(captures, { recursive: true });
-    async function waitForPlayer(selector) {
-      for (let attempt = 0; attempt < 120; attempt++) {
-        if (
-          await win.evaluate(
-            `!!document.querySelector('${selector} iframe')?.contentWindow.productMotion`,
-          )
-        )
-          return;
-        await wait(30);
-      }
-      throw Error(`Player did not load: ${selector}`);
-    }
+    const waitForApp = () =>
+      win.waitForFunction(() => !!document.querySelector('.app-frame')?.contentWindow.appMotion);
     for (const locale of ['zh', 'en']) {
-      for (const width of [320, 375, 390, 696, 768, 1024, 1280, 1440]) {
-        await win.setViewportSize({ width: width, height: 900 });
+      for (const [width, height] of [
+        [320, 568],
+        [390, 844],
+        [768, 1024],
+        [1280, 720],
+        [1440, 900],
+        [1920, 1080],
+        [568, 320],
+      ]) {
+        await win.setViewportSize({ width, height });
         await loadHome(locale);
-        await win.evaluate(`(async () => {
-            document.querySelectorAll('img').forEach(image => image.loading = 'eager');
-            await Promise.all([...document.images].map(image => image.decode()));
-            await document.fonts.ready;
-            for (let attempt = 0; attempt < 100; attempt++) {
-              if (document.querySelector('[data-github-stars]').textContent === '1.2K') return;
-              await new Promise(resolve => setTimeout(resolve, 20));
+        await waitForApp();
+        if (locale === 'en' && width === 1440) {
+          await win.locator('.demo').click();
+          const preview = await win.locator('.app-frame').evaluate((frame) => {
+            const app = frame.contentDocument;
+            const capsule = app.querySelector('iframe:not(.pair-phone)').contentDocument;
+            const untranslated = [];
+            for (const time of [6000, 11000, 17000, 28000, 33000, 54500]) {
+              frame.contentWindow.appMotion.render(time);
+              for (const doc of time === 17000 ? [app, capsule] : [app]) {
+                const visible = [...doc.querySelectorAll('*')].filter(
+                  (el) =>
+                    el.checkVisibility({ visibilityProperty: true }) &&
+                    el.getBoundingClientRect().width,
+                );
+                for (const el of visible) {
+                  const strings = [...el.childNodes]
+                    .filter((n) => n.nodeType === 3)
+                    .map((n) => n.textContent);
+                  strings.push(
+                    ...['title', 'placeholder', 'aria-label', 'data-tooltip', 'alt'].map((key) =>
+                      el.getAttribute(key),
+                    ),
+                  );
+                  untranslated.push(
+                    ...strings.filter((text) => text && /\p{Script=Han}/u.test(text)),
+                  );
+                }
+              }
             }
-            throw Error('GitHub star count did not load');
-          })()`);
-        const page = await win.evaluate(`({
+            return {
+              untranslated,
+              source: capsule.querySelector('[data-caption-text]').textContent,
+              target: capsule.querySelector('.capsule-translation').textContent,
+            };
+          });
+          assert.deepEqual(preview.untranslated, []);
+          assert.match(preview.source, /^Simplifiquemos/);
+          assert.match(preview.target, /^Let’s make/);
+        }
+        const layout = await win.evaluate(() => {
+          const frame = document.querySelector('.app-frame');
+          const app = frame.contentDocument;
+          return {
             overflow: document.documentElement.scrollWidth > innerWidth,
-            headerFits: [...document.querySelectorAll('.header-inner > *, .header-actions > *')].filter(element => element.getClientRects().length).every(element => {const rect = element.getBoundingClientRect();return rect.left >= 0 && rect.right <= innerWidth;}),
-            github: (() => {
-              const link = document.querySelector('.github-link');
-              const box = link.getBoundingClientRect();
-              const count = link.querySelector('[data-github-stars]').getBoundingClientRect();
-              return link.href === 'https://github.com/zerolovesea/Brevia' && box.width >= 44 && box.height >= 44 && count.right <= box.right && link.getAttribute('aria-label').includes('1,234');
-            })(),
-            headerIcons: (() => {
-              const icons = [...document.querySelectorAll('.header-actions svg')].filter(icon => icon.getBoundingClientRect().width > 0);
-              const centers = icons.map(icon => { const box = icon.getBoundingClientRect(); return box.top + box.height / 2; });
-              return icons.every(icon => icon.querySelector('path') && icon.getBBox().width > 0) && Math.max(...centers) - Math.min(...centers) < 1;
-            })(),
-            headings: document.querySelectorAll('h1').length,
-            motions: document.querySelectorAll('[data-motion-scene]').length,
-            staticApplicationImages: document.querySelectorAll('.privacy-app img[src*="/app-ui/"][src*="-models.png"]').length,
-            missingAnchors: [...document.querySelectorAll('a[href^="#"]')].filter(link => !document.getElementById(link.hash.slice(1))).map(link => link.hash),
-            downloads: [...document.querySelectorAll('.platform-row a')].map(link => link.href),
-            sticky: getComputedStyle(document.querySelector('.site-header')).position,
-            featureSections: [...document.querySelectorAll('[data-story-panel]')].every(panel => panel.getBoundingClientRect().height > 0 && !panel.hasAttribute('aria-hidden')),
-            softwareBrands: document.querySelectorAll('.software-group:not([aria-hidden]) .software-brand').length,
-            icons: [...document.querySelectorAll('use')].every(use => ['./icons.svg#', './sketches.svg#'].some(prefix => use.getAttribute('href').startsWith(prefix))),
-            qrWidths: [...document.querySelectorAll('.qr-link img')].map(img=>img.getBoundingClientRect().width),
-            mobileFirst: getComputedStyle(document.querySelector('#mobile-download')).order,
-          })`);
-        assert.equal(page.overflow, false, `${locale}/${width}: horizontal overflow`);
-        assert.equal(page.headerFits, true, `${locale}/${width}: header clipped`);
-        assert.equal(page.github, true, `${locale}/${width}: GitHub link or stars clipped`);
-        assert.equal(
-          page.headerIcons,
-          true,
-          `${locale}/${width}: header icons missing or misaligned`,
-        );
-        assert.equal(page.headings, 1);
-        if (locale === 'zh' && width >= 1280) {
-          const conceptLayout = await win.evaluate(`(() => {
-              const heading = document.querySelector('#title-transcription');
-              const lines = heading.getBoundingClientRect().height / parseFloat(getComputedStyle(heading).lineHeight);
-              const demo = document.querySelector('#transcription [data-motion-scene]');
-              return {lines, aspect: getComputedStyle(demo).aspectRatio, ctaWidth: document.querySelector('.hero-actions .button').getBoundingClientRect().width};
-            })()`);
-          assert.ok(Math.abs(conceptLayout.lines - 2) < 0.05, '转写标题保持概念图的两行');
-          assert.equal(conceptLayout.aspect, '1152 / 800');
-          assert.ok(conceptLayout.ctaWidth >= 264, '首屏主操作保持概念图的宽度');
-        }
-
-        assert.deepEqual(
-          page.qrWidths,
-          width < 640 ? [0, 0] : [128, 128],
-          'Desktop QR codes stay secondary; phones use direct download buttons',
-        );
-        const downloadLayout = await win.evaluate(`(() => {
-            const rows = [...document.querySelectorAll('.platform-row')];
-            return {
-              readable: [...document.querySelectorAll('.platform-name')].every(name => name.getBoundingClientRect().width >= 140),
-              linksFit: rows.every(row => [...row.querySelectorAll('a')].filter(link => link.getClientRects().length).every(link => {const a = link.getBoundingClientRect(), r = row.getBoundingClientRect();return a.left >= r.left && a.right <= r.right + 1 && link.scrollWidth <= link.clientWidth + 1})),
-              mobileActions: document.querySelectorAll('#mobile-download .platform-name > .button').length,
-              heights: rows.map(row => row.getBoundingClientRect().height),
-              stacked: document.querySelector('#mobile-download').getBoundingClientRect().top > document.querySelector('.download-column').getBoundingClientRect().bottom,
-            };
-          })()`);
-        assert.equal(downloadLayout.readable, true, `${locale}/${width}: platform text squeezed`);
-        assert.equal(downloadLayout.linksFit, true, `${locale}/${width}: download button clipped`);
-        assert.equal(downloadLayout.mobileActions, 2);
-        if (width >= 640)
-          assert.ok(
-            Math.max(...downloadLayout.heights) - Math.min(...downloadLayout.heights) < 1,
-            `${locale}/${width}: download row proportions differ`,
-          );
-        if (width >= 640 && width < 1000)
+            demos: document.querySelectorAll('.demo').length,
+            media: app.querySelectorAll('video,img[src$=".png"]:not(#mobile-qr),img[src$=".webp"]')
+              .length,
+            currentStyles: !!app.querySelector('link[href$="/desktop-workspace.css"]'),
+            controls: document.querySelectorAll('.motion-toggle,.demo-controls').length,
+            fits:
+              frame.getBoundingClientRect().top >= 0 &&
+              frame.getBoundingClientRect().bottom <= innerHeight &&
+              document.querySelector('.download-area')?.getBoundingClientRect().bottom <=
+                innerHeight,
+            scrollable: document.documentElement.scrollHeight > innerHeight,
+            canvas: document.querySelector('.demo-canvas').getBoundingClientRect().height,
+            backend: !!frame.contentWindow.brevia,
+          };
+        });
+        assert.equal(layout.overflow, false, `${locale}/${width}: horizontal overflow`);
+        assert.equal(layout.demos, 1);
+        assert.equal(layout.media, 0, 'Application renders live DOM, not screenshots');
+        assert.equal(layout.controls, 0);
+        assert.ok(layout.currentStyles && layout.fits && layout.canvas >= 150);
+        assert.equal(layout.scrollable, false, 'The default page fits in the viewport');
+        assert.equal(layout.backend, false, 'Demonstration has no native backend');
+        for (const platform of ['macos', 'windows', 'ios', 'android']) {
+          await win.locator(`label[for="platform-${platform}"]`).click();
+          assert.equal(await win.locator('.platform-link:visible').count(), 1);
           assert.equal(
-            downloadLayout.stacked,
-            true,
-            'Tablet download groups stack before text gets cramped',
-          );
-        assert.equal(page.motions, 7);
-        assert.equal(
-          page.staticApplicationImages,
-          1,
-          'Privacy section includes the real model library',
-        );
-        assert.equal(page.featureSections, true);
-        if (width >= 1000) {
-          const splitLayout =
-            await win.evaluate(`['#transcription','#notes','#minutes','#mobile-microphone','#mobile-field','#library'].every(selector => {
-              const panel = document.querySelector(selector);
-              const copy = panel.querySelector('.scene-copy,.collaboration-copy,.section-intro').getBoundingClientRect();
-              const visual = panel.querySelector('.scene-visual,.collaboration-visual,.library-visual').getBoundingClientRect();
-              return visual.left > copy.right && Math.min(copy.bottom, visual.bottom) > Math.max(copy.top, visual.top);
-            })`);
-          assert.equal(
-            splitLayout,
-            true,
-            `${locale}/${width}: feature text must sit left of its application window`,
+            await win.locator('.platform-link:visible').getAttribute('data-platform'),
+            platform,
           );
         }
-
-        const artwork = await win.evaluate(`(() => {
-            const image = document.querySelector('.privacy-app');
-            const parent = image.closest('.privacy-local').getBoundingClientRect();
-            const box = image.getBoundingClientRect();
-            return {transform:getComputedStyle(image).transform, fits:box.left >= parent.left && box.right <= parent.right + 1,
-              connections:document.querySelectorAll('.connected-art,.connection-arm').length,
-              note:!!document.querySelector('.note-paper h4')};
-          })()`);
-        assert.equal(artwork.transform, 'none', 'Model library stays upright');
-        assert.equal(artwork.fits, true, `${locale}/${width}: model library clipped`);
-        assert.equal(
-          artwork.connections,
-          0,
-          'Workflow uses readable notes instead of diagram chrome',
-        );
-        assert.equal(artwork.note, true);
-
-        assert.equal(page.softwareBrands, 20);
-        assert.equal(page.icons, true);
-        assert.deepEqual(page.missingAnchors, []);
-        assert.ok(page.downloads.some((url) => url.endsWith('.dmg')));
-        assert.ok(page.downloads.some((url) => url.endsWith('-setup.exe')));
-        assert.ok(page.downloads.includes('https://apps.apple.com/app/id6819869442'));
-        assert.ok(page.downloads.some((url) => url.endsWith('/android/Brevia-android.apk')));
-        assert.equal(page.sticky, 'sticky');
-        if (width < 640) assert.equal(page.mobileFirst, '-1');
-        await waitForPlayer('.hero-visual');
-        const assetVersions = await win.evaluate(`(() => {
-            const frame = document.querySelector('.hero-visual iframe');
-            const urls = [...document.querySelectorAll('link[href*="landing.css"],script[src*="landing.js"]')].map(element => element.href || element.src);
-            urls.push(frame.src, ...[...frame.contentDocument.querySelectorAll('link[href*="-motion.css"],script[src*="-motion.js"]')].map(element => element.href || element.src));
-            return {count:urls.length, versioned:urls.every(url => new URL(url).searchParams.has('v'))};
-          })()`);
-        const productBrand = await win.evaluate(`(() => {
-            const doc = document.querySelector('.hero-visual iframe').contentDocument;
-            const names = [...doc.querySelectorAll('.brand-name,.window-wordmark')];
-            return names.length === 2 && names.every(node => node.textContent === 'Brevia' || node.querySelector('img')?.alt === 'Brevia');
-          })()`);
-        assert.equal(productBrand, true, 'Product brand remains Brevia in both languages');
-        assert.equal(assetVersions.count, 8);
-        assert.equal(
-          assetVersions.versioned,
-          true,
-          'Returning visitors must receive the matching styles and scripts',
-        );
-        const beforeMotion = await win.evaluate(
-          "document.querySelector('.hero-visual iframe').contentWindow.productMotion.elapsed",
-        );
-        await wait(160);
-        assert.ok(
-          (await win.evaluate(
-            "document.querySelector('.hero-visual iframe').contentWindow.productMotion.elapsed",
-          )) > beforeMotion,
-          'Visible hero should play',
-        );
-        assert.equal(
-          await win.evaluate(
-            "document.querySelectorAll('.demo-controls,.software-footer,.scene-hint,[data-motion-toggle],[data-motion-replay],[data-software-toggle]').length",
-          ),
-          0,
-          'Demo labels and controls must be removed',
-        );
-        assert.equal(
-          await win.evaluate(
-            '/示例会议|真实组件演示|暂停滚动|Sample meeting|Real interface|Pause scrolling|System-audio permission required/.test(document.body.innerText)',
-          ),
-          false,
-          'Demo meta copy must be removed in both languages',
-        );
         if ([390, 1440].includes(width)) {
-          writeFileSync(join(captures, `${locale}-${width}-hero.png`), await shot(width));
+          await win.evaluate(() => scrollTo(0, 0));
+          await win.screenshot({ path: join(captures, `${locale}-${width}.png`), fullPage: true });
         }
-        await win.evaluate(
-          "document.querySelector('[data-story]').scrollIntoView({behavior:'instant'})",
-        );
-        for (const target of ['transcription', 'notes', 'minutes']) {
-          await win.evaluate(
-            `document.querySelector('#${target}').scrollIntoView({behavior:'instant',block:'center'})`,
-          );
-          await wait(450);
-          await waitForPlayer(`#${target}`);
-          const state = await win.evaluate(`(() => {
-              const panel = document.querySelector('#${target}');const demo = panel.querySelector('[data-motion-scene]');
-              const frame = demo.querySelector('iframe');const bounds=frame.getBoundingClientRect();
-              return {visible:getComputedStyle(panel).visibility, running:frame.contentWindow.productMotion.running, noCrop:bounds.width <= demo.clientWidth + 1 && bounds.height <= demo.clientHeight + 1,
-                focus: frame.contentDocument.body.dataset.focus, sidebar: getComputedStyle(frame.contentDocument.querySelector('.sidebar')).display, text:frame.contentDocument.querySelector('#motion-stage').innerText};
-            })()`);
-          assert.equal(
-            state.visible,
-            'visible',
-            `${locale}/${width}/${target}: visible product section`,
-          );
-          assert.equal(state.running, true);
-          assert.equal(state.noCrop, true);
-          assert.equal(state.focus, '', 'Product scenes must keep the complete application');
-          assert.notEqual(state.sidebar, 'none', 'Product scenes include the application sidebar');
-          assert.ok(state.text.includes(locale === 'zh' ? '产品周会' : 'Product sync'));
-          if (target === 'transcription') {
-            assert.equal(
-              await win.evaluate("document.querySelector('#transcription iframe').style.width"),
-              '1152px',
-            );
-            await win.evaluate(
-              "document.querySelector('#transcription iframe').contentWindow.productMotion.seek(7500)",
-            );
-          }
-          if (target === 'notes') {
-            const effect = await win.evaluate(
-              `(() => {const frame=document.querySelector('#notes iframe');frame.contentWindow.productMotion.seek(1650);const d=frame.contentDocument;return {cursor:!d.querySelector('.motion-cursor').hidden,suggestion:d.querySelector('.ai-suggestion-text').textContent};})()`,
-            );
-            assert.equal(effect.cursor, true);
-            assert.ok(effect.suggestion.includes(locale === 'zh' ? '既定范围' : 'agreed'));
-            await win.evaluate(
-              "document.querySelector('#notes iframe').contentWindow.productMotion.seek(1900)",
-            );
-          }
-          if ([390, 1440].includes(width)) {
-            await wait(80);
-            writeFileSync(join(captures, `${locale}-${width}-${target}.png`), await shot(width));
-          }
-        }
-        await win.evaluate(
-          "document.querySelector('.software-section').scrollIntoView({behavior:'instant',block:'center'})",
-        );
-        await wait(100);
-        const software = await win.evaluate(`(() => {
-            const brands = [...document.querySelectorAll('.software-brand')];
-            const boxes = brands.map(brand => brand.getBoundingClientRect());
-            return {
-              duplicates: document.querySelectorAll('.software-group[aria-hidden]').length,
-              overlap: boxes.some((box, i) => boxes.some((other, j) => i !== j && box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)),
-              labelsFit: brands.every(brand => brand.scrollWidth <= brand.clientWidth),
-              animation: getComputedStyle(document.querySelector('.software-group')).animationName,
-            };
-          })()`);
-        assert.equal(software.duplicates, 2, 'Each row has one hidden seamless-loop copy');
-        assert.equal(software.overlap, false, `${locale}/${width}: software logos overlap`);
-        assert.equal(software.labelsFit, true, `${locale}/${width}: software labels clipped`);
-        assert.equal(software.animation, 'software-travel');
-        const wallSelector = "document.querySelector('.software-group')";
-        const beforeScroll = await win.evaluate(`getComputedStyle(${wallSelector}).transform`);
-        await wait(100);
-        assert.notEqual(
-          await win.evaluate(`getComputedStyle(${wallSelector}).transform`),
-          beforeScroll,
-          'Visible software rows scroll',
-        );
-        const overlapsAtLoop = await win.evaluate(`(() => {
-            const groups = [...document.querySelectorAll('.software-group')];
-            return [0, 0.5, 0.9999].some(progress => {
-              groups.forEach(group => group.getAnimations().forEach(animation => animation.currentTime = animation.effect.getTiming().duration * progress));
-              const boxes = [...document.querySelectorAll('.software-brand')].map(brand => brand.getBoundingClientRect());
-              return boxes.some((box, i) => boxes.some((other, j) => i !== j && box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top));
-            });
-          })()`);
-        assert.equal(
-          overlapsAtLoop,
-          false,
-          `${locale}/${width}: logos overlap around loop boundary`,
-        );
-        await win.evaluate("document.querySelector('.software-wall').focus({preventScroll:true})");
-        assert.equal(
-          await win.evaluate(`getComputedStyle(${wallSelector}).animationPlayState`),
-          'paused',
-          'Keyboard focus pauses logos',
-        );
-        await win.evaluate(
-          "document.activeElement.blur();Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))",
-        );
-        await wait(60);
-        const hiddenScroll = await win.evaluate(`getComputedStyle(${wallSelector}).transform`);
-        await wait(100);
-        assert.equal(
-          await win.evaluate(`getComputedStyle(${wallSelector}).transform`),
-          hiddenScroll,
-          'Background logos stay still',
-        );
-        await win.evaluate(
-          "delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))",
-        );
-        const navigation = await win.evaluate(`(() => {
-            const links = [...document.querySelectorAll('.workflow-nav a')];
-            return {
-              destinations: links.map(link => link.hash),
-              readable: links.every(link => link.scrollWidth <= link.clientWidth && link.clientHeight >= 44),
-              heroPreview: !!document.querySelector('.hero-caption a[target="_blank"]'),
-              headingsFit: [...document.querySelectorAll('h1,h2,h3')].every(heading => heading.scrollWidth <= heading.clientWidth),
-              trustLabelsFit: [...document.querySelectorAll('.hero-trust > span')].every(label => label.scrollWidth <= label.clientWidth && getComputedStyle(label).whiteSpace === 'nowrap'),
-              featureHeadingLines: document.querySelector('#features h2').clientHeight / parseFloat(getComputedStyle(document.querySelector('#features h2')).lineHeight),
-            };
-          })()`);
-        assert.deepEqual(navigation.destinations, ['#transcription', '#notes', '#minutes']);
-        assert.equal(navigation.readable, true, `${locale}/${width}: workflow labels clipped`);
-        assert.equal(navigation.heroPreview, true, 'Hero interface can be opened at full size');
-        assert.equal(navigation.headingsFit, true, `${locale}/${width}: heading clipped`);
-        assert.equal(navigation.trustLabelsFit, true, `${locale}/${width}: trust label split`);
-        if (locale === 'zh')
-          assert.ok(
-            navigation.featureHeadingLines <= 2.1,
-            `${width}: Chinese feature heading breaks mid-phrase`,
-          );
-        for (const target of [
-          'features',
-          'software-title',
-          'mobile',
-          'mobile-microphone',
-          'mobile-field',
-          'library',
-          'privacy',
-          'download',
-        ]) {
-          await win.evaluate(
-            `document.querySelector('#${target}').scrollIntoView({behavior:'instant'})`,
-          );
-          await wait(200);
-          if (target.startsWith('mobile-')) {
-            await waitForPlayer(`#${target}`);
-            const pairing = await win.evaluate(
-              `(()=>{const el=document.querySelector('#${target} .motion-demo'),f=el.querySelector('iframe'),r=f.getBoundingClientRect();return {scene:f.contentWindow.productMotion.scene,running:f.contentWindow.productMotion.running,fits:r.width<=el.clientWidth+1&&r.height<=el.clientHeight+1}})()`,
-            );
-            assert.equal(
-              pairing.scene,
-              target === 'mobile-field' ? 'pair-field' : 'pair-microphone',
-            );
-            assert.equal(pairing.running, true);
-            assert.equal(pairing.fits, true);
-          }
-          if ([390, 1440].includes(width))
-            writeFileSync(join(captures, `${locale}-${width}-${target}.png`), await shot(width));
-        }
-        const pausedAt = await win.evaluate(
-          "document.querySelector('.hero-visual iframe').contentWindow.productMotion.elapsed",
-        );
-        await wait(100);
-        assert.equal(
-          await win.evaluate(
-            "document.querySelector('.hero-visual iframe').contentWindow.productMotion.elapsed",
-          ),
-          pausedAt,
-          'Offscreen motion should pause',
-        );
-        if (width < 1000) {
-          await win.evaluate("document.querySelector('.mobile-menu summary').click()");
-          assert.equal(await win.evaluate("document.querySelector('.mobile-menu').open"), true);
-          await win.keyboard.down('Escape');
-          await win.keyboard.up('Escape');
-          await wait(140);
-          assert.equal(await win.evaluate("document.querySelector('.mobile-menu').open"), false);
-        }
-        await win.evaluate("document.querySelector('.language-picker summary').click()");
-        assert.equal(await win.evaluate("document.querySelector('.language-picker').open"), true);
-        await win.evaluate("document.querySelector('h1').click()");
-        await wait(140);
-        assert.equal(await win.evaluate("document.querySelector('.language-picker').open"), false);
-        await win.evaluate(`(() => {
-            const trigger = document.querySelector('.language-picker summary');
-            trigger.click(); trigger.click(); trigger.click();
-          })()`);
-        await wait(200);
-        assert.equal(
-          await win.evaluate("document.querySelector('.language-picker').open"),
-          true,
-          'Reopening cancels the old exit',
-        );
-        await win.evaluate("document.querySelector('.language-picker summary').click()");
-        await wait(140);
-        assert.equal(
-          await win.evaluate(`(() => {
-              const item = document.querySelector('.faq-item:not([open])');
-              item.querySelector('summary').click();
-              return item.open;
-            })()`),
-          true,
-          'A collapsed FAQ opens when its summary is activated',
-        );
-        console.log(`PASS homepage ${locale}/${width}: autoplay, sections, layout, downloads`);
       }
     }
-    // 结果过后进入下一轮；离屏、后台和减少动态效果仍暂停。
-    await win.setViewportSize({ width: 1440, height: 900 });
+    await win.setViewportSize({ width: 1440, height: 1100 });
+    await win.clock.install();
     await loadHome('zh');
-    await waitForPlayer('.hero-visual');
-    const initialTransform = await win.evaluate(
-      "getComputedStyle(document.querySelector('.hero-window')).transform",
-    );
-    await win.evaluate(
-      "scrollTo({top:document.querySelector('.hero-visual').offsetTop - document.querySelector('.site-header').offsetHeight - 24,behavior:'instant'})",
-    );
-    await wait(80);
-    const scrolledTransform = await win.evaluate(
-      "getComputedStyle(document.querySelector('.hero-window')).transform",
-    );
-    assert.equal(initialTransform, 'none');
-    assert.equal(scrolledTransform, 'none', 'Scrolling must not zoom the hero');
-    await win.evaluate("scrollTo({top:0,behavior:'instant'})");
-    await wait(80);
-    await win.evaluate(
-      "const player=document.querySelector('.hero-visual iframe').contentWindow.productMotion;player.seek(player.duration-600)",
-    );
-    await wait(900);
-    const loop = await win.evaluate(
-      "(()=>{const f=document.querySelector('.hero-visual iframe');return {running:f.contentWindow.productMotion.running,cycle:Number(f.contentDocument.querySelector('#motion-stage').dataset.cycle)}})()",
-    );
-    assert.equal(loop.running, true);
-    assert.ok(loop.cycle >= 1, 'Homepage demos must loop');
-    await loadHome('zh');
-    await waitForPlayer('.hero-visual');
-    await wait(80);
-    assert.equal(
-      await win.evaluate(
-        "document.querySelector('.hero-visual iframe').contentWindow.productMotion.running",
-      ),
-      true,
-    );
-    await win.evaluate(
-      "Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))",
-    );
-    await wait(80);
-    assert.equal(
-      await win.evaluate(
-        "document.querySelector('.hero-visual iframe').contentWindow.productMotion.running",
-      ),
-      false,
-    );
-    await win.evaluate(
-      "delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))",
-    );
-    cdp = await context.newCDPSession(win);
-    await cdp.send('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
-    });
-    await wait(200);
-    const reduced = await win.evaluate(
-      `({playing:[...document.querySelectorAll('.motion-demo iframe')].some(frame=>frame.contentWindow.productMotion?.running),scroll:getComputedStyle(document.documentElement).scrollBehavior,hero:getComputedStyle(document.querySelector('.hero-window')).transform,software:getComputedStyle(document.querySelector('.software-group')).animationName,stage:getComputedStyle(document.querySelector('.scene-visual .motion-demo')).transform,faq:getComputedStyle(document.querySelector('.faq-item'),'::details-content').transitionDuration})`,
-    );
-    assert.equal(reduced.playing, false);
-    assert.equal(reduced.scroll, 'auto');
-    assert.equal(reduced.hero, 'none');
-    assert.equal(reduced.software, 'none');
-    assert.equal(reduced.stage, 'none');
-    assert.equal(reduced.faq, '0s', 'Reduced motion also disables FAQ size interpolation');
-    await cdp.detach();
-    console.log('PASS continuous loop, background pause, and reduced motion');
-
-    const noScriptContext = await browser.newContext({
-      javaScriptEnabled: false,
-      viewport: { width: 1440, height: 900 },
-    });
-    const noScript = await noScriptContext.newPage();
-    try {
-      await noScript.goto(pathToFileURL(join(root, 'website/index-zh.html')).href);
-      // 调试协议读取 DOM，不在页面执行脚本。
-      const noScriptCDP = await noScriptContext.newCDPSession(noScript);
-      const { root: dom } = await noScriptCDP.send('DOM.getDocument');
-      const { nodeId } = await noScriptCDP.send('DOM.querySelector', {
-        nodeId: dom.nodeId,
-        selector: '.story-panel',
-      });
-      const { model } = await noScriptCDP.send('DOM.getBoxModel', {
-        nodeId,
-      });
-      assert.ok(model.width > 0 && model.height > 0);
-    } finally {
-      await noScriptContext.close();
+    await waitForApp();
+    await win.clock.runFor(100);
+    const previewFrame = await win.locator('.app-frame').elementHandle();
+    assert.deepEqual(await win.locator('.feature-tabs label').allTextContents(), [
+      '转写与 AI 笔记',
+      '鱼骨图',
+      '手机协作',
+      'Agent 与 MCP',
+      '会议胶囊',
+    ]);
+    for (const [feature, phase] of [
+      ['live', 1],
+      ['fishbone', 3],
+      ['capsule', 2],
+      ['agent', 4],
+      ['phone', 0],
+    ]) {
+      await win.locator(`label[for="feature-${feature}"]`).click();
+      assert.equal(await win.locator('.demo').getAttribute('data-phase'), String(phase));
+      assert.ok(
+        await previewFrame.evaluate((frame) => frame === document.querySelector('.app-frame')),
+      );
     }
-    console.log('PASS homepage without JavaScript');
-
+    await win.waitForFunction(
+      () =>
+        !!document.querySelector('.app-frame').contentDocument.querySelector('.pair-phone')
+          .contentWindow.showMeetingPreview,
+    );
+    const feature = await win.locator('.app-frame').evaluate((frame) => {
+      const doc = frame.contentDocument;
+      const capsule = doc.querySelector('iframe:not(.pair-phone)').contentDocument;
+      const seek = (time) => frame.contentWindow.appMotion.render(time);
+      const steps = [33000, 35000, 38900].map((time) => {
+        seek(time);
+        return doc.querySelector('.pair-scene').dataset.step;
+      });
+      const phoneUI =
+        !!doc.querySelector('#mobile-pair-dialog[open] #mobile-qr') &&
+        !!doc.querySelector('.pair-phone').contentWindow.showMeetingPreview;
+      seek(200);
+      const identifying = doc.querySelector('.segment-speaker').textContent;
+      seek(4800);
+      const recognized = doc.querySelector('.segment-speaker').textContent;
+      const translated = !!doc.querySelector('#transcript-scroll .translation')?.textContent;
+      seek(11000);
+      const aiVisible = !doc.querySelector('[data-ai-suggestion]').hidden;
+      const contrast = (selector) => {
+        const style = doc.defaultView.getComputedStyle(doc.querySelector(selector));
+        const luminance = (color) =>
+          color
+            .match(/\d+/g)
+            .slice(0, 3)
+            .reduce((sum, channel, i) => {
+              const n = Number(channel) / 255;
+              return (
+                sum +
+                [0.2126, 0.7152, 0.0722][i] *
+                  (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
+              );
+            }, 0);
+        const a = luminance(style.color),
+          b = luminance(style.backgroundColor);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      };
+      const readable = ['.ai-suggestion-accept', '#pause'].every(
+        (selector) => contrast(selector) >= 4.5,
+      );
+      const fullColor = getComputedStyle(frame.parentElement).filter === 'none';
+      const metrics = doc.querySelectorAll('[data-library-metrics] > [aria-label]').length;
+      const card = doc.querySelector('.ai-suggestion-card');
+      seek(11017);
+      const stableCard = card === doc.querySelector('.ai-suggestion-card');
+      seek(17000);
+      const expanded = !capsule.querySelector('#capsule-panel').hidden;
+      const pauseIcon = capsule.querySelector('.capsule-pause svg');
+      seek(18100);
+      const stableCapsule = pauseIcon === capsule.querySelector('.capsule-pause svg');
+      seek(28000);
+      return {
+        steps,
+        phoneUI,
+        readable,
+        fullColor,
+        metrics,
+        stableCard,
+        stableCapsule,
+        identifying,
+        recognized,
+        translated,
+        aiVisible,
+        expanded,
+        causes: !!doc.querySelector('.detail-cause-scroll'),
+      };
+    });
+    assert.deepEqual(feature, {
+      steps: ['scan', 'start', 'record'],
+      phoneUI: true,
+      readable: true,
+      fullColor: true,
+      metrics: 4,
+      stableCard: true,
+      stableCapsule: true,
+      identifying: '识别中…',
+      recognized: '林晓',
+      translated: true,
+      aiVisible: true,
+      expanded: true,
+      causes: true,
+    });
+    await win.locator('label[for="feature-live"]').click();
+    await win.clock.runFor(11000);
+    assert.ok(
+      await previewFrame.evaluate(
+        (frame) => !frame.contentDocument.querySelector('[data-ai-suggestion]').hidden,
+      ),
+    );
+    await win.clock.runFor(4000);
+    assert.equal(await win.locator('.demo').getAttribute('data-phase'), '1');
+    await win.locator('.demo').click();
+    await win.clock.runFor(11000);
+    assert.equal(await win.locator('.demo').getAttribute('data-phase'), '1');
+    await win.locator('.demo').focus();
+    await win.keyboard.press('Space');
+    await win.clock.runFor(11000);
+    assert.equal(await win.locator('.demo').getAttribute('data-phase'), '2');
+    await win.locator('#feature-live').focus();
+    await win.keyboard.press('ArrowRight');
+    assert.ok(await win.locator('#feature-fishbone').isChecked());
+    await win.locator('label[for="feature-agent"]').click();
+    await win.clock.runFor(2300);
+    const agent = win.frameLocator('.app-frame').locator('.agent-demo');
+    await agent.locator('.agent-guide-copy[data-copy-state="done"]').waitFor();
+    assert.equal(
+      await agent.locator('.settings-navigation [aria-current=page]').innerText(),
+      'Agent 与 MCP',
+    );
+    assert.equal(
+      await win
+        .locator('.app-frame')
+        .evaluate(
+          (frame) =>
+            frame.contentDocument.querySelector('.window-bar').getBoundingClientRect().left,
+        ),
+      0,
+      'Settings toolbar spans the full app window',
+    );
+    const prompt = await agent.locator('.agent-guide').innerText();
+    await win.clock.runFor(1200);
+    assert.equal(await agent.locator('.codex-composer .agent-paste').innerText(), prompt);
+    const request = await agent.locator('.codex-input-task').innerText();
+    assert.match(request, /entrevista\.wav/);
+    await win.clock.runFor(1600);
+    assert.equal(await agent.locator('.codex-user-message').innerText(), `${prompt}\n\n${request}`);
+    assert.match(await agent.locator('.agent-work code').innerText(), /SKILL\.md/);
+    await win.clock.runFor(1000);
+    assert.match(await agent.locator('.agent-work code').innerText(), /status --no-start/);
+    await win.clock.runFor(2000);
+    assert.match(
+      await agent.locator('.agent-work code').innerText(),
+      /transcribe.*entrevista\.wav/,
+    );
+    await win.clock.runFor(2200);
+    assert.match(
+      await agent.locator('.agent-work code').innerText(),
+      /translate.*entrevista\.es\.srt/,
+    );
+    await win.clock.runFor(3200);
+    assert.match(
+      await agent.locator('.codex-code pre').innerText(),
+      /00:00:04,000 --> 00:00:08,000[\s\S]*We decided to test/,
+    );
+    assert.deepEqual(await agent.locator('.agent-reply code').allTextContents(), [
+      'entrevista.es.srt',
+      'entrevista.en.srt',
+    ]);
+    await agent.locator('.agent-reply').waitFor();
+    await win.clock.runFor(3000);
+    assert.equal(await agent.getAttribute('data-screen'), 'settings');
+    await win.emulateMedia({ reducedMotion: 'reduce' });
+    await win.locator('.demo.is-paused').waitFor();
+    await agent.locator('.agent-reply').waitFor();
+    await win.emulateMedia({ reducedMotion: 'no-preference' });
+    console.log(
+      'PASS default feature tabs, merged live/notes loop, Agent skill, CLI and MCP handoff',
+    );
+    const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
+    const noScript = await noScriptContext.newPage();
+    await noScript.goto(`${siteURL}/website/index-en.html`);
+    for (const platform of ['macos', 'windows', 'ios', 'android']) {
+      await noScript.locator(`label[for="platform-${platform}"]`).click();
+      assert.equal(
+        await noScript.locator('.platform-link:visible').getAttribute('data-platform'),
+        platform,
+      );
+    }
+    await noScriptContext.close();
     // 与 Pages 工作流使用相同的目录布局和路径替换。
     const deployed = join(temp, 'site');
     cpSync(join(root, 'website'), deployed, { recursive: true });
@@ -1271,6 +1075,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     }
     for (const locale of ['zh', 'en']) {
       await loadHome(locale, '__deployed__');
+      await waitForApp();
       const resources = await win.evaluate(`(async () => {
           document.querySelectorAll('img').forEach(image => image.loading = 'eager');
           await Promise.all([...document.images].map(image => image.decode()));
@@ -1280,9 +1085,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         assert.ok((await fetch(url)).ok, `Missing deployed resource ${url}`);
       await wait(400);
       assert.equal(
-        await win.evaluate(
-          "document.querySelector('.hero-visual .motion-demo').classList.contains('is-ready')",
-        ),
+        await win.evaluate("!!document.querySelector('.app-frame')?.contentWindow.appMotion"),
         true,
       );
     }
@@ -1296,6 +1099,9 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     ];
     mkdirSync(join(temp, 'docs'), { recursive: true });
     for (const file of readmes) cpSync(join(root, file), join(temp, file));
+    mkdirSync(join(temp, 'dist'));
+    for (const name of ['Brevia-WebKit-9.8.7-arm64.dmg', 'Brevia-9.8.7-x64-setup.exe'])
+      writeFileSync(join(temp, 'dist', name), Buffer.alloc(100000));
     const release = spawnSync(process.execPath, [join(root, 'scripts/update-release-links.mjs')], {
       cwd: temp,
       env: { ...process.env, VERSION: 'v9.8.7' },
@@ -1313,12 +1119,15 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       assert.ok(html.includes('Brevia-WebKit-9.8.7-arm64.dmg'));
       assert.ok(html.includes('Brevia-9.8.7-x64-setup.exe'));
       assert.ok(html.includes('>v9.8.7<'));
+      assert.ok(
+        html.includes('data-size="macos">0.1 MB') && html.includes('data-size="windows">0.1 MB'),
+      );
     }
     // 跨语言跳转保留章节，入口页沿用语言选择；存储被禁用时也能进入主页。
     await loadHome('zh', '__deployed__', 'privacy');
     await Promise.all([
       win.waitForEvent('load'),
-      win.evaluate('document.querySelector(\'.language-picker [data-language="en"]\').click()'),
+      win.evaluate('document.querySelector(\'[data-language="en"]\').click()'),
     ]);
     assert.ok(win.url().endsWith('index-en.html#privacy'));
     // 入口页主动跳转会取消 浏览器的初始加载，这是正常导航。

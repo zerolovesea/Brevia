@@ -240,6 +240,15 @@
           '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。',
         '申请权限': '申请权限',
         '正在请求权限…': '正在请求权限…',
+        '录音时确认': '录音时确认',
+        '已发起权限申请': '已发起权限申请',
+        '已检测到系统音频': '已检测到系统音频',
+        '播放其他应用的声音后重新检测。': '播放其他应用的声音后重新检测。',
+        '重新检测': '重新检测',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。',
         '隐私与安全性 → 屏幕与系统音频录制': '隐私与安全性 → 屏幕与系统音频录制',
         '隐私与安全性 → 麦克风': '隐私与安全性 → 麦克风',
         '连接后，手机可访问电脑上的会议。': '连接后，手机可访问电脑上的会议。',
@@ -778,7 +787,7 @@
         '屏幕与系统音频': '屏幕与系统音频',
         '允许': '允许',
         '已允许': '已允许',
-        '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。',
+        '请在系统设置中允许': '请在系统设置中允许此权限。',
         '已准备就绪': '已准备就绪',
         '当前系统不支持直接录制系统音频，请仅使用麦克风':
           '当前系统不支持直接录制系统音频，请仅使用麦克风',
@@ -1149,6 +1158,15 @@
           'Use Brevia to list recording devices, then start recording with the computer microphone.',
         '申请权限': 'Request access',
         '正在请求权限…': 'Requesting access…',
+        '录音时确认': 'Checked when recording',
+        '已发起权限申请': 'Permission request started',
+        '已检测到系统音频': 'System audio detected',
+        '播放其他应用的声音后重新检测。': 'Play audio in another app, then check again.',
+        '重新检测': 'Check again',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'Privacy & Security → Screen & System Audio Recording → System Audio Recording Only',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          'System audio permission is requested when recording starts. If no sound is recorded, check System Settings.',
         '隐私与安全性 → 屏幕与系统音频录制': 'Privacy & Security → Screen & System Audio Recording',
         '隐私与安全性 → 麦克风': 'Privacy & Security → Microphone',
         '连接后，手机可访问电脑上的会议。':
@@ -1788,8 +1806,7 @@
         '屏幕与系统音频': 'Screen and system audio',
         '允许': 'Allow',
         '已允许': 'Allowed',
-        '请在系统设置中允许':
-          'Approve Brevia for screen and system-audio access in System Settings.',
+        '请在系统设置中允许': 'Allow this permission in System Settings.',
         '已准备就绪': 'Ready',
         '当前系统不支持直接录制系统音频，请仅使用麦克风':
           'Direct system-audio recording is not supported on this system. Use only the microphone.',
@@ -1859,6 +1876,7 @@
         '新建工作区': 'New workspace',
         '翻译：开': 'Translation: On',
         '翻译：关': 'Translation: Off',
+        结束: 'End',
         '分享': 'Share',
         '精修字幕': 'Refine captions',
         '已精修': 'Refined',
@@ -2261,6 +2279,16 @@
           'Usa Brevia para listar los dispositivos de grabación y empezar a grabar con el micrófono del ordenador.',
         '申请权限': 'Solicitar acceso',
         '正在请求权限…': 'Solicitando acceso…',
+        '录音时确认': 'Se comprueba al grabar',
+        '已发起权限申请': 'Solicitud de permiso iniciada',
+        '已检测到系统音频': 'Audio del sistema detectado',
+        '播放其他应用的声音后重新检测。':
+          'Reproduce audio en otra aplicación y vuelve a comprobarlo.',
+        '重新检测': 'Volver a comprobar',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'Privacidad y seguridad → Grabación de pantalla y audio del sistema → Solo grabación de audio del sistema',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          'El permiso de audio del sistema se solicita al grabar. Si no se graba sonido, revisa Ajustes del Sistema.',
         '隐私与安全性 → 屏幕与系统音频录制':
           'Privacidad y seguridad → Grabación de pantalla y del audio del sistema',
         '隐私与安全性 → 麦克风': 'Privacidad y seguridad → Micrófono',
@@ -2906,8 +2934,7 @@
         '屏幕与系统音频': 'Pantalla y audio del sistema',
         '允许': 'Permitir',
         '已允许': 'Permitido',
-        '请在系统设置中允许':
-          'Aprueba el acceso de Brevia a la pantalla y al audio del sistema en Ajustes del Sistema.',
+        '请在系统设置中允许': 'Permite este acceso en Ajustes del Sistema.',
         '已准备就绪': 'Listo',
         '系统权限': 'Permisos del sistema',
         '打开系统设置': 'Abrir Ajustes del Sistema',
@@ -3382,6 +3409,16 @@
           'Brevia で録音デバイスを確認してから、パソコンのマイクで録音を開始してください。',
         '申请权限': 'アクセスをリクエスト',
         '正在请求权限…': 'アクセスをリクエスト中…',
+        '录音时确认': '録音時に確認',
+        '已发起权限申请': 'アクセスをリクエストしました',
+        '已检测到系统音频': 'システム音声を検出',
+        '播放其他应用的声音后重新检测。':
+          '別のアプリで音声を再生してから、もう一度確認してください。',
+        '重新检测': '再確認',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'プライバシーとセキュリティ → 画面収録とシステムオーディオ録音 → システムオーディオ録音のみ',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          '録音時にシステム音声のアクセスをリクエストします。音声が録音されない場合はシステム設定を確認してください。',
         '隐私与安全性 → 屏幕与系统音频录制':
           'プライバシーとセキュリティ → 画面収録とシステムオーディオ録音',
         '隐私与安全性 → 麦克风': 'プライバシーとセキュリティ → マイク',
@@ -4028,8 +4065,7 @@
         '屏幕与系统音频': '画面とシステム音声',
         '允许': '許可する',
         '已允许': '許可済み',
-        '请在系统设置中允许':
-          'システム設定で、Brevia に画面とシステム音声へのアクセスを許可してください。',
+        '请在系统设置中允许': 'システム設定でこのアクセスを許可してください。',
         '已准备就绪': '準備完了',
         '系统权限': 'システム権限',
         '打开系统设置': 'システム設定を開く',
@@ -4500,6 +4536,15 @@
           'Brevia로 녹음 장치를 확인한 다음 컴퓨터 마이크로 녹음을 시작해 주세요.',
         '申请权限': '권한 요청',
         '正在请求权限…': '권한 요청 중…',
+        '录音时确认': '녹음 시 확인',
+        '已发起权限申请': '권한 요청을 보냈습니다',
+        '已检测到系统音频': '시스템 오디오 감지됨',
+        '播放其他应用的声音后重新检测。': '다른 앱에서 소리를 재생한 후 다시 확인하세요.',
+        '重新检测': '다시 확인',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          '개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음 → 시스템 오디오 녹음만',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          '녹음할 때 시스템 오디오 권한을 요청합니다. 소리가 녹음되지 않으면 시스템 설정을 확인하세요.',
         '隐私与安全性 → 屏幕与系统音频录制': '개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음',
         '隐私与安全性 → 麦克风': '개인정보 보호 및 보안 → 마이크',
         '连接后，手机可访问电脑上的会议。':
@@ -5132,7 +5177,7 @@
         '屏幕与系统音频': '화면 및 시스템 오디오',
         '允许': '허용',
         '已允许': '허용됨',
-        '请在系统设置中允许': '시스템 설정에서 Brevia의 화면 및 시스템 오디오 접근을 허용하세요.',
+        '请在系统设置中允许': '시스템 설정에서 이 권한을 허용하세요.',
         '已准备就绪': '준비됨',
         '系统权限': '시스템 권한',
         '打开系统设置': '시스템 설정 열기',
@@ -5599,6 +5644,16 @@
           'Utilise Brevia pour lister les périphériques d’enregistrement, puis lance un enregistrement avec le microphone de l’ordinateur.',
         '申请权限': 'Demander l’accès',
         '正在请求权限…': 'Demande d’accès…',
+        '录音时确认': 'Vérifié à l’enregistrement',
+        '已发起权限申请': 'Demande d’accès lancée',
+        '已检测到系统音频': 'Audio système détecté',
+        '播放其他应用的声音后重新检测。':
+          'Lancez un son dans une autre application, puis vérifiez à nouveau.',
+        '重新检测': 'Vérifier à nouveau',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'Confidentialité et sécurité → Enregistrement de l’écran et de l’audio système → Audio système uniquement',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          'L’accès à l’audio système est demandé au début de l’enregistrement. Si aucun son n’est enregistré, vérifiez Réglages Système.',
         '隐私与安全性 → 屏幕与系统音频录制':
           'Confidentialité et sécurité → Enregistrement de l’écran et de l’audio du système',
         '隐私与安全性 → 麦克风': 'Confidentialité et sécurité → Microphone',
@@ -6256,8 +6311,7 @@
         '屏幕与系统音频': 'Écran et audio système',
         '允许': 'Autoriser',
         '已允许': 'Autorisé',
-        '请在系统设置中允许':
-          'Autorisez Brevia à accéder à l’écran et à l’audio système dans Réglages Système.',
+        '请在系统设置中允许': 'Autorisez cet accès dans Réglages Système.',
         '已准备就绪': 'Prêt',
         '系统权限': 'Autorisations système',
         '打开系统设置': 'Ouvrir Réglages Système',
@@ -6737,6 +6791,15 @@
           'Liste mit Brevia die Aufnahmegeräte auf und starte dann eine Aufnahme mit dem Mikrofon des Computers.',
         '申请权限': 'Zugriff anfragen',
         '正在请求权限…': 'Zugriff wird angefragt…',
+        '录音时确认': 'Prüfung bei Aufnahme',
+        '已发起权限申请': 'Zugriff angefragt',
+        '已检测到系统音频': 'Systemaudio erkannt',
+        '播放其他应用的声音后重新检测。': 'Audio in einer anderen App abspielen und erneut prüfen.',
+        '重新检测': 'Erneut prüfen',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'Datenschutz & Sicherheit → Aufnahme von Bildschirm & Systemaudio → Nur Systemaudioaufnahme',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          'Der Zugriff auf Systemaudio wird beim Aufnahmestart angefragt. Falls kein Ton aufgenommen wird, prüfen Sie die Systemeinstellungen.',
         '隐私与安全性 → 屏幕与系统音频录制':
           'Datenschutz & Sicherheit → Aufnahme von Bildschirm & Systemaudio',
         '隐私与安全性 → 麦克风': 'Datenschutz & Sicherheit → Mikrofon',
@@ -7396,8 +7459,7 @@
         '屏幕与系统音频': 'Bildschirm und Systemaudio',
         '允许': 'Erlauben',
         '已允许': 'Erlaubt',
-        '请在系统设置中允许':
-          'Erlauben Sie Brevia in den Systemeinstellungen den Zugriff auf Bildschirm und Systemaudio.',
+        '请在系统设置中允许': 'Erlauben Sie diesen Zugriff in den Systemeinstellungen.',
         '已准备就绪': 'Bereit',
         '系统权限': 'Systemberechtigungen',
         '打开系统设置': 'Systemeinstellungen öffnen',
@@ -7883,6 +7945,15 @@
           'Покажи устройства записи в Brevia, затем начни запись через микрофон компьютера.',
         '申请权限': 'Запросить доступ',
         '正在请求权限…': 'Запрос доступа…',
+        '录音时确认': 'Проверяется при записи',
+        '已发起权限申请': 'Запрос доступа отправлен',
+        '已检测到系统音频': 'Системный звук обнаружен',
+        '播放其他应用的声音后重新检测。': 'Включите звук в другом приложении и повторите проверку.',
+        '重新检测': 'Проверить снова',
+        '隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制':
+          'Конфиденциальность и безопасность → Запись экрана и системного звука → Только запись системного звука',
+        '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。':
+          'Доступ к системному звуку запрашивается при начале записи. Если звук не записывается, проверьте Системные настройки.',
         '隐私与安全性 → 屏幕与系统音频录制':
           'Конфиденциальность и безопасность → Запись экрана и системного аудио',
         '隐私与安全性 → 麦克风': 'Конфиденциальность и безопасность → Микрофон',
@@ -8521,8 +8592,7 @@
         '屏幕与系统音频': 'Экран и системный звук',
         '允许': 'Разрешить',
         '已允许': 'Разрешено',
-        '请在系统设置中允许':
-          'Разрешите Brevia доступ к экрану и системному звуку в системных настройках.',
+        '请在系统设置中允许': 'Разрешите этот доступ в Системных настройках.',
         '已准备就绪': 'Готово',
         '系统权限': 'Системные разрешения',
         '打开系统设置': 'Открыть системные настройки',

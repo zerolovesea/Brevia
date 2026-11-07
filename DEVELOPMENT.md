@@ -19,14 +19,14 @@ macOS WebKit 实现面向 Apple Silicon、macOS 14 及以上。安装文件是�
 
 ### 组成
 
-| 部分           | 随应用提供的实现                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 窗口与系统集成 | Rust/Tauri 使用系统 WKWebView；AppKit 提供对话框、打印、窗口和状态栏。                                                    |
-| 录音与导入     | Swift 使用 AVAudioEngine/Core Audio 和 ScreenCaptureKit；音频导入优先走系统 AudioToolbox，不支持的 Ogg 由原生解码器处理。 |
-| ONNX 推理      | C++ 直接调用 sherpa-onnx 和 ONNX Runtime，支持转写、VAD、说话人分段与声纹嵌入。Silero VAD 权重也随包提供。                |
-| MLX 推理       | Swift 直接调用 MLX/Metal，支持现有 FunASR Nano、Qwen3-ASR 和 Parakeet 权重。                                              |
-| GGUF 推理      | C++ 直接调用 llama.cpp；本地纪要、实时 AI 笔记和 Hy-MT 翻译独立调度并支持取消。                                           |
-| 会议业务       | 随包 Node.js 使用内置 SQLite 接口处理会议、手机同步、工作区、笔记、导出和任务；数据库字段、文件格式及手机协议保持兼容。   |
+| 部分           | 随应用提供的实现                                                                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 窗口与系统集成 | Rust/Tauri 使用系统 WKWebView；AppKit 提供对话框、打印、窗口和状态栏。                                                                                |
+| 录音与导入     | Swift 使用 AVAudioEngine/Core Audio Tap（macOS 14.4+），旧系统使用 ScreenCaptureKit；音频导入优先走系统 AudioToolbox，不支持的 Ogg 由原生解码器处理。 |
+| ONNX 推理      | C++ 直接调用 sherpa-onnx 和 ONNX Runtime，支持转写、VAD、说话人分段与声纹嵌入。Silero VAD 权重也随包提供。                                            |
+| MLX 推理       | Swift 直接调用 MLX/Metal，支持现有 FunASR Nano、Qwen3-ASR 和 Parakeet 权重。                                                                          |
+| GGUF 推理      | C++ 直接调用 llama.cpp；本地纪要、实时 AI 笔记和 Hy-MT 翻译独立调度并支持取消。                                                                       |
+| 会议业务       | 随包 Node.js 使用内置 SQLite 接口处理会议、手机同步、工作区、笔记、导出和任务；数据库字段、文件格式及手机协议保持兼容。                               |
 
 Node.js 随应用提供，两端共用同一业务层与 C++ 推理引擎。旧 Electron 壳、Python 后端及对应开发入口已删除，应用不依赖用户安装解释器。
 
@@ -59,6 +59,8 @@ npm run test:mac:webkit
 
 `npm test` 包括死代码检查、桌面控制器、UI、Playwright 端到端、Node 后端、Agent 与发布回归；首次运行前执行 `npx playwright install chromium`。Playwright 只用于开发检查，不进入安装包。`npm run test:backend` 可单独验证业务后端；`npm run test:mac:webkit` 使用临时会议库检查真实 WKWebView、包内控制层、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地真实模型验证各引擎。
 
+macOS 14.4+ 的系统声音使用公开 Core Audio Tap API，仅申请音频录制权限；14.0–14.3 保留 ScreenCaptureKit。权限查询不会探录音，也不以录屏权限代替音频权限；公开 API 无法查询时返回 `screen: "unknown"`（保留既有协议字段），界面显示“录音时确认”。主动请求通过临时启动并释放 Tap 触发系统授权，检测到真实声音时返回 `true`，没有检测到声音时返回 `null`，首次尚未确认时，界面保留申请记录与重新检测入口；实际采集成功后本地记住确认结果，后续启动显示“已允许”。该记录表示上次确认成功，公开 API 无法同步用户在系统设置里的撤销操作。系统静音时不能推断授权结果。发布前额外验证延迟确认、拒绝后恢复、耳机／扬声器切换、采样率变化及双轨暂停收尾。
+
 正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。旧 Electron 用户首次升级需要手动安装新包，之后使用各自的原生更新通道。
 
 ## Windows 开发与打包
@@ -86,7 +88,7 @@ npm run test:windows:native
 
 离线手机录音先按序上传并在电脑持久化完整 PCM；电脑确认 `received` 后手机结束发送，可离开应用。桌面持久化队列独立完成导入与完整转写，重启后恢复；缺模型或处理失败不删除原音。实时手机会议继续边录边传，不能把上传完成误当作识别完成。
 
-实时字幕落盘后，独立低优先级进程异步补充说话人，使用已安装的 ERes2Net 权重；没有该模型时不下载、不阻塞录音，并保留原有字幕合并方式。已安装时，每个真实 ASR 识别单元独立落盘，避免跨单元合并后无法归属；识别输入、上下文与调用次数不变，保留硬切回看窗口内的精确接缝去重，不按文字长度拆分说话人。声纹使用该单元内部原始 VAD 有声区间，排除回看前缀及合并间隙。
+实时字幕沿用 v1.4.5 的分段。先显示草稿，保留切点处的尾句，等下一段识别结果到达后修复接缝、合并短句，再提交正式段落。声纹模型的安装状态不改变字幕内容、分段或转写次数。字幕落盘后，已安装的 ERes2Net 在独立低优先级进程中异步补充说话人。它使用段落覆盖的原始 VAD 有声区间，排除回看前缀和静音间隙。如果字幕切在一次发声中间，保留未知身份。
 
 不足 1 秒的语音不识别人，1–2 秒只匹配已有身份，至少 2 秒才允许创建或更新临时中心。注册声纹与临时身份共同比较，歧义、混声或证据不足时保持未知；多个窗口全部一致后才写回姓名。中心只在字幕修订及人工更正检查通过后学习，不自动修改用户注册声纹。每轮最多计算一个 4 秒窗口，单线程、至少间隔 8 秒，并按实际推理耗时退避；字幕积压时让出资源。队列及窗口数量有上限，30 秒过期丢弃，暂停/结束取消，闲置释放模型。持续无停顿换人、重叠发言及未能及时确认的片段由会后精修处理。
 
@@ -107,6 +109,8 @@ npm run test:windows:native
 | 桌面、官网 JS / CSS / HTML 和维护文档、配置 | `npm run format`        | `npm run format:check`                                                        |
 | 手机与发布 Python 脚本                      | `npm run format:python` | `npm run lint:python`                                                         |
 | 手机 Dart（在 mobile 目录）                 | `dart format lib test`  | `dart format --output=none --set-exit-if-changed lib test`、`flutter analyze` |
+
+官网手机演示直接使用 Flutter 扫码、会议设置和实时转写页面。从仓库根目录运行 `(cd mobile && flutter build web --target=web/preview.dart --output=../website/mobile-preview --no-web-resources-cdn --no-tree-shake-icons)` 后，通过 HTTP 服务打开官网。GitHub Pages 使用同一命令构建手机界面。
 
 格式工具版本固定在锁文件或 `requirements-dev.txt`；升级工具单独提交。Prettier 保留 HTML 空白语义，不重排模板字符串中的嵌入代码；Markdown 不强制重排段落。`frontend/styles.css` 由 `npm run build` 生成，不手动格式化。模型、录音、翻译词条的实际内容、锁文件、第三方文件和原生工程生成配置不做人工风格清理。
 
@@ -142,18 +146,22 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 
 ### CI / CD 职责
 
-| 工作流                         | 职责与触发范围                                                                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Code style                     | PR / main 的统一 JS、文档及 Python 格式与静态检查。                                                                       |
-| Native macOS validation        | 桌面相关改动的测试、原生打包、真实 WKWebView / PDF / 录音收尾及 Agent 验证。                                              |
-| Native Windows validation      | 桌面相关改动的 Windows 测试、MSVC / NSIS 构建、WebView2 / PDF、旧版升级和真实模型验证。纯手机、官网或说明文档改动不触发。 |
-| Release                        | 标签或手动运行时构建两端正式签名成品，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                          |
-| Mobile CI and distribution     | 手机改动的 Flutter / 原生检查，main 自动分发 Android 更新及内部 TestFlight；正式 App Store 送审单独触发。                 |
-| Deploy website to GitHub Pages | 官网、前端素材相关的 main 改动部署静态站点。                                                                              |
+| 工作流                         | 职责与触发范围                                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code style                     | PR / main 的统一 JS、文档及 Python 格式与静态检查。                                                                                                   |
+| Native macOS validation        | 桌面相关改动的测试、原生打包、真实 WKWebView / PDF / 录音收尾及 Agent 验证。                                                                          |
+| Native Windows validation      | Windows 与共享桌面代码的测试、MSVC / NSIS 构建、WebView2 / PDF、旧版升级和真实模型验证；macOS 专属代码、手机、官网和说明文档不触发。                  |
+| Release                        | 标签或手动运行时构建两端正式签名成品，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                                                      |
+| Mobile CI and distribution     | 手机改动的 Flutter / 原生检查；main 按共享、iOS、Android 改动选择分发平台，文档不触发，Flutter／发布脚本测试改动仅检查；正式 App Store 送审单独触发。 |
+| Deploy website to GitHub Pages | 官网、前端素材相关的 main 改动部署静态站点。                                                                                                          |
+
+Code style 额外运行 `node --test scripts/test-ci.cjs`，验证平台触发范围与缓存兼容性。Mobile check 使用 `scripts/ci-mobile-changes.py` 从上次成功的 main 推送分发开始累计比较差异，避免等待任务被合并后漏发；查询失败或提交不可达时保留两端。共享 Flutter、资源或依赖变更分发两端，平台专属代码只分发对应端，Flutter／发布脚本测试和分析配置变更只检查；Android 原生单测变更仍运行对应构建任务。手动 TestFlight 构建仍覆盖两端，App Store 送审继续复用已有构建。
+
+原生 CI 和 Release 共用编译缓存，按运行器系统、架构、镜像、构建配置与依赖区分，再按提交保存增量结果。只恢复相同配置的最近缓存，缓存成功任务的编译中间产物，不缓存正式安装包或签名材料。缓存命中后仍重新组装、签名并验收成品；新镜像或构建配置第一次运行需要重新预热。
 
 格式检查集中在 Code style；两端业务测试保留各自运行，以覆盖路径、进程及系统差异。Release 重新验证实际签名成品，不能用普通 CI 的未签名构件代替。
 
-后端单测由 `npm test` / `npm run test:backend` 执行；`test:mac:webkit` 专门检查原生平台与成品，不重复后端单测。macOS 验证及 Release 均先执行完整 `npm test`，再检查原生成品。
+完整 `npm test` 中，桌面 Agent 用例归入 `test:desktop`，后端 Agent 用例随 `test:backend` 执行一次；独立 `npm run test:agent` 仍覆盖两端 Agent 用例。后端单测由 `npm test` / `npm run test:backend` 执行；`test:mac:webkit` 专门检查原生平台与成品，不重复后端单测。macOS 验证及 Release 均先执行完整 `npm test`，再检查原生成品。
 
 `desktop/` 管理两端共用的桌面控制器、手机服务、Agent、预加载协议与品牌资源。`desktop/platform.cjs` 显式连接 Rust 原生宿主，`macos/backend/` 管理共用 Node Worker，`macos/`、`windows/` 分别维护平台能力和打包。旧数据迁移及旧版安装器升级验证继续保留。
 

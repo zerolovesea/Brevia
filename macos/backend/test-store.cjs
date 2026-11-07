@@ -180,6 +180,13 @@ test('Evidence references, fenced code, headings and dates preserve original beh
       fixture.results[index],
     );
   });
+  const [cleaned, [cause]] = evidence.parseClaims(
+    '- Cause：缺少资源 [[cause:S1]]',
+    fixture.segments,
+  );
+  assert.equal(cleaned, '- 缺少资源 〔00:01〕');
+  assert.equal(cause.line, cleaned);
+  assert.equal(cause.text, '缺少资源');
   for (const [text, expected] of fixture.repair)
     assert.equal(evidence.normalizeSummaryMarkdown(text), expected);
   for (const [text, date, expected] of fixture.dates)

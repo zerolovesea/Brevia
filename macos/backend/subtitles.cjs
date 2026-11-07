@@ -297,36 +297,42 @@ function joinPending(previous, current, style, overlap = 0) {
 }
 class LiveSubtitles {
   constructor(publish, { overlapMs = 400 } = {}) {
-    this.publish = publish;
+    this.onSubtitle = publish;
     this.overlapMs = overlapMs;
     this.paragraphs = new Map();
     this.tails = new Map();
     this.joinStyles = new Map();
-    this.units = new Map();
+    this.voiceSpans = new Map();
   }
-  publishUnit(event, text, voiceSpans) {
-    const previous = this.units.get(event.track);
-    this.units.set(event.track, { ...event, text });
-    if (previous && ['pause', 'cut'].includes(previous.boundary)) {
-      const gap = event.start_ms - previous.end_ms,
-        duration = event.end_ms - event.start_ms;
-      // 只去除真实回看时间窗内的精确重复；没有重叠的自然重复照常保留。
-      // 已落盘的两个识别单元不拼接，也不按字数重算起止时间。
-      if (-this.overlapMs <= gap && gap < 0 && duration > 0)
-        text = dedupeSeam(
-          previous.text,
-          text,
-          Math.max(2, Math.min(8, roundEven((-gap * charLength(text)) / duration))),
-        );
-    }
-    // 整段只是上次回看的重复时，保留接缝状态但不生成标点字幕或重复 AI 任务。
-    if (/[\p{L}\p{N}]/u.test(text)) this.publish({ ...event, text }, voiceSpans);
+  publish(event) {
+    const spans = (this.voiceSpans.get(event.track) || []).filter(
+      (span) => span.end > event.start_ms && span.start < event.end_ms,
+    );
+    // 字幕可能在一次发声中间断句。只有完整覆盖的原始 VAD 区间才可用于归属。
+    const supported = spans.every(
+      (span) => !span.unknown && span.start >= event.start_ms && span.end <= event.end_ms,
+    );
+    this.onSubtitle(event, supported ? spans : []);
   }
-  push(event, text) {
-    this.units.delete(event.track);
+  pruneVoiceSpans(track) {
+    const from = Math.min(
+      this.paragraphs.get(track)?.start_ms ?? Infinity,
+      this.tails.get(track)?.start_ms ?? Infinity,
+    );
+    const retained = this.voiceSpans.get(track)?.filter((span) => span.end > from);
+    if (retained?.length) this.voiceSpans.set(track, retained);
+    else this.voiceSpans.delete(track);
+  }
+  push(event, text, voiceSpans) {
     const track = event.track,
       sentences = attachLeadingClosers(splitSentences(text).filter((sentence) => sentence.trim()));
     if (!sentences.length) return;
+    if (voiceSpans) {
+      const spans = this.voiceSpans.get(track) || [];
+      if (voiceSpans.length) spans.push(...voiceSpans);
+      else spans.push({ start: event.start_ms, end: event.end_ms, unknown: true });
+      this.voiceSpans.set(track, spans);
+    }
     const pending = this.tails.get(track);
     this.tails.delete(track);
     const total = sentences.reduce((sum, sentence) => sum + charLength(sentence), 0) || 1,
@@ -384,6 +390,7 @@ class LiveSubtitles {
       this.joinStyles.set(track, event.boundary === 'pause' ? 'comma' : null);
     }
     this.coalesce(track, pieces);
+    this.pruneVoiceSpans(track);
   }
   coalesce(track, pieces) {
     const touched = performance.now();
@@ -429,6 +436,7 @@ class LiveSubtitles {
         this.joinStyles.delete(track);
         this.publish(value);
       }
+    for (const track of this.voiceSpans.keys()) this.pruneVoiceSpans(track);
   }
   draft(track) {
     const parts = [this.paragraphs.get(track), this.tails.get(track)].filter(Boolean);

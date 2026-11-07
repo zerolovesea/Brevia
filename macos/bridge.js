@@ -9,7 +9,8 @@
   }
   const listeners = new Map();
   const core = window.__TAURI__.core;
-  const subscription = window.__TAURI__.event.listen('brevia:event', ({ payload }) => {
+  const view = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+  const subscription = view.listen('brevia:event', ({ payload }) => {
     const channel = payload.type === 'floating-caption:update' ? payload.type : 'brevia:event';
     for (const fn of listeners.get(channel) || [])
       fn(null, channel === 'brevia:event' ? payload : payload.payload);

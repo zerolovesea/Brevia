@@ -33,7 +33,7 @@ class SentenceVAD {
     this.engine = worker.newEngine('sherpa-onnx');
     this.model = meeting.vad_model_id || 'silero-vad';
     const configured = worker.settings.vad[meeting.language] || worker.settings.vad.default;
-    this.maximum = Math.min(maximum, configured.max_speech_duration);
+    this.maximum = maximum;
     this.cap = Math.max(0.1, this.maximum - 0.4 - 0.032);
     this.params = { ...configured, min_silence_duration: 0.1, max_speech_duration: this.cap };
     this.gap = Math.max(

@@ -74,3 +74,6 @@ credentials.json
 /docs/global-recording-shortcuts.md
 
 /.playwright-cli/
+
+# Flutter web build of the mobile product demo
+/website/mobile-preview/

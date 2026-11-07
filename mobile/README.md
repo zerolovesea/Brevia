@@ -141,9 +141,9 @@ git push -u origin feature/mobile-transcript-layout
 
 工作流：`.github/workflows/mobile.yml`（Mobile CI and distribution）。
 
-- PR 涉及 `mobile/**` 或该工作流：只跑静态分析与测试，不读取发布密钥。
-- push 到 `main` 且上述路径有变化：检查通过后，iOS 上传并等待 Apple 处理，分配到“Brevia 内部测试”；Android 生成固定签名 APK / AAB，保存到 Artifacts，并将 APK 发布到 ModelScope 应用内更新渠道。没有自动上传 Google Play。
-- 手动运行选择 `testflight`：与自动推送相同；必须选择 `main`。
+- PR 涉及 `mobile/**`（Markdown 文档除外）、该工作流或 `scripts/ci-mobile-changes.py`／对应测试：只跑静态分析与测试，不读取发布密钥。
+- push 到 `main` 且上述路径有变化：检查通过后，从上一次成功的 main 分发开始累计比较变更，选择分发平台，避免连续推送时漏掉等待中的改动；无法确定变更范围时保留两端。共享 Flutter 代码、资源、依赖或工作流变更分发两端；`ios/`、Fastlane、iOS 签名脚本仅分发 iOS，`android/`、Android 发布脚本仅分发 Android；Flutter／发布脚本测试和分析配置改动仅检查，Android 原生单测变更仍运行对应构建任务；Markdown 说明文档不触发本工作流。iOS 上传并等待 Apple 处理，分配到“Brevia 内部测试”；Android 生成固定签名 APK / AAB，保存到 Artifacts，并将 APK 发布到 ModelScope 应用内更新渠道。没有自动上传 Google Play。
+- 手动运行选择 `testflight`：完整构建并分发两端，不依赖改动范围；必须选择 `main`。
 - 版本名来自 `pubspec.yaml`。构建号是自 2026-01-01 起的秒数加 1000，两端共用，括号数字会较大。发布任务串行，不中断正在上传的构建。重新上传时使用 **Re-run all jobs** 分配新号，不单独重跑已成功上传的任务。
 - iOS 保存 IPA 和 dSYM，测试说明带 Git commit。安卓不回退到 debug 签名；旧 debug 签名 APK 无法被新签名覆盖，首次换签需要先备份录音再卸载旧包。
 

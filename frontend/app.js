@@ -736,8 +736,6 @@ function aiAssistEnabled() {
 const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
 settingsModal.hidden = true;
-const settingsModalMarkup = () =>
-  `<section class="modal-panel ui-surface" role="dialog" aria-modal="true"><header class="modal-head ui-surface-heading"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="关闭">${interfaceIcon('close')}</button></header><div class="modal-body"></div></section>`;
 settingsModal.innerHTML = settingsModalMarkup();
 document.body.append(settingsModal);
 const settingsFolders = document.createElement('div');
@@ -918,40 +916,82 @@ function validateAdvancedSettings(form) {
     input.setCustomValidity(invalid ? hint.textContent : '');
   }
 }
-function permissionSettingsPath(kind) {
+let screenProbe =
+  localStorage.getItem('brevia-system-audio-confirmed') === 'true' ? true : undefined;
+function systemAudioAllowed(status) {
+  return (
+    status.screen === 'granted' ||
+    (status.screen === 'unknown' &&
+      status.systemAudioCapture === 'core-audio-tap' &&
+      screenProbe === true)
+  );
+}
+function unknownScreenLabel() {
+  return screenProbe === true
+    ? '已检测到系统音频'
+    : screenProbe === null
+      ? '已发起权限申请'
+      : '录音时确认';
+}
+function permissionSettingsPath(kind, status = permissionStatus) {
   if (window.brevia?.platform !== 'darwin') return t('请在系统设置中开启此权限');
+  if (kind === 'screen' && status?.systemAudioCapture === 'core-audio-tap')
+    return t('隐私与安全性 → 屏幕与系统音频录制 → 仅系统音频录制');
   return t(kind === 'screen' ? '隐私与安全性 → 屏幕与系统音频录制' : '隐私与安全性 → 麦克风');
 }
 async function requestPermissionAccess(kind) {
+  if (kind === 'screen') screenProbe = undefined;
   const granted = await (kind === 'screen'
     ? window.brevia.permissions.requestScreen()
     : window.brevia.permissions.requestMicrophone());
-  if (!granted) throw new Error(`${t('请在系统设置中允许')} · ${permissionSettingsPath(kind)}`);
-  return true;
+  if (kind === 'screen') {
+    screenProbe = granted;
+    if (granted === true) localStorage.setItem('brevia-system-audio-confirmed', 'true');
+    else localStorage.removeItem('brevia-system-audio-confirmed');
+  }
+  if (granted === false)
+    throw new Error(`${t('请在系统设置中允许')} · ${permissionSettingsPath(kind)}`);
+  if (granted === null) showToast(t('已发起权限申请'));
+  return granted;
 }
 /** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
-function permissionRow(kind, label, detail, granted, denied, active, unsupported) {
-  const state = `<span class="permission-badge${granted ? ' is-granted' : denied ? ' is-denied' : ''}">${t(granted ? '已允许' : unsupported ? '不可用' : '未授权')}</span>`;
+function permissionRow(
+  kind,
+  label,
+  detail,
+  granted,
+  denied,
+  active,
+  unsupported,
+  uncertain = false,
+) {
+  const state = `<span class="permission-badge${granted || (uncertain && screenProbe === true) ? ' is-granted' : denied ? ' is-denied' : ''}">${t(granted ? '已允许' : unsupported ? '不可用' : uncertain ? unknownScreenLabel() : '未授权')}</span>`;
   const hint = unsupported
     ? t('当前系统不支持直接录制系统音频，请仅使用麦克风')
     : denied
       ? permissionSettingsPath(kind)
-      : detail;
+      : uncertain && !granted
+        ? t(
+            screenProbe === undefined
+              ? '录制时将请求系统音频权限；若录不到声音，请在系统设置中检查。'
+              : '播放其他应用的声音后重新检测。',
+          )
+        : detail;
   const pending = permissionRequests.has(kind);
-  // CGPreflight 不能区分未申请和已拒绝，所以屏幕权限始终保留主动申请入口。
+  // 系统音频沿用 screen 协议字段；其权限不能总由公开 API 静默查询。
   const canRequest = active || kind === 'screen';
   const action =
     granted || unsupported
       ? ''
-      : `<span class="permission-actions">${canRequest ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button"${pending ? ' disabled aria-busy="true"' : ''}>${t(pending ? '正在请求权限…' : '申请权限')}</button>` : ''}<button class="secondary permission-setting-action" data-open-permission-settings="${kind}" type="button" title="${escapeHtml(permissionSettingsPath(kind))}"${pending ? ' disabled' : ''}>${t('打开系统设置')}</button></span>`;
-  return `<div class="preference-row preferences-permission-row${granted ? ' is-granted' : ''}"><span class="preference-copy" title="${escapeHtml(hint)}"><b>${escapeHtml(label)}</b>${denied || unsupported ? `<small>${escapeHtml(hint)}</small>` : ''}</span><span class="preference-control preferences-permission-control"><span class="preferences-permission-state">${state}</span>${action}</span></div>`;
+      : `<span class="permission-actions">${canRequest ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button"${uncertain ? ` title="${escapeHtml(hint)}"` : ''}${pending ? ' disabled aria-busy="true"' : ''}>${t(pending ? '正在请求权限…' : uncertain && screenProbe !== undefined ? '重新检测' : '申请权限')}</button>` : ''}<button class="secondary permission-setting-action" data-open-permission-settings="${kind}" type="button" title="${escapeHtml(permissionSettingsPath(kind))}"${pending ? ' disabled' : ''}>${t('打开系统设置')}</button></span>`;
+  return `<div class="preference-row preferences-permission-row${granted ? ' is-granted' : ''}"><span class="preference-copy" title="${escapeHtml(hint)}"><b>${escapeHtml(label)}</b>${denied || unsupported || (uncertain && screenProbe === null) ? `<small>${escapeHtml(hint)}</small>` : ''}</span><span class="preference-control preferences-permission-control"><span class="preferences-permission-state">${state}</span>${action}</span></div>`;
 }
 /** 渲染显示在高级设置模态框顶部的系统权限部分。@returns {string} */
 function renderPermissionSettings() {
   const status = permissionStatus || {};
   const micGranted = status.microphone === 'granted';
   const micActive = status.microphone === 'not-determined';
-  const screenGranted = status.screen === 'granted';
+  const screenGranted = systemAudioAllowed(status);
   const screenUnsupported = status.systemAudioSupported === false;
   const rows =
     permissionRow(
@@ -965,12 +1005,13 @@ function renderPermissionSettings() {
     ) +
     permissionRow(
       'screen',
-      t('屏幕与系统音频'),
-      t('录制屏幕共享中的系统声音。'),
+      t('系统音频'),
+      t('用于录制电脑播放的声音。'),
       screenGranted && !screenUnsupported,
       status.screen === 'denied',
       false,
       screenUnsupported,
+      status.screen === 'unknown',
     );
   return `<section class="preferences-section permission-settings-section" data-permission-settings><header class="preferences-section-heading preferences-advanced-heading">${interfaceIcon('laptop')}<h3>${t('系统权限')}</h3></header>${rows}</section>`;
 }
@@ -1483,16 +1524,8 @@ function renderCaptureMode(value = currentCaptureMode) {
   renderPhoneDeviceOptions();
   const phoneReady = selectedPhoneDevice()?.captureReady;
   const hint = prepareForm.querySelector('#capture-mode-hint');
-  hint.hidden = currentCaptureMode !== 'phone' || phoneReady;
-  hint.textContent = hint.hidden
-    ? ''
-    : t(
-        selectedPhoneDeviceId && !selectedPhoneDevice()
-          ? '设备已断开'
-          : capturePhones.length
-            ? '手机端未就绪，请打开或更新 Brevia'
-            : '尚未连接设备',
-      );
+  hint.hidden = currentCaptureMode !== 'phone' || phoneReady || !selectedPhoneDevice();
+  hint.textContent = hint.hidden ? '' : t('手机端未就绪，请打开或更新 Brevia');
   const submit = prepareForm.querySelector('.primary-action');
   submit.disabled =
     submit.classList.contains('is-pending') ||
@@ -1653,7 +1686,7 @@ function renderPrepareAudioSources() {
   const status = permissionStatus || {};
   const inputs = captureModeInputs();
   const micReady = status.microphone === 'granted';
-  const systemReady = status.systemAudioSupported !== false && status.screen === 'granted';
+  const systemReady = status.systemAudioSupported !== false && systemAudioAllowed(status);
   const phone = currentCaptureMode === 'phone';
   const sourceLabel = document.querySelector('#mic-input-state > b');
   const sourceText = t(phone ? '手机麦克风' : '麦克风');
@@ -1679,8 +1712,19 @@ function renderPrepareAudioSources() {
         : t('未启用'),
   });
   setSourceBadge(document.querySelector('#system-input-label'), null, {
-    ok: systemReady && inputs.system,
-    text: inputs.system ? (systemReady ? t('已连接') : t('未就绪')) : t('未启用'),
+    ok:
+      inputs.system &&
+      (systemReady ||
+        (status.screen === 'unknown' &&
+          screenProbe === true &&
+          status.systemAudioSupported !== false)),
+    text: inputs.system
+      ? systemReady
+        ? t('已连接')
+        : status.screen === 'unknown' && status.systemAudioSupported !== false
+          ? t(unknownScreenLabel())
+          : t('未就绪')
+      : t('未启用'),
   });
   if (!phone) renderMicDeviceOptions();
 }
@@ -3276,41 +3320,10 @@ let agentSettings;
 let agentSettingsBusy = false;
 let agentSettingsError = '';
 function agentSetupGuide() {
-  return [
-    t(
-      '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
-    ),
-    '',
-    `${t('Skill 文件')}: ${agentSettings.skill_path}`,
-    `${t('CLI 路径')}: ${agentSettings.cli_path}`,
-    `BREVIA_DATA_DIR: ${agentSettings.mcp.env.BREVIA_DATA_DIR}`,
-    '',
-    'status --no-start',
-  ].join('\n');
+  return renderAgentSetupGuide(agentSettings);
 }
 function renderAgentSettings() {
-  const value = agentSettings;
-  const needsEnable =
-    !value.enabled || ['read', 'infer', 'record'].some((key) => !value.permissions[key]);
-  const status = !value.enabled ? t('服务已停用') : value.status?.ready ? t('就绪') : t('准备中');
-  const examples = [
-    ['search', '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。'],
-    ['captions', '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。'],
-    ['microphone', '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。'],
-  ];
-  return `<div class="preferences-content agent-settings">
-    <section class="preferences-section agent-connection">
-      <header class="agent-access-heading"><span class="agent-access-icon">${interfaceIcon('laptop')}</span><h3>Skill + CLI</h3><span class="agent-status" data-state="${!value.enabled ? 'off' : value.status?.ready ? 'ready' : 'pending'}" data-agent-status role="status">${escapeHtml(status)}</span></header>
-      <p class="agent-intro">${t('适合 Codex、Claude Code 等能操作本机的 Agent。')}</p>
-      ${needsEnable ? `<div class="agent-enable"><p>${t('本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。')}</p><button type="button" class="secondary" data-agent-enable${agentSettingsBusy ? ' disabled' : ''}>${t('启用本机接入')}</button></div>` : ''}
-      <ol class="agent-steps">
-        <li><span class="agent-step-number" aria-hidden="true">1</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('连接你的 Agent')}</h3></div><p>${t('把以下提示词复制并发送给你的 Agent（Codex、Claude Code 等）。')}</p><div class="agent-guide-block"><pre class="agent-guide">${escapeHtml(agentSetupGuide())}</pre><button type="button" class="icon-button agent-guide-copy" data-agent-copy="guide" title="${t('复制引导语')}" aria-label="${t('复制引导语')}"><span data-copy-icon>${interfaceIcon('copy')}</span></button></div></div></li>
-        <li><span class="agent-step-number" aria-hidden="true">2</span><div class="agent-step-content"><div class="agent-step-heading"><h3>${t('试着这样提问')}</h3></div><div class="agent-examples">${examples.map(([icon, prompt]) => `<button type="button" class="agent-example" data-agent-copy="prompt" data-agent-prompt="${escapeHtml(t(prompt))}" title="${t('复制到剪贴板')}">${interfaceIcon(icon)}<span>${escapeHtml(t(prompt))}</span><span data-copy-icon>${interfaceIcon('copy')}</span></button>`).join('')}</div></div></li>
-      </ol>
-    </section>
-    <section class="preferences-section agent-connection"><div class="agent-step-heading"><h3>MCP</h3><button type="button" class="secondary" data-agent-copy="mcp">${interfaceIcon('copy')}${t('复制 MCP 配置')}</button></div><p class="agent-intro">${t('用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。')}</p><details class="agent-cli"><summary>${interfaceIcon('chevron-right')}${t('CLI 路径')}</summary><div class="agent-cli-path"><code title="${escapeHtml(value.cli_path)}">${escapeHtml(value.cli_path)}</code><button type="button" class="secondary" data-agent-copy="cli" title="${t('复制路径')}">${interfaceIcon('copy')}<span>${t('复制路径')}</span></button></div></details></section>
-    <p class="settings-inline-error" data-agent-error role="status"${agentSettingsError || value.status?.error ? '' : ' hidden'}>${escapeHtml(agentSettingsError || value.status?.error || '')}</p>
-  </div>`;
+  return renderAgentSettingsPage(agentSettings, agentSettingsBusy, agentSettingsError);
 }
 async function enableAgentAccess() {
   if (agentSettingsBusy) return;
@@ -4865,13 +4878,13 @@ function openOnboardingMobile() {
 function openOnboardingPermissions(fixtureStatus) {
   const copy = onboardingCopy[locale] || onboardingCopy.en;
   const steps = [
-    ['microphone', t('麦克风'), t('用于录制会议音频。')],
-    ['screen', t('系统音频'), t('用于录制电脑播放的声音。')],
+    ['microphone', t('麦克风')],
+    ['screen', t('系统音频')],
   ];
   const placeholders = steps
     .map(
-      ([permission, label, detail]) =>
-        `<div class="onboarding-permission" aria-busy="true">${interfaceIcon(permission === 'microphone' ? 'microphone' : 'appearance')}<span><b>${label}</b><small>${detail}</small></span><span class="permission-status">${t('加载中')}</span></div>`,
+      ([permission, label]) =>
+        `<div class="onboarding-permission" aria-busy="true">${interfaceIcon(permission === 'microphone' ? 'microphone' : 'appearance')}<span class="onboarding-permission-copy"><b>${label}</b></span><span class="permission-status">${t('加载中')}</span></div>`,
     )
     .join('');
   showOnboardingPage(
@@ -4887,33 +4900,38 @@ function openOnboardingPermissions(fixtureStatus) {
     // 隔离截图可传固定权限状态；正常入口始终读取操作系统。
     const status = fixtureStatus || (await window.brevia.permissions.status());
     if (onboardingPage !== page) return;
-    const signature = JSON.stringify([status, [...grantedPermissions], [...permissionRequests]]);
+    const signature = JSON.stringify([
+      status,
+      unknownScreenLabel(),
+      [...grantedPermissions],
+      [...permissionRequests],
+    ]);
     if (signature === renderedStatus) return;
     renderedStatus = signature;
     const permissionGranted = (permission) =>
-      grantedPermissions.has(permission) || status[permission] === 'granted';
+      grantedPermissions.has(permission) ||
+      status[permission] === 'granted' ||
+      (permission === 'screen' && systemAudioAllowed(status));
     section.innerHTML = steps
-      .map(([permission, label, detail]) => {
+      .map(([permission, label]) => {
         const unsupported = permission === 'screen' && status.systemAudioSupported === false;
         const granted = permissionGranted(permission);
         const value = granted ? 'granted' : status[permission];
+        const uncertain = permission === 'screen' && value === 'unknown';
         const pending = permissionRequests.has(permission);
-        const canRequest = permission === 'screen' || value === 'not-determined';
+        const canRequest =
+          !['denied', 'restricted'].includes(value) &&
+          (permission === 'screen' || value === 'not-determined');
         const action = granted
           ? ''
           : unsupported
             ? `<button class="secondary onboarding-permission-action" type="button" disabled>${t('不可用')}</button>`
-            : `<span class="permission-actions">${canRequest ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button"${pending ? ' disabled aria-busy="true"' : ''}>${t(pending ? '正在请求权限…' : '申请权限')}</button>` : ''}<button class="secondary onboarding-permission-action" data-open-${permission}-settings type="button" title="${escapeHtml(permissionSettingsPath(permission))}"${pending ? ' disabled' : ''}>${t('打开系统设置')}</button></span>`;
-        const hint = unsupported
-          ? t('当前系统不支持直接录制系统音频，请仅使用麦克风')
-          : ['denied', 'restricted'].includes(value) && !granted
-            ? permissionSettingsPath(permission)
-            : detail;
+            : `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}"${canRequest ? '' : ' data-permission-settings'} type="button" title="${escapeHtml(!canRequest ? permissionSettingsPath(permission, status) : uncertain && screenProbe === null ? t('播放其他应用的声音后重新检测。') : label)}"${pending ? ' disabled aria-busy="true"' : ''}>${t(pending ? '正在请求权限…' : uncertain && screenProbe !== undefined ? '重新检测' : '申请权限')}</button>`;
         const meter =
           permission === 'microphone' && granted
             ? `<i class="input-meter onboarding-mic-meter" data-onboarding-mic-level aria-label="${t('麦克风')} ${t('音量')}"></i>`
             : '';
-        return `<div class="onboarding-permission${granted ? ' is-granted' : ''}">${interfaceIcon(permission === 'microphone' ? 'microphone' : 'appearance')}<span class="onboarding-permission-copy"><span class="onboarding-permission-title"><b>${label}</b>${permission === 'screen' ? `<span class="permission-optional">${t('可选')}</span>` : ''}${meter}</span><small>${hint}</small></span><span class="permission-status${granted ? ' is-granted' : value === 'denied' ? ' is-denied' : ''}">${granted ? checkIconSvg + t('已允许') : unsupported ? '' : t('未授权')}</span>${action}</div>`;
+        return `<div class="onboarding-permission${granted ? ' is-granted' : ''}">${interfaceIcon(permission === 'microphone' ? 'microphone' : 'appearance')}<span class="onboarding-permission-copy"><span class="onboarding-permission-title"><b>${label}</b>${meter}</span></span><span class="permission-status${granted ? ' is-granted' : value === 'denied' ? ' is-denied' : ''}">${granted ? checkIconSvg + t('已允许') : unsupported ? '' : t(uncertain ? unknownScreenLabel() : '未授权')}</span>${action}</div>`;
       })
       .join('');
     if (permissionGranted('microphone') && !microphonePreviewed) {
@@ -4955,19 +4973,6 @@ function openOnboardingPermissions(fixtureStatus) {
       dismissOnboardingPage(openOnboardingSetup);
       return;
     }
-    const openSettings = event.target.closest(
-      '[data-open-microphone-settings], [data-open-screen-settings]',
-    );
-    if (openSettings) {
-      try {
-        await (openSettings.hasAttribute('data-open-screen-settings')
-          ? window.brevia.permissions.openScreenSettings()
-          : window.brevia.permissions.openMicrophoneSettings());
-      } catch (error) {
-        showToast(error.message, undefined, 'error');
-      }
-      return;
-    }
     const button = event.target.closest('[data-request-onboarding-permission]');
     if (!button) return;
     const kind = button.dataset.requestOnboardingPermission;
@@ -4975,8 +4980,12 @@ function openOnboardingPermissions(fixtureStatus) {
     permissionRequests.add(kind);
     void refresh();
     try {
-      await requestPermissionAccess(kind);
-      grantedPermissions.add(kind);
+      if (button.hasAttribute('data-permission-settings')) {
+        await (kind === 'screen'
+          ? window.brevia.permissions.openScreenSettings()
+          : window.brevia.permissions.openMicrophoneSettings());
+      } else if ((await requestPermissionAccess(kind)) === true && kind !== 'screen')
+        grantedPermissions.add(kind);
     } catch (error) {
       showToast(error.message, undefined, 'error');
     } finally {
@@ -6985,11 +6994,15 @@ function adoptMobileMeeting(meeting) {
     document.querySelector('#pause').textContent = t('在手机控制录音');
   const transcript = document.querySelector('#transcript-scroll');
   const segments = (meeting.segments || []).slice(-maxLiveSegments);
+  const assignedSpeakers = new Set((meeting.speakers || []).map((person) => person.id));
   transcript.innerHTML = segments
     .map((segment) =>
       renderTranscriptSegment({
         ...renderSegmentData(segment, false, new Map()),
-        showSpeaker: Boolean(segment.speaker_name),
+        showSpeaker:
+          Boolean(segment.speaker_name) &&
+          (segment.speaker_name !== segment.speaker || assignedSpeakers.has(segment.speaker)),
+        live: true,
       }),
     )
     .join('');
@@ -7010,6 +7023,12 @@ function adoptMobileMeeting(meeting) {
   if (typeof syncCorrectionControls === 'function') syncCorrectionControls();
 }
 function activateMeeting(meeting, payload) {
+  if (livePaletteMeetingId !== meeting.id) {
+    livePaletteMeetingId = meeting.id;
+    liveSpeakerPalette.clear();
+    for (const person of meeting.speakers || [])
+      speakerColor(person.id || person.name, liveSpeakerPalette);
+  }
   if (typeof syncCorrectionControls === 'function') queueMicrotask(syncCorrectionControls);
   desktopSaveError = '';
   desktopSavedMeeting = null;
@@ -7588,10 +7607,12 @@ function setLiveAcceptedClaims(claims) {
 }
 window.addEventListener('brevia:language-changed', () => setLiveAcceptedClaims(liveAcceptedClaims));
 let pendingAutoSuggestions = [];
+const seenAiSuggestions = new Set();
 function resetAiNoteSuggestions() {
   clearTimeout(aiNoteTypingTimer);
   aiNoteUserTyping = false;
   pendingAutoSuggestions.length = 0;
+  seenAiSuggestions.clear();
   aiSuggestionQueue = [];
   setLiveAcceptedClaims([]);
   document.querySelector('[data-live-note-dialog][open]')?.close();
@@ -7600,7 +7621,26 @@ function resetAiNoteSuggestions() {
   hideAiSuggestion();
 }
 const pendingNoteSources = new Map();
+function noteLineKey(text) {
+  return text
+    .trim()
+    .replace(/^(?:#{1,6}|[-*+]|\d+\.)\s+/, '')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .replace(/[。.!！]+$/, '')
+    .trim();
+}
+function notesContainSuggestion(text) {
+  const key = noteLineKey(text);
+  return (
+    !key ||
+    currentNotesMarkdown()
+      .split('\n')
+      .some((line) => noteLineKey(line) === key)
+  );
+}
 function appendAiSuggestion(suggestion) {
+  if (notesContainSuggestion(suggestion.text)) return false;
   if (suggestion.source_tracked && suggestion.meeting_id && suggestion.id) {
     if (!pendingNoteSources.has(suggestion.meeting_id))
       pendingNoteSources.set(suggestion.meeting_id, new Set());
@@ -7615,6 +7655,7 @@ function appendAiSuggestion(suggestion) {
   window.brevia?.aiNote
     .dismiss({ meeting_id: suggestion.meeting_id, text: suggestion.text })
     .catch(() => {});
+  return true;
 }
 function flushAutoSuggestions() {
   if (aiAssistConfig.proactivity !== 'auto' || aiNoteUserTyping) return;
@@ -7623,6 +7664,8 @@ function flushAutoSuggestions() {
 if (window.brevia?.on)
   window.brevia.on('ai-note.suggestion', (payload) => {
     if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
+    if (seenAiSuggestions.has(payload.id)) return;
+    seenAiSuggestions.add(payload.id);
     if (aiAssistConfig.proactivity === 'auto') {
       if (aiNoteUserTyping) pendingAutoSuggestions.push(payload);
       else appendAiSuggestion(payload);
@@ -7652,7 +7695,9 @@ if (window.brevia?.on)
   });
 /** 展示队列里的下一条建议（没有则回到空状态）。@returns {void} */
 function showNextAiSuggestion() {
-  latestAiSuggestion = aiSuggestionQueue.shift() || null;
+  do {
+    latestAiSuggestion = aiSuggestionQueue.shift() || null;
+  } while (latestAiSuggestion && notesContainSuggestion(latestAiSuggestion.text));
   renderAiSuggestion();
 }
 if (window.brevia?.on)
@@ -7750,7 +7795,10 @@ async function acceptAiSuggestion(text) {
   });
   try {
     if (aiSuggestionDraftKey !== key) {
-      appendAiSuggestion(suggestion);
+      if (!appendAiSuggestion(suggestion)) {
+        hideAiSuggestion();
+        return true;
+      }
       aiSuggestionDraftKey = key;
     }
     clearTimeout(liveNotesSaveTimer.current);
@@ -9753,9 +9801,13 @@ function updateLiveSpeaker(meetingId, segment) {
   label.dataset.segmentSpeaker = segment.id;
   label.dataset.speaker = segment.speaker;
   label.textContent = name;
-  label.title = name;
+  label.title = t('标记说话人');
+  label.dataset.liveSpeaker = '';
   element.querySelector('.speaker-avatar')?.remove();
-  label.insertAdjacentHTML('beforebegin', renderSpeakerAvatar({ id: segment.speaker, name }));
+  label.insertAdjacentHTML(
+    'beforebegin',
+    renderSpeakerAvatar({ id: segment.speaker, name }, liveSpeakerPalette),
+  );
   liveSegmentData.set(segment.id, {
     ...data,
     revision: Number(segment.revision) || data.revision,
@@ -9770,15 +9822,20 @@ async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
   segmentSpeakerDraft = draft;
   try {
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
-    if (segmentSpeakerDraft !== draft || !anchor.checkVisibility() || anchor.closest('[inert]'))
+    if (segmentSpeakerDraft !== draft) return;
+    if (!anchor.isConnected || !anchor.checkVisibility() || anchor.closest('[inert]')) {
+      segmentSpeakerDraft = undefined;
       return;
+    }
     const segment = meeting.segments.find((item) => item.id === segmentId);
     if (!segment) throw Error(t('无法获取字幕内容'));
+    const palette = meetingId === livePaletteMeetingId ? new Map(liveSpeakerPalette) : new Map();
+    for (const person of meeting.speakers) speakerColor(person.id || person.name, palette);
     const names = [
       ...new Set([...meeting.speakers, ...speakerProfiles].map((person) => person.name)),
     ].filter((name) => name && name.length <= 32 && !isDefaultSegmentSpeakerName(name));
     segmentSpeakerPicker.setAttribute('aria-label', t('标记说话人'));
-    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(meeting.speakers.find((person) => person.name === name) || speakerProfiles.find((person) => person.name === name) || name)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
+    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(meeting.speakers.find((person) => person.name === name) || speakerProfiles.find((person) => person.name === name) || name, palette)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
     anchor.closest('.segment')?.classList.add('has-segment-menu');
     draft.open = true;
     segmentSpeakerPicker.showPopover();
@@ -9844,10 +9901,13 @@ segmentSpeakerPicker.addEventListener('submit', async (event) => {
     }
     if (segmentSpeakerDraft === draft) {
       closeMeetingPopovers();
-      const row = [...document.querySelectorAll('.segment[data-segment-id]')].find(
+      const row = [...document.querySelectorAll('.view.active .segment[data-segment-id]')].find(
         (row) => row.dataset.segmentId === draft.segmentId,
       );
-      row?.querySelector('[data-segment-tool="speaker"]')?.focus({ preventScroll: true });
+      const trigger = draft.anchor.isConnected
+        ? draft.anchor
+        : row?.querySelector('[data-live-speaker], [data-segment-tool="speaker"]');
+      trigger?.focus({ preventScroll: true });
       showToast(t('已保存'), undefined, 'success');
     }
   } catch (error) {
@@ -9900,26 +9960,10 @@ document.addEventListener('click', (event) => {
     popover.hidePopover();
     return;
   }
-  const input = popover.querySelector('input');
-  input.value = '';
-  popover.querySelectorAll('.summary-participant-list > span').forEach((row) => {
-    row.hidden = false;
-  });
-  popover.querySelector('[data-participant-empty]').hidden = true;
   closeMeetingPopovers();
   popover.showPopover();
   toggle.setAttribute('aria-expanded', 'true');
   positionFloating(popover, toggle, ['bottom-end', 'top-end']);
-});
-document.addEventListener('input', (event) => {
-  if (!event.target.matches('[data-participant-search]')) return;
-  const popover = event.target.closest('[popover]');
-  const query = event.target.value.trim().toLocaleLowerCase();
-  const rows = [...popover.querySelectorAll('.summary-participant-list > span')];
-  rows.forEach((row) => {
-    row.hidden = !row.textContent.toLocaleLowerCase().includes(query);
-  });
-  popover.querySelector('[data-participant-empty]').hidden = rows.some((row) => !row.hidden);
 });
 window.addEventListener('resize', closeMeetingPopovers);
 document.addEventListener('pointerdown', (event) => {
@@ -11126,6 +11170,16 @@ if (window.brevia) {
       backToLatest.hidden = true;
     });
   }
+  transcript.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-live-speaker]');
+    const meetingId = breviaClient.state.meeting?.id;
+    if (button && meetingId)
+      void openSegmentSpeakerPicker(
+        meetingId,
+        button.closest('.segment').dataset.segmentId,
+        button,
+      );
+  });
   transcript.addEventListener('contextmenu', (event) => {
     const segment = event.target.closest('[data-segment-id]');
     const meetingId = breviaClient.state.meeting?.id;
@@ -11139,13 +11193,16 @@ if (window.brevia) {
       segmentInfoFor(meetingId, segment.dataset.segmentId),
     );
   });
-  const renderLiveEvent = (payload) => {
+  const renderLiveEvent = (payload, wasPreviewed = false) => {
     // 防止重复事件覆盖已经展示的字幕。
     const revision = Number(payload.revision) || 0;
     const seenRevision = liveSegmentData.get(payload.segment_id)?.revision;
     if (seenRevision !== undefined && revision <= seenRevision) return;
     const shouldFollow =
-      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
+      !segmentSpeakerDraft &&
+      !correctionDraft &&
+      correctionPanel.hidden &&
+      (followLiveTranscript || isAtLiveBottom());
     const previous = liveSegments.get(payload.segment_id);
     if (correctionDraft?.segment.id === payload.segment_id) {
       liveSegmentData.set(payload.segment_id, {
@@ -11171,6 +11228,7 @@ if (window.brevia) {
       text: payload.text,
       translation,
       showSpeaker: Boolean(payload.speaker_name),
+      live: true,
       userEdited: Boolean(payload.user_edited),
     };
     latestLiveSegmentId = payload.segment_id;
@@ -11194,7 +11252,7 @@ if (window.brevia) {
         (item) => Number(item.dataset.start) > payload.start_ms / 1000,
       );
       transcript.insertBefore(element, next || null);
-      if (shouldFollow) BreviaMotion.enter(element, 'attention');
+      if (shouldFollow && !wasPreviewed) BreviaMotion.enter(element, 'attention');
     }
     liveSegments.set(payload.segment_id, element);
     liveSegmentData.set(payload.segment_id, {
@@ -11321,7 +11379,6 @@ if (window.brevia) {
       !data ||
       !element ||
       Number(payload.revision) <= data.revision ||
-      correctionDraft?.segment.id === payload.segment_id ||
       element.querySelector('.speaker-name-input')
     )
       return;
@@ -11329,7 +11386,7 @@ if (window.brevia) {
   });
   window.brevia.on('transcript.final', (payload) => {
     if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
-    renderLiveEvent(payload);
+    renderLiveEvent(payload, draftSegments.has(payload.track || 'mix'));
     // 只有正式段落覆盖整个草稿才移除；包含后续尾句的预览等待就地更新。
     for (const [key, draft] of draftSegments) {
       // 只让同一条音轨的正式段落撤下临时行：双轨会议里 mic 的 final 不该清掉 system
@@ -11359,7 +11416,10 @@ if (window.brevia) {
       return;
     }
     const shouldFollow =
-      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
+      !segmentSpeakerDraft &&
+      !correctionDraft &&
+      correctionPanel.hidden &&
+      (followLiveTranscript || isAtLiveBottom());
     const entry = {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
@@ -11367,6 +11427,7 @@ if (window.brevia) {
       speaker: { id: payload.speaker, name: '' },
       text: payload.text,
       showSpeaker: false,
+      live: true,
     };
     let element = existing;
     if (!element) {
@@ -11416,7 +11477,10 @@ if (window.brevia) {
     const element = liveSegments.get(payload.segment_id);
     if (!element) return;
     const shouldFollow =
-      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
+      !segmentSpeakerDraft &&
+      !correctionDraft &&
+      correctionPanel.hidden &&
+      (followLiveTranscript || isAtLiveBottom());
     let line = element.querySelector('.translation');
     if (!line) {
       line = document.createElement('p');
