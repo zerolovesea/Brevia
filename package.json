@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.4.5",
+  "version": "2.0.0",
   "scripts": {
     "assets:brand": "node scripts/generate-brand-assets.cjs",
     "assets:brand:check": "node scripts/generate-brand-assets.cjs --check",

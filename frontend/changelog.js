@@ -2,9 +2,146 @@
 (() => {
   const releases = [
     {
+      'version': '2.0.0',
+      'date': '2026-11-07',
+      'current': true,
+      'previousVersion': '1.4.5',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '桌面版改用系统原生窗口。实时字幕可标注说话人，回看会议时可从纪要定位到原始发言，本机 Agent 也可调用转写和翻译。',
+        'what': [
+          {
+            'text': '从会议纪要和原因图跳转到对应的逐字稿与录音，核对结论的上下文。',
+            'commit': 'eda1667b43d16b7c6d0d3341d810773342445b38',
+          },
+          {
+            'text':
+              '在设置中复制 Agent 接入引导语，通过本机 CLI 或 MCP 查询会议、控制录音、转写文件和翻译字幕。',
+            'commit': '82595d53b1c3fd1f7379452db25d82aa82378f42',
+          },
+          {
+            'text':
+              '安装声纹模型后，实时字幕可根据原始语音片段识别说话人。证据不足时保留未知身份。',
+            'commit': '185740523463c29a14db5fe4cd1122cdb4f39d4e',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              '桌面主窗口默认按 90% 显示，内容区为 1152 × 720。会议纪要、逐字稿和侧栏同比缩放，小屏幕会继续适配可用空间。',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+          {
+            'text':
+              '手机离线录音完整传至电脑后即可离开手机应用，电脑会继续导入，重启后也可恢复处理。',
+            'commit': '60a932280ce74051c40a939029f5a6f260d6b67b',
+          },
+          {
+            'text':
+              'macOS 使用 WebKit，Windows 使用 WebView2。两端均随包提供推理引擎，转写模型仍按需下载。',
+            'commit': '26d48b77c244afe270b51397d287efc5f42e4a1e',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              '取消手机信任后，排队中的请求会在执行前重新校验权限；手机保存会议快照时会按提交顺序写入。',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+          {
+            'text': '修复 Windows 双轨录音停止时末批音频可能遗漏的问题。',
+            'commit': '03c6d6cbc2c5a8a3be81c49d9110574f28c9b524',
+          },
+          {
+            'text': '已结束会议的录音时长按保存的音频计算，避免把暂停时间计入录音。',
+            'commit': 'd571b5c9dd0edc2f7b71f37e44f825982e106341',
+          },
+        ],
+        'changes': [
+          {
+            'text':
+              '升级后，已信任的手机可访问电脑会议库，包括旧版中关闭过会议库访问的设备。可在「设置 → 设备连接」查看设备并取消信任。',
+            'commit': '60a932280ce74051c40a939029f5a6f260d6b67b',
+          },
+          {
+            'text':
+              'v2.0.0 是桌面端大版本更新。从 v1.4.5 升级时，请先保存录音，等待后台任务结束，再在应用内点击「检查更新」并安装。升级后会沿用已有会议、录音和已下载的模型。macOS 需要 Apple Silicon 和 macOS 14 或以上，Windows 需要 Windows 10/11 x64 和支持 AVX2 的处理器。',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'The desktop app now uses native windows. Live captions can identify speakers, meeting reviews link back to the original speech, and local agents can transcribe and translate files.',
+        'what': [
+          {
+            'text':
+              'Follow a meeting summary or cause diagram back to the transcript and recording to check a conclusion in context.',
+            'commit': 'eda1667b43d16b7c6d0d3341d810773342445b38',
+          },
+          {
+            'text':
+              'Copy the Agent setup instructions from Settings to query meetings, control recordings, transcribe files and translate subtitles through the local CLI or MCP.',
+            'commit': '82595d53b1c3fd1f7379452db25d82aa82378f42',
+          },
+          {
+            'text':
+              'With the speaker embedding model installed, live captions can identify speakers from the original speech. Uncertain matches stay unlabeled.',
+            'commit': '185740523463c29a14db5fe4cd1122cdb4f39d4e',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'The desktop window opens at 90% scale with a 1152 × 720 content area. Meeting notes, transcripts and the sidebar scale together, and the window fits smaller screens.',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+          {
+            'text':
+              'Once an offline phone recording has transferred in full, you can leave the mobile app. The desktop continues importing and can resume after a restart.',
+            'commit': '60a932280ce74051c40a939029f5a6f260d6b67b',
+          },
+          {
+            'text':
+              'The desktop app uses WebKit on macOS and WebView2 on Windows. Both installers include inference engines, and transcription models download on demand.',
+            'commit': '26d48b77c244afe270b51397d287efc5f42e4a1e',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Queued phone requests recheck access after trust is revoked. The mobile app now saves meeting snapshots in submission order.',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+          {
+            'text':
+              'Preserve the final audio frames when stopping a dual-track recording on Windows.',
+            'commit': '03c6d6cbc2c5a8a3be81c49d9110574f28c9b524',
+          },
+          {
+            'text':
+              'Calculate the duration of a completed recording from the saved audio so time spent paused is excluded.',
+            'commit': 'd571b5c9dd0edc2f7b71f37e44f825982e106341',
+          },
+        ],
+        'changes': [
+          {
+            'text':
+              'After upgrading, trusted phones can access the desktop meeting library, including devices whose library access was turned off in the previous version. Review devices and revoke trust in Settings → Device connections.',
+            'commit': '60a932280ce74051c40a939029f5a6f260d6b67b',
+          },
+          {
+            'text':
+              'v2.0.0 is a major desktop update. In v1.4.5, save your recording, wait for background tasks to finish, then select Check for updates and install the update from within Brevia. Your meetings, recordings and downloaded models carry over. macOS requires Apple Silicon and macOS 14 or later. Windows requires Windows 10/11 x64 and a processor with AVX2.',
+            'commit': '1590fa65107f0a1525a026706119e76b18ddf31d',
+          },
+        ],
+      },
+    },
+    {
       'version': '1.4.5',
       'date': '2026-10-22',
-      'current': true,
       'previousVersion': '1.4.4',
       'contributors': [],
       'zh': {

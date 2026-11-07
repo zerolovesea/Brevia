@@ -150,7 +150,7 @@ dependencies = [
 
 [[package]]
 name = "brevia-host"
-version = "1.4.5"
+version = "2.0.0"
 dependencies = [
  "base64 0.22.1",
  "cc",
