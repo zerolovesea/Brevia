@@ -105,7 +105,7 @@ jobs:
           include-hidden-files: true
           retention-days: 7
       - name: Preserve native build cache
-        if: ${{ !cancelled() && (steps.native-build.outcome == 'success' || steps.native-build.outcome == 'failure') && steps.native-build-cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' && steps.native-build-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |

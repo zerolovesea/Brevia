@@ -1848,6 +1848,7 @@ try {
     branches[0].querySelector('summary').click();
     if (!branches[0].querySelector('blockquote').textContent.includes('开发团队周四可以交付测试版本')) throw Error('first-run source mismatch');
     const playback = branches[0].querySelector('[data-play-evidence]');
+    const wasMuted = playerAudio.muted;
     playerAudio.muted = true;
     const playing = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(Error('example WAV did not play: '+JSON.stringify({ready:playerAudio.readyState,network:playerAudio.networkState,error:playerAudio.error?.message,paused:playerAudio.paused}))), 4000);
@@ -1857,6 +1858,7 @@ try {
     await playing;
     if (Math.abs(playerAudio.currentTime - 5.016) > .2) throw Error('example quote did not seek to its audio');
     playerAudio.pause();
+    playerAudio.muted = wasMuted;
   })()`);
   if (process.env.BREVIA_CORRECTION_CAPTURE_DIR)
     await correctionEvaluate(`(async()=>{
