@@ -26,8 +26,7 @@ The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **
 
 - **Transcription and translation.** Record your microphone and computer audio with live bilingual captions, or import an interview and export SRT subtitles.
 - **Speaker recognition.** See who said what, correct a name, and save a voice profile to recognize the same speaker next time.
-
-Fast transcription: On an M4 Pro, Brevia transcribed a **66 min 40 s** recording in **3 min 33 s**.
+- **Fast transcription:** On an M4 Pro, Brevia transcribed a **66 min 40 s** recording in **3 min 33 s**.
 
 ### AI notes
 

@@ -26,7 +26,7 @@ Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo su
 
 - Enregistrez le microphone et le son du système, avec transcription, traduction, sous-titres flottants et commandes d’enregistrement.
 - Identifiez les intervenants en arrière-plan pendant que les sous-titres s’affichent. Affinez ensuite la transcription, corrigez les noms et enregistrez les profils vocaux.
-- Transcription rapide : Sur un M4 Pro, Brevia a transcrit un enregistrement de **66 min 40 s** en **3 min 33 s**.
+- **Transcription rapide :** Sur un M4 Pro, Brevia a transcrit un enregistrement de **66 min 40 s** en **3 min 33 s**.
 - Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.
 - Classez les réunions par espace de travail, recherchez leur contenu et exportez en Markdown, TXT, JSON, SRT, DOCX, PDF ou WAV.
 - Importez des fichiers audio ou vidéo pour les transcrire, les traduire et analyser les intervenants, y compris via un agent local.

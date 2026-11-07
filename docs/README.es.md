@@ -26,7 +26,7 @@ El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos
 
 - Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.
 - Identifica hablantes en segundo plano mientras aparecen los subtítulos. Después puedes refinar el texto, corregir nombres y guardar perfiles de voz.
-- Transcripción rápida: En un M4 Pro, Brevia transcribió una grabación de **66 min 40 s** en **3 min 33 s**.
+- **Transcripción rápida:** En un M4 Pro, Brevia transcribió una grabación de **66 min 40 s** en **3 min 33 s**.
 - Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
 - Organiza reuniones en espacios de trabajo, busca su contenido y exporta Markdown, TXT, JSON, SRT, DOCX, PDF o WAV.
 - Importa audio y vídeo para transcribir, traducir y analizar hablantes, también mediante tu agente local.

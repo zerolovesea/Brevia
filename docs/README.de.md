@@ -26,7 +26,7 @@ Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat herunterge
 
 - Mikrofon und Systemton gemeinsam aufnehmen, mit Live-Transkription, Übersetzung, schwebenden Untertiteln und Aufnahmesteuerung.
 - Sprecher im Hintergrund erkennen, während Untertitel sofort erscheinen. Anschließend Transkripte verbessern, Namen korrigieren und Stimmprofile speichern.
-- Schnelle Transkription: Auf einem M4 Pro dauerte die vollständige Transkription einer **66 min 40 s** langen Aufnahme **3 min 33 s**.
+- **Schnelle Transkription:** Auf einem M4 Pro dauerte die vollständige Transkription einer **66 min 40 s** langen Aufnahme **3 min 33 s**.
 - Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
 - Meetings in Arbeitsbereichen organisieren, Inhalte durchsuchen und als Markdown, TXT, JSON, SRT, DOCX, PDF oder WAV exportieren.
 - Vorhandene Audio- und Videodateien transkribieren, übersetzen und nach Sprechern auswerten – auch über einen lokalen Agenten.
