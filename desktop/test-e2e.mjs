@@ -1753,6 +1753,8 @@ try {
   );
   const directSubtitleActions = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
+      // 清除视口模拟后，先处理浏览器排队的 resize/scroll，再验证弹层。
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       const errors=[],initialized=await window.brevia.initialize();
       const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id}),segment=meeting.segments[0];
       const profilesBefore=await window.brevia.speakerProfile.list();
