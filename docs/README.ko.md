@@ -15,16 +15,10 @@
 | iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
-[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg
-[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe
+[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-WebKit-2.0.0-arm64.dmg
+[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-2.0.0-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
-
-<!-- native-release-pending -->
-
-이 페이지는 main의 새 기능을 소개합니다. 현재 다운로드는 v1.4.5이며, 네이티브 설치 파일은 다음 릴리스에서 제공합니다.
-
-<!-- /native-release-pending -->
 
 v2.0.0은 데스크톱 앱의 주요 업데이트입니다. 녹음을 저장하고 v1.4.5 앱에서 업데이트를 확인해 설치하세요. 기존 회의, 녹음, 다운로드한 모델은 그대로 유지됩니다.
 

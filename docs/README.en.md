@@ -15,16 +15,10 @@
 | iPhone   | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android  | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
-[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg
-[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe
+[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-WebKit-2.0.0-arm64.dmg
+[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-2.0.0-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
-
-<!-- native-release-pending -->
-
-This page describes the new features on main. Downloads still provide v1.4.5; native installers will arrive with the next release.
-
-<!-- /native-release-pending -->
 
 v2.0.0 is a major desktop update. Save your recording and check for updates in v1.4.5 to install it. Your meetings, recordings and downloaded models carry over.
 

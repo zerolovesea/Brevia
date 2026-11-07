@@ -15,16 +15,10 @@
 | iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
-[download-mac]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg
-[download-windows]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe
+[download-mac]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-WebKit-2.0.0-arm64.dmg
+[download-windows]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.0.0-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
-
-<!-- native-release-pending -->
-
-本页介绍 main 中的新版功能。当前下载仍为 v1.4.5，原生安装包将在下一版发布。
-
-<!-- /native-release-pending -->
 
 v2.0.0 是桌面端大版本更新。v1.4.5 用户可以先保存录音，再在应用内检查并安装更新。已有会议、录音和模型将继续保留。
 

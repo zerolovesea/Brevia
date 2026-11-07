@@ -15,16 +15,10 @@
 | iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
-[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg
-[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe
+[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-WebKit-2.0.0-arm64.dmg
+[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.0/Brevia-2.0.0-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
-
-<!-- native-release-pending -->
-
-Эта страница описывает новые функции в main. Для скачивания пока доступна v1.4.5; нативные установщики появятся в следующем выпуске.
-
-<!-- /native-release-pending -->
 
 v2.0.0 — крупное обновление настольного приложения. Сохраните текущую запись и проверьте наличие обновлений в v1.4.5. Ваши встречи, записи и скачанные модели сохранятся.
 
