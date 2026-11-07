@@ -126,7 +126,7 @@ public static class BreviaTestWindow {
   assert.equal(result.status, 0, result.stderr || result.error?.message || 'Quit test app');
 }
 
-async function main() {
+async function main(version, installerHash, uninstallerHash) {
   assert.equal(process.platform, 'win32', 'Run this integration check on Windows');
   assert.equal(
     process.env.GITHUB_ACTIONS,
@@ -147,11 +147,11 @@ async function main() {
   let app;
   let createdProfile = false;
   try {
-    console.log('Windows upgrade: downloading the verified v1.4.5 installer');
+    console.log('Windows upgrade: downloading the verified v' + version + ' installer');
     await download(
-      'https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe',
+      `https://github.com/zerolovesea/Brevia/releases/download/v${version}/Brevia-${version}-x64-setup.exe`,
       oldInstaller,
-      '71016acd9f061f1401e549e14a77055c4a7985b0419958b500b171e5b0cd3559',
+      installerHash,
     );
     install(oldInstaller, ['/S', `/D=${directory}`]);
     assert.ok(fs.existsSync(path.join(directory, 'resources/app.asar')));
@@ -161,8 +161,36 @@ async function main() {
     assert.equal(installed[0].hive, 'HKLM');
     assert.equal(
       registry('HKLM', `${uninstallRoot}\\${legacyGuid}`, 'DisplayName', installed[0].view),
-      'Brevia 1.4.5',
+      'Brevia ' + version,
     );
+    // Reproduce STARTF_USESHOWWINDOW / SW_HIDE sent by the old elevation helper.
+    const probe = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `
+      $ErrorActionPreference = 'Stop'
+      $p = Start-Process -FilePath $env:BREVIA_TEST_INSTALLER -ArgumentList '--updated','--force-run' -WindowStyle Hidden -PassThru
+      try {
+        for ($i = 0; $i -lt 100; $i++) {
+          $p.Refresh()
+          if ($p.HasExited) { throw "Installer exited: $($p.ExitCode)" }
+          if ($p.MainWindowHandle -ne [IntPtr]::Zero -and $p.MainWindowTitle -like '*Brevia*') { break }
+          Start-Sleep -Milliseconds 100
+        }
+        if ($p.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Installer wizard stayed hidden' }
+      } finally { if (!$p.HasExited) { $p.Kill(); $p.WaitForExit() } }
+    `,
+      ],
+      {
+        env: { ...process.env, BREVIA_TEST_INSTALLER: installer },
+        encoding: 'utf8',
+        timeout: 30000,
+      },
+    );
+    assert.equal(probe.status, 0, probe.stderr || String(probe.error));
     fs.mkdirSync(profile);
     createdProfile = true;
     const sentinel = path.join(profile, 'upgrade-preserved.txt');
@@ -170,10 +198,7 @@ async function main() {
 
     // 即使 HKLM 登记可信，自定义目录中的卸载器仍可能被普通用户替换。
     const oldUninstaller = path.join(directory, 'Uninstall Brevia.exe');
-    assert.equal(
-      await digest(oldUninstaller),
-      '42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835',
-    );
+    assert.equal(await digest(oldUninstaller), uninstallerHash);
     const originalUninstaller = fs.readFileSync(oldUninstaller);
     try {
       fs.appendFileSync(oldUninstaller, 'tampered');
@@ -226,7 +251,9 @@ async function main() {
       'user meetings and models must survive migration',
     );
     console.log(
-      'Windows upgrade passed: real v1.4.5, custom directory, retained profile, removed legacy registration, repeat install, running-app protection.',
+      'Windows upgrade passed: real v' +
+        version +
+        ', custom directory, retained profile, removed legacy registration, repeat install, running-app protection.',
     );
   } finally {
     try {
@@ -248,7 +275,19 @@ async function main() {
     }
   }
 }
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main(
+  '1.4.3',
+  'a2a086c424b910f0fa2cbdb9220d03fb2d429dba246c01cca27e18630d77c3d3',
+  'd8433f86ca41812d41ab4706f7ea3c68d9ed7c83a2d9975f1eee2f03ec8196aa',
+)
+  .then(() =>
+    main(
+      '1.4.5',
+      '71016acd9f061f1401e549e14a77055c4a7985b0419958b500b171e5b0cd3559',
+      '42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835',
+    ),
+  )
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

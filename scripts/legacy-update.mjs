@@ -8,10 +8,11 @@ import pkg from '../package.json' with { type: 'json' };
 
 const version = pkg.version;
 // Leave the mirror's migration release in place when publishing later native releases.
-if (version !== '2.0.0') process.exit(0);
+if (version !== '2.0.0' && version !== '2.0.1') process.exit(0);
 const input = path.resolve(process.argv[2]);
 const output = process.argv[3] ? path.resolve(process.argv[3]) : path.dirname(input);
 const mac = path.basename(input) === 'Brevia.app';
+if (mac && version !== '2.0.0') process.exit(0);
 let asset = input;
 if (mac) {
   const plist = path.join(input, 'Contents/Info.plist');
@@ -57,6 +58,7 @@ const file = {
   url: path.basename(asset),
   sha512: hash.digest('base64'),
   size: (await stat(asset)).size,
+  ...(!mac && { isAdminRightsRequired: true }),
 };
 if (!file.size) throw new Error('Empty update artifact: ' + asset);
 // JSON is valid YAML and safely quotes filenames and hashes for the old js-yaml parser.

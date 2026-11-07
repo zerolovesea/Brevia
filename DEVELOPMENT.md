@@ -61,7 +61,7 @@ npm run test:mac:webkit
 
 macOS 14.4+ 的系统声音使用公开 Core Audio Tap API，仅申请音频录制权限；14.0–14.3 保留 ScreenCaptureKit。权限查询不会探录音，也不以录屏权限代替音频权限；公开 API 无法查询时返回 `screen: "unknown"`（保留既有协议字段），界面显示“录音时确认”。主动请求通过临时启动并释放 Tap 触发系统授权，检测到真实声音时返回 `true`，没有检测到声音时返回 `null`，首次尚未确认时，界面保留申请记录与重新检测入口；实际采集成功后本地记住确认结果，后续启动显示“已允许”。该记录表示上次确认成功，公开 API 无法同步用户在系统设置里的撤销操作。系统静音时不能推断授权结果。发布前额外验证延迟确认、拒绝后恢复、耳机／扬声器切换、采样率变化及双轨暂停收尾。
 
-正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。v1.4.5 的 Electron 更新器从 ModelScope 读取 `latest-mac.yml`（macOS）或 `latest.yml`（Windows）。v2.0.0 是桌面大版本更新：在 v1.4.5 内保存录音，等待后台任务结束，再检查并安装更新。此次 Release 同时生成旧版清单，macOS 指向符合旧版签名要求的 Brevia.app ZIP，Windows 指向同一份 x64 安装器。后续 Release 保留镜像上的 v2.0.0 清单及对应文件；完成迁移的桌面应用通过 `latest-webkit.json` 或 `latest-windows.json` 在应用内更新。
+正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。v1.4.5 的 Electron 更新器从 ModelScope 读取 `latest-mac.yml`（macOS）或 `latest.yml`（Windows）。v2.0.0 是桌面大版本更新：在 v1.4.5 内保存录音，等待后台任务结束，再检查并安装更新。此次 Release 同时生成旧版清单，macOS 指向符合旧版签名要求的 Brevia.app ZIP，Windows 指向同一份 x64 安装器。Windows 的旧版清单指向 v2.0.1，macOS 的旧版清单继续指向 v2.0.0。后续 Release 保留这两份清单及对应文件；完成迁移的桌面应用通过 `latest-webkit.json` 或 `latest-windows.json` 在应用内更新。
 
 ## Windows 开发与打包
 
@@ -80,7 +80,7 @@ npm run test:windows:native
 
 输出为 `dist/native-win/app/` 和 `dist/native-win/Brevia-<版本>-x64-setup.exe`。原生依赖固定版本并校验 SHA256。必要推理引擎和 Node 始终随包提供，不下载推理运行包。Windows 复用系统 WebView2，安装包只内置小型引导程序；已安装 WebView2 时不下载，缺失时在安装阶段联网补装。没有 WebView2 的离线机器需由管理员预装微软运行时。模型权重仍按所选模型下载；macOS 的 MLX 模型由 Windows 的 ONNX/GGUF 实现承担相应功能，不能直接运行 MLX 权重。当前 Windows 推理使用 CPU，不保证与 Apple Silicon 的 Metal 性能相同。
 
-从官方 Electron v1.4.5 升级会校验旧卸载器并清理旧程序文件，保留会议、模型和原安装目录。更早版本或卸载器被修改时拒绝自动执行，先保留应用数据手动卸载旧版再安装。应用内更新前保存录音并等待后台任务结束，旧版会在启动安装器时自行退出。安装器先检查 AVX2 能力，再迁移旧安装；不强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
+从 Windows 正式版 v1.4.3 或 v1.4.5 升级至 v2.0.1 会按版本校验旧卸载器并清理旧程序文件，保留会议、模型和原安装目录。未列入校验范围的版本或卸载器被修改时拒绝自动执行，先保留应用数据手动卸载旧版再安装。应用内更新前保存录音并等待后台任务结束，旧版会在启动安装器时自行退出。安装器先检查 AVX2 能力，再迁移旧安装；不强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
 
 `npm start` 在两端都复用原生依赖的编译缓存，但仍重新组装应用；`start:fresh` 只额外重置引导，不清会议。`npm run clean` 回收可重建的原生编译目录，保留安装包和已下载模型；下次启动会重新编译。`npm run clean:dist` 删除整个 `dist`（包括本地安装包与下载缓存），先退出其中运行的应用。
 

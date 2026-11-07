@@ -3,17 +3,19 @@
 !define BREVIA_LEGACY_GUID "cd5ecd10-b94d-5d23-8c47-11b57b4f71d8"
 !define BREVIA_LEGACY_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${BREVIA_LEGACY_GUID}"
 !define BREVIA_HOOK_DIR "${__FILEDIR__}"
-!define MUI_CUSTOMFUNCTION_GUIINIT BreviaRestoreLegacyDirectory
+!define MUI_CUSTOMFUNCTION_GUIINIT BreviaWizardInit
 !include StrFunc.nsh
 ${StrStr}
-; 官方 v1.4.5 安装器 SHA256 71016acd...3559 中的原始卸载器，不执行自选目录中的任意程序。
-!define BREVIA_LEGACY_UNINSTALL_SHA256 "42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835"
+; 各正式安装包的卸载器摘要；按注册版本精确匹配。
+!define BREVIA_UNINSTALL_143 "d8433f86ca41812d41ab4706f7ea3c68d9ed7c83a2d9975f1eee2f03ec8196aa"
+!define BREVIA_UNINSTALL_145 "42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835"
 
 Var BreviaLegacyDir
 Var BreviaLegacyScope
 Var BreviaLegacyView
 Var BreviaLegacyInvalid
 Var BreviaDirectorySuggested
+Var BreviaExpectedHash
 Var BreviaUninstallerHandle
 
 LangString BreviaAvx2Required 1033 "Brevia 2 requires an x64 processor with AVX2. Setup cannot continue."
@@ -75,8 +77,14 @@ LangString BreviaMigrationFailed 2052 "旧版程序未能完成迁移。请修�
       ReadRegStr $2 ${root} "${BREVIA_LEGACY_KEY}" "UninstallString"
       StrCpy $3 $BreviaLegacyDir 1 1
       StrLen $4 $BreviaLegacyDir
-      ${If} $1 != "Brevia 1.4.5"
-      ${OrIf} $3 != ":"
+      ${If} $1 == "Brevia 1.4.5"
+        StrCpy $BreviaExpectedHash "${BREVIA_UNINSTALL_145}"
+      ${ElseIf} $1 == "Brevia 1.4.3"
+        StrCpy $BreviaExpectedHash "${BREVIA_UNINSTALL_143}"
+      ${Else}
+        StrCpy $BreviaLegacyInvalid 1
+      ${EndIf}
+      ${If} $3 != ":"
       ${OrIf} $4 <= 3
       ${OrIf} $2 != '$\"$BreviaLegacyDir\Uninstall Brevia.exe$\" /${scope}'
       ${OrIfNot} ${FileExists} "$BreviaLegacyDir\resources\app.asar"
@@ -95,6 +103,20 @@ Function BreviaFindLegacy
   !insertmacro BreviaReadLegacy HKCU 64 currentuser
   !insertmacro BreviaReadLegacy HKCU 32 currentuser
   SetRegView 64
+FunctionEnd
+
+Function BreviaWizardInit
+  Call BreviaRestoreLegacyDirectory
+  ${GetOptions} $CMDLINE "/P" $0
+  ${If} ${Errors}
+  ${AndIfNot} ${Silent}
+    ${GetOptions} $CMDLINE "--updated" $0
+    ${IfNot} ${Errors}
+    ; NSIS 首次显示使用 SW_SHOWDEFAULT；等这一轮初始化结束后再恢复被 elevate.exe 隐藏的向导。
+      System::Call 'user32::PostMessageW(p $HWNDPARENT, i ${WM_SYSCOMMAND}, p 0xF120, p 0)'
+    ${EndIf}
+  ${EndIf}
+  ClearErrors
 FunctionEnd
 
 Function BreviaRestoreLegacyDirectory
@@ -123,7 +145,7 @@ Function BreviaVerifyUninstaller
   nsExec::ExecToStack /TIMEOUT=30000 '$\"$SYSDIR\certutil.exe$\" -hashfile $\"$PLUGINSDIR\brevia-old-uninstaller.exe$\" SHA256'
   Pop $0
   Pop $1
-  ${StrStr} $1 $1 "$\r$\n${BREVIA_LEGACY_UNINSTALL_SHA256}$\r$\n"
+  ${StrStr} $1 $1 "$\r$\n$BreviaExpectedHash$\r$\n"
   ${If} $0 != 0
   ${OrIf} $1 == ""
     System::Call 'kernel32::CloseHandle(p $BreviaUninstallerHandle)'
