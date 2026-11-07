@@ -2,9 +2,36 @@
 (() => {
   const releases = [
     {
-      'version': '2.0.0',
+      'version': '2.0.1',
       'date': '2026-11-07',
       'current': true,
+      'previousVersion': '2.0.0',
+      'contributors': [],
+      'zh': {
+        'summary': '修复 Windows 应用内更新在点击「允许」后安装向导不可见的问题。',
+        'changes': [
+          {
+            'text':
+              'Windows 正式版 v1.4.3 和 v1.4.5 均可直接更新到 v2.0.1。保存录音并等待后台任务结束，然后点击「检查更新」。允许系统提示后，按安装向导继续，已有会议、录音和模型会保留。',
+            'commit': '0cd9061a5d3997036321980598a204ef6c3ddbbb',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Fix the Windows in-app updater hiding the installation wizard after administrator approval.',
+        'changes': [
+          {
+            'text':
+              'On Windows, official v1.4.3 and v1.4.5 installations can update directly to v2.0.1. Save your recording and wait for background tasks to finish, then select Check for updates. Approve the Windows prompt and continue in the installer. Your meetings, recordings and downloaded models carry over.',
+            'commit': '0cd9061a5d3997036321980598a204ef6c3ddbbb',
+          },
+        ],
+      },
+    },
+    {
+      'version': '2.0.0',
+      'date': '2026-11-07',
       'previousVersion': '1.4.5',
       'contributors': [],
       'zh': {
