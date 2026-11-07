@@ -1843,6 +1843,12 @@ try {
     row.click();
     for(let i=0;i<80 && (currentMeetingDetail?.id!==sample.id || activeView!=='detail');i++) await new Promise(r=>setTimeout(r,25));
     if (detailActiveTab !== 'summary') throw Error('example did not open its prepared review');
+    if(pageTransition) await pageTransition;
+    const mediaDeadline = Date.now()+6000;
+    while(!playerAudio.getAttribute('src') || playerAudio.readyState<1){
+      if(Date.now()>mediaDeadline) throw Error('example WAV metadata did not load');
+      await new Promise(r=>setTimeout(r,25));
+    }
     const branches = [...document.querySelectorAll('brevia-cause-tree .evidence-claim')];
     if (branches.length !== 2 || !branches[0].checkVisibility()) throw Error('first-run tree missing');
     branches[0].querySelector('summary').click();
