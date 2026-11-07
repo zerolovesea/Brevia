@@ -61,6 +61,19 @@ Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次�
 
 ![Agent 调用 Brevia，保存西班牙语原文和英语译文两份 SRT 字幕](docs/assets/showcase/desktop/zh/agent.png)
 
+## CLI 参数
+
+命令格式为 `brevia 方法 [JSON 参数] [--no-start]`。在 **设置 → Agent 与 MCP** 的引导语里找到本机 CLI 路径，用它替换示例中的 `brevia`。运行 `brevia help` 查看全部方法，`brevia status --no-start` 只检查状态。
+
+用 `inference.run` 处理文件：`operation` 选 `transcribe`（转写）或 `translate`（翻译）；`input_path` 和 `output_path` 填绝对路径。`language` 是原文语言，默认 `auto`；翻译还需填写目标语言 `target_language`。
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+把示例路径换成自己的文件路径。命令返回 `task_id`，用 `task.get` 查询，状态为 `completed` 时读取输出文件。 [完整命令与参数](DEVELOPMENT.md#本机-agent-接口)
+
 ## 数据与隐私
 
 无需账号。录音和会议保存在自己的设备上，下载模型后可离线使用。选择在线 AI 时，相关文字会发送给你配置的服务商。[隐私政策](https://brevia.work/privacy.html)

@@ -75,6 +75,19 @@
 
 ![Агент сохраняет испанские и английские субтитры SRT](assets/showcase/desktop/en/agent.png)
 
+## Параметры CLI
+
+Синтаксис: `brevia МЕТОД [JSON] [--no-start]`. Путь к CLI указан в **Настройки → Agent и MCP**. Команда `brevia help` выводит список методов, а `brevia status --no-start` проверяет состояние без запуска приложения.
+
+Для `inference.run` укажите `transcribe` или `translate` в поле `operation`. Параметры `input_path` и `output_path` принимают абсолютные пути. Исходный язык `language` по умолчанию равен `auto`. Для перевода нужен `target_language`.
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+Замените пути из примера своими и передайте полученный `task_id` в `task.get`. Когда статус сменится на `completed`, откройте выходной файл. [Все команды и параметры](../DEVELOPMENT.md#本机-agent-接口)
+
 ## Ваши данные
 
 Аккаунт не нужен. Записи, встречи и модели остаются на ваших устройствах. Синхронизация телефона использует локальный HTTPS. Локальный ИИ работает офлайн; при выборе онлайн-провайдера ему отправляется соответствующий текст. [Privacy](https://brevia.work/privacy.html).

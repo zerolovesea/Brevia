@@ -75,6 +75,19 @@ Agenten können transkribieren, übersetzen, Stimmen erkennen, Meetings durchsuc
 
 ![Agent erstellt spanische und englische SRT-Dateien](assets/showcase/desktop/en/agent.png)
 
+## CLI-Parameter
+
+Syntax: `brevia METHODE [JSON] [--no-start]`. Der CLI-Pfad steht unter **Einstellungen → Agent & MCP**. `brevia help` listet die Methoden auf. `brevia status --no-start` prüft den Status, ohne die App zu starten.
+
+Für `inference.run` ist `operation` entweder `transcribe` oder `translate`. `input_path` und `output_path` sind absolute Pfade. Die Quellsprache `language` ist standardmäßig `auto`. Eine Übersetzung benötigt `target_language`.
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+Ersetze die Beispielpfade und übergib die zurückgegebene `task_id` an `task.get`. Bei `completed` ist die Ausgabedatei fertig. [Alle Befehle und Parameter](../DEVELOPMENT.md#本机-agent-接口)
+
 ## Deine Daten
 
 Kein Konto erforderlich. Aufnahmen, Meetings und Modelle bleiben auf deinen Geräten. Das Smartphone synchronisiert per lokalem HTTPS. Lokale KI funktioniert offline; bei einem gewählten Onlinedienst werden die betreffenden Texte an diesen Anbieter gesendet. [Privacy](https://brevia.work/privacy.html).

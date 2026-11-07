@@ -75,6 +75,19 @@ Les agents peuvent transcrire, traduire, identifier les voix, chercher des réun
 
 ![L’agent enregistre les sous-titres SRT en espagnol et en anglais](assets/showcase/desktop/en/agent.png)
 
+## Paramètres de la CLI
+
+Utilisez `brevia MÉTHODE [JSON] [--no-start]`. Le chemin de la CLI figure dans **Paramètres → Agent et MCP**. `brevia help` liste les méthodes et `brevia status --no-start` vérifie l’état sans lancer l’application.
+
+Avec `inference.run`, choisissez `transcribe` ou `translate` pour `operation`. Indiquez des chemins absolus dans `input_path` et `output_path`. La langue source `language` vaut `auto` par défaut. Une traduction nécessite `target_language`.
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+Remplacez les chemins et passez le `task_id` renvoyé à `task.get`. Ouvrez le fichier lorsque l’état passe à `completed`. [Toutes les commandes et tous les paramètres](../DEVELOPMENT.md#本机-agent-接口)
+
 ## Vos données
 
 Aucun compte nécessaire. Enregistrements, réunions et modèles restent sur vos appareils. La synchronisation utilise HTTPS sur le réseau local. L’IA locale fonctionne hors ligne ; si vous choisissez un service en ligne, le texte concerné lui est envoyé. [Privacy](https://brevia.work/privacy.html).

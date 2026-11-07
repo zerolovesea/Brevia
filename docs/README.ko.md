@@ -75,6 +75,19 @@ macOS 14.4 이상에서는 화면 녹화 권한 없이 시스템 오디오 녹�
 
 ![Agent가 스페인어 및 영어 SRT 자막을 저장하는 화면](assets/showcase/desktop/en/agent.png)
 
+## CLI 매개변수
+
+명령 형식은 `brevia 메서드 [JSON] [--no-start]`입니다. CLI 경로는 **설정 → Agent & MCP**에서 확인합니다. `brevia help`는 메서드 목록을 표시하고, `brevia status --no-start`는 앱을 실행하지 않고 상태를 확인합니다.
+
+`inference.run`의 `operation`에 `transcribe` 또는 `translate`를 지정합니다. `input_path`와 `output_path`에는 절대 경로를 사용합니다. 원문 언어 `language`의 기본값은 `auto`이며, 번역에는 `target_language`가 필요합니다.
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+예시 경로를 실제 경로로 바꾼 뒤, 반환된 `task_id`를 `task.get`에 전달합니다. 상태가 `completed`이면 출력 파일을 엽니다. [전체 명령과 매개변수](../DEVELOPMENT.md#本机-agent-接口)
+
 ## 내 데이터
 
 계정이 필요 없습니다. 녹음, 회의와 모델은 내 기기에 저장되며 휴대폰은 로컬 HTTPS로 동기화합니다. 로컬 AI는 오프라인에서 작동합니다. 온라인 AI를 선택하면 관련 텍스트가 선택한 서비스에 전송됩니다. [Privacy](https://brevia.work/privacy.html).

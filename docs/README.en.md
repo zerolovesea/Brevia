@@ -61,6 +61,19 @@ Under **Settings → Agent & MCP**, copy the instructions into your local agent.
 
 ![An agent uses Brevia to save Spanish and English SRT subtitles](assets/showcase/desktop/en/agent.png)
 
+## CLI parameters
+
+Use `brevia METHOD [JSON] [--no-start]`. Replace `brevia` with the CLI path shown under **Settings → Agent & MCP**. Run `brevia help` to list methods or `brevia status --no-start` to check status without launching the app.
+
+For `inference.run`, set `operation` to `transcribe` or `translate`. Use absolute paths for `input_path` and `output_path`. The source `language` defaults to `auto`. Translation requires `target_language`.
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+Replace the example paths with your own. Pass the returned `task_id` to `task.get` and read the output file when the status is `completed`. [All commands and parameters](../DEVELOPMENT.md#本机-agent-接口)
+
 ## Your data
 
 No account required. Recordings and meetings stay on your devices. Local models work offline once downloaded. If you choose an online AI provider, the relevant text goes to that provider. [Privacy](https://brevia.work/privacy.html)

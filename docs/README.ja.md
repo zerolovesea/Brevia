@@ -75,6 +75,19 @@ macOS 14.4 以降ではシステム音声の録音権限のみをリクエスト
 
 ![Agent がスペイン語と英語の SRT 字幕を保存](assets/showcase/desktop/en/agent.png)
 
+## CLI パラメーター
+
+書式は `brevia メソッド [JSON] [--no-start]` です。CLI のパスは **設定 → Agent & MCP** で確認できます。`brevia help` はメソッド一覧を表示し、`brevia status --no-start` はアプリを起動せずに状態を確認します。
+
+`inference.run` の `operation` に `transcribe` または `translate` を指定します。`input_path` と `output_path` は絶対パスで指定します。入力言語 `language` の既定値は `auto` です。翻訳には `target_language` も必要です。
+
+```sh
+brevia inference.run '{"operation":"transcribe","input_path":"/Users/me/interview.wav","language":"es","output_path":"/Users/me/interview.srt"}'
+brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
+```
+
+例のパスを置き換え、返された `task_id` を `task.get` に渡します。状態が `completed` になったら出力ファイルを開きます。 [コマンドとパラメーターの一覧](../DEVELOPMENT.md#本机-agent-接口)
+
 ## データについて
 
 アカウントは不要です。録音・会議・モデルは自分のデバイスに保存され、スマートフォンとはローカル HTTPS で同期します。ローカル AI はオフラインで使えます。オンライン AI を選択した場合は、関連するテキストがそのサービスに送られます。 [Privacy](https://brevia.work/privacy.html).
