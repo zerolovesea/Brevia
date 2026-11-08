@@ -767,6 +767,50 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     mkdirSync(captures, { recursive: true });
     const waitForApp = () =>
       win.waitForFunction(() => !!document.querySelector('.app-frame')?.contentWindow.appMotion);
+    let releaseCapsule;
+    const capsuleGate = new Promise((resolve) => {
+      releaseCapsule = resolve;
+    });
+    const capsuleRoute = (route) => capsuleGate.then(() => route.continue());
+    await win.route('**/capsule-preview.html?*', capsuleRoute);
+    try {
+      await win.goto(`${siteURL}/website/index-zh.html`, { waitUntil: 'domcontentloaded' });
+      await waitForApp();
+      assert.equal(await win.locator('.demo').getAttribute('data-phase'), '1');
+      assert.equal(
+        await win
+          .locator('.app-frame')
+          .evaluate(
+            (frame) =>
+              typeof frame.contentDocument.querySelector('iframe:not(.pair-phone)')?.contentWindow
+                .capsulePreview,
+          ),
+        'undefined',
+        'A delayed capsule does not block the desktop first frame',
+      );
+      await win.emulateMedia({ reducedMotion: 'reduce' });
+      await win.locator('label[for="feature-capsule"]').click();
+    } finally {
+      releaseCapsule();
+    }
+    await win.waitForFunction(
+      () =>
+        !!document
+          .querySelector('.app-frame')
+          ?.contentDocument.querySelector('iframe:not(.pair-phone)')?.contentWindow.capsulePreview,
+    );
+    await win.waitForFunction(() => {
+      const frame = document.querySelector('.app-frame');
+      const capsule = frame.contentDocument.querySelector('iframe:not(.pair-phone)');
+      return (
+        getComputedStyle(capsule).opacity === '1' &&
+        !capsule.contentDocument.querySelector('#capsule-panel').hidden &&
+        capsule.getAnimations().every((animation) => animation.playState !== 'running')
+      );
+    });
+    await win.unroute('**/capsule-preview.html?*', capsuleRoute);
+    await win.emulateMedia({ reducedMotion: 'no-preference' });
+    console.log('PASS desktop first frame before capsule load, paused late capsule reveal');
     for (const locale of ['zh', 'en']) {
       for (const [width, height] of [
         [320, 568],
@@ -781,6 +825,13 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         await loadHome(locale);
         await waitForApp();
         if (locale === 'en' && width === 1440) {
+          await win.waitForFunction(
+            () =>
+              !!document
+                .querySelector('.app-frame')
+                ?.contentDocument.querySelector('iframe:not(.pair-phone)')?.contentWindow
+                .capsulePreview,
+          );
           await win.locator('.demo').click();
           const preview = await win.locator('.app-frame').evaluate((frame) => {
             const app = frame.contentDocument;

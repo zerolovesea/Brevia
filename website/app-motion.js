@@ -10,7 +10,7 @@ const editingMeetingIndex = null;
   const template = new DOMParser().parseFromString(await response.text(), 'text/html');
   document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN';
   document.documentElement.dataset.theme = 'dark';
-  await Promise.all(
+  const stylesReady = Promise.all(
     [...template.querySelectorAll('link[rel="stylesheet"]')].map(
       (link) =>
         new Promise((resolve, reject) => {
@@ -23,23 +23,28 @@ const editingMeetingIndex = null;
         }),
     ),
   );
-  for (const name of [
-    'i18n-data.js',
-    'i18n.js',
-    'i18n-runtime.js',
-    'app-utils.js',
-    'motion.js',
-    'ui-components.js',
-    'meeting-evidence.js',
-  ]) {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = new URL(name, templateURL).href;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.append(script);
-    });
-  }
+  const scriptsReady = Promise.all(
+    [
+      'i18n-data.js',
+      'i18n.js',
+      'i18n-runtime.js',
+      'app-utils.js',
+      'motion.js',
+      'ui-components.js',
+      'meeting-evidence.js',
+    ].map(
+      (name) =>
+        new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.async = false;
+          script.src = new URL(name, templateURL).href;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.append(script);
+        }),
+    ),
+  );
+  await Promise.all([stylesReady, scriptsReady]);
   const shell = template.querySelector('.app-shell');
   shell.removeAttribute('aria-live');
   document.body.append(shell);
@@ -250,7 +255,6 @@ const editingMeetingIndex = null;
   shell.querySelector('#detail-meta').innerHTML =
     `<span>2026/11/07</span><span>${interfaceIcon('clock')}${pick('12 分钟', '12 min')}</span><span>${interfaceIcon('folder')}${pick('产品团队', 'Product team')}</span>`;
   const capsule = document.createElement('iframe');
-  capsule.src = new URL(`./capsule-preview.html?lang=${locale}`, location.href).href;
   capsule.title = 'Brevia meeting capsule';
   Object.assign(capsule.style, {
     position: 'fixed',
@@ -265,20 +269,34 @@ const editingMeetingIndex = null;
     pointerEvents: 'none',
     transform: 'translateY(20px)',
   });
-  document.body.append(capsule);
-  await new Promise((resolve, reject) => {
-    const receive = (event) => {
-      if (event.origin !== location.origin || event.source !== capsule.contentWindow) return;
-      if (event.data?.type === 'brevia-capsule-ready') {
-        removeEventListener('message', receive);
-        resolve();
-      }
-      if (event.data?.type === 'brevia-capsule-error') {
-        removeEventListener('message', receive);
-        reject(new Error('Capsule could not load'));
-      }
-    };
-    addEventListener('message', receive);
+  let capsuleReady = false;
+  let latestTime = 0;
+  const capsuleError = document.createElement('p');
+  capsuleError.textContent = pick('胶囊演示暂时无法加载', 'The capsule demo could not load');
+  Object.assign(capsuleError.style, {
+    position: 'fixed',
+    inset: '35% 12%',
+    zIndex: '101',
+    textAlign: 'center',
+  });
+  capsuleError.hidden = true;
+  document.body.append(capsuleError);
+  addEventListener('message', (event) => {
+    if (event.origin !== location.origin || event.source !== capsule.contentWindow) return;
+    if (event.data?.type === 'brevia-capsule-ready') {
+      capsuleReady = true;
+      render(latestTime);
+      syncAnimations(paused);
+    }
+    if (event.data?.type === 'brevia-capsule-error') {
+      capsule.dataset.failed = 'true';
+      render(latestTime);
+    }
+  });
+  // 桌面首帧无需等待胶囊子窗口就绪。
+  requestAnimationFrame(() => {
+    capsule.src = new URL(`./capsule-preview.html?lang=${locale}`, location.href).href;
+    document.body.append(capsule);
   });
   let summaryStage = '';
   let noteSaved = false;
@@ -318,6 +336,7 @@ const editingMeetingIndex = null;
     if (node.textContent !== text) node.textContent = text;
   };
   function render(time) {
+    latestTime = time;
     const clock = ((time % 56000) + 56000) % 56000;
     const phase = clock < 10000 ? 1 : clock < 20000 ? 2 : clock < 32000 ? 3 : clock < 40000 ? 0 : 4;
     const local = clock - [32000, 0, 10000, 20000, 40000][phase];
@@ -410,7 +429,9 @@ const editingMeetingIndex = null;
           (Math.max(0, local - 10000) / 4000) *
           Math.min(240, rail.scrollHeight - rail.clientHeight);
     } else summaryStage = '';
-    const showCapsule = phase === 2 && local >= 4800;
+    const capsuleRequested = phase === 2 && local >= 4800;
+    capsuleError.hidden = !capsuleRequested || capsule.dataset.failed !== 'true';
+    const showCapsule = capsuleRequested && capsuleReady;
     const expanded = showCapsule && local >= 6200;
     const seconds = Math.floor(clock / 1000) + 4;
     if (showCapsule && (!capsuleShown || expanded !== capsuleExpanded)) {
@@ -460,6 +481,18 @@ const editingMeetingIndex = null;
   }
   window.appMotion = { render };
   addEventListener('resize', () => shell.classList.toggle('is-library-hidden', innerWidth <= 740));
+  function syncAnimations(settle) {
+    handset.contentWindow.playMobilePreview?.(!paused && phaseBefore === 0);
+    for (const animation of [
+      ...document.getAnimations(),
+      ...(capsuleReady ? capsule.contentDocument.getAnimations() : []),
+    ]) {
+      if (paused && settle && Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        animation.finish();
+      else if (paused) animation.pause();
+      else if (animation.playState === 'paused') animation.play();
+    }
+  }
   addEventListener('message', (event) => {
     if (
       event.origin !== location.origin ||
@@ -468,21 +501,8 @@ const editingMeetingIndex = null;
     )
       return;
     paused = Boolean(event.data.paused);
-    handset.contentWindow.playMobilePreview?.(!paused && phaseBefore === 0);
     if (Number.isFinite(event.data.time)) render(event.data.time);
-    for (const animation of [
-      ...document.getAnimations(),
-      ...capsule.contentDocument.getAnimations(),
-    ]) {
-      if (
-        paused &&
-        event.data.settle &&
-        Number.isFinite(animation.effect?.getComputedTiming().endTime)
-      )
-        animation.finish();
-      else if (paused) animation.pause();
-      else if (animation.playState === 'paused') animation.play();
-    }
+    syncAnimations(event.data.settle);
   });
   render(0);
   document.body.inert = true;
