@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=3" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>Сосредоточьтесь на разговоре. Сохраните главное.</strong><br />ИИ-помощник для встреч с приоритетом локальной обработки. Записывайте, расшифровывайте и переводите разговоры, превращая их в заметки и задачи со ссылками на исходную запись.</p>
 

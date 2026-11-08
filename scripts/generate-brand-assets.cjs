@@ -33,19 +33,18 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-brand-'));
     ])
       add(path, mark);
     add('website/assets/brevia-logo.svg', logo);
-    // README 内嵌图片不会继承 GitHub 主题，用不透明白色颗粒底保证深色模式可读。
+    // README 使用白底，点阵沿用设备连接页标题区的 6px 间距、0.7px 半径和 17% 文字色。
     add(
       'docs/assets/brevia-mark.svg',
       svg(
         '0 0 1280 240',
         `  <defs>
-    <filter id="grain" x="0" y="0" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="7" stitchTiles="stitch"/>
-      <feColorMatrix type="saturate" values="0"/>
-    </filter>
+    <pattern id="dots" width="6" height="6" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="0.7" fill="#171717" fill-opacity="0.17"/>
+    </pattern>
   </defs>
   <path fill="#ffffff" d="M0 0h1280v240H0z"/>
-  <path fill="#ffffff" d="M0 0h1280v240H0z" filter="url(#grain)" opacity="0.22"/>
+  <path fill="url(#dots)" d="M0 0h1280v240H0z"/>
   <g transform="translate(387 40)">
   ${group('mark')}
   ${group('wordmark')}

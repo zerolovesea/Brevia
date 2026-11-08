@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=3" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>Brevia 2.0 · Local AI meeting assistant</strong><br />Follow bilingual captions, capture decisions, and jump from meeting minutes back to the original conversation.</p>
 
