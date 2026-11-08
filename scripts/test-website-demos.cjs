@@ -59,7 +59,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
   }
   async function capture(file) {
     await wait(350);
-    writeFileSync(file, await shot(1200));
+    writeFileSync(file, record ? await shot(1200) : await win.screenshot());
   }
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname;
