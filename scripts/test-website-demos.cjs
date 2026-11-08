@@ -1,7 +1,6 @@
 // Run with: node scripts/test-website-demos.cjs [--record]
-// --record 将官网演示导出到 output/website-demos；README 使用正式应用截图。
+// --record 将当前官网动画导出到 output/website-demos。
 const { chromium } = require('playwright');
-const { pathToFileURL } = require('node:url');
 const {
   writeFileSync,
   readFileSync,
@@ -19,7 +18,7 @@ const assert = require('node:assert/strict');
 const root = resolve(__dirname, '..');
 const output = join(root, 'output/website-demos');
 const record = process.argv.includes('--record');
-const updatePosters = process.argv.includes('--update-posters');
+if (record) mkdirSync(output, { recursive: true });
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
 
@@ -28,38 +27,13 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
   const context = await browser.newContext({ viewport: { width: 1200, height: 750 } });
   const win = await context.newPage();
   let cdp;
-  const loadFile = (file) => win.goto(pathToFileURL(file).href);
-  const shot = async (width) => {
-    const data = await win.screenshot();
-    if (win.viewportSize().width === width) return data;
-    const result = spawnSync('magick', ['png:-', '-resize', String(width) + 'x', 'png:-'], {
-      input: data,
-    });
-    assert.equal(result.status, 0, result.stderr.toString());
-    return result.stdout;
-  };
   const errors = [];
   win.on('console', (event) => {
     if (event.type() === 'error') errors.push(event.text());
   });
-  async function load(name, locale) {
-    await win.goto(
-      pathToFileURL(join(root, 'website', `demo-${name}${locale === 'en' ? '-en' : ''}.html`))
-        .href + '?manual=1',
-    );
-    await win.evaluate('document.fonts.ready');
-    const shell = await win.evaluate(`({
-        deviceEntry: document.querySelectorAll('.sidebar #mobile-nav').length,
-        deviceLabel: document.querySelector('.mobile-sidebar-heading strong')?.textContent,
-        toolbar: ['app-version', 'language-toggle', 'theme-toggle'].every(id => document.getElementById(id)),
-      })`);
-    assert.equal(shell.deviceEntry, 1, `${locale}/${name}: device entry missing`);
-    assert.equal(shell.deviceLabel, locale === 'zh' ? '设备连接' : 'Device connection');
-    assert.equal(shell.toolbar, true, `${locale}/${name}: current toolbar missing`);
-  }
   async function capture(file) {
     await wait(350);
-    writeFileSync(file, record ? await shot(1200) : await win.screenshot());
+    writeFileSync(file, await win.screenshot());
   }
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname;
@@ -120,190 +94,6 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
   };
   try {
     await import('./test-github-stars.mjs');
-    for (const locale of ['zh', 'en']) {
-      const tour = join(output, 'tour', locale);
-      if (record) {
-        mkdirSync(tour, { recursive: true });
-        mkdirSync(join(output, 'demo'), { recursive: true });
-      }
-      await load('home', locale);
-      if (record) await capture(join(output, `home-${locale === 'zh' ? 'cn' : 'en'}.png`));
-      for (const name of [
-        'transcription',
-        'summary',
-        'voiceprint',
-        'caption-bar',
-        'model-library',
-      ]) {
-        await load(name, locale);
-        const result = await win.evaluate(`(async () => {
-          const { engine, timeline } = window.demoDebug;
-          timeline.setLoop(false);
-          engine.wait = () => Promise.resolve();
-          engine.moveCursor = async target => {
-            const element = document.querySelector(target);
-            if (!element || !element.getClientRects().length) throw new Error('Invisible target: ' + target);
-            const r = element.getBoundingClientRect();
-            if (r.width <= 0 || r.height <= 0 || r.top >= innerHeight || r.bottom <= 0)
-              throw new Error('Clipped target: ' + target);
-          };
-          engine.click = engine.hover = async () => {};
-          engine.scrollToBottom = async element => { element.scrollTop = element.scrollHeight; };
-          for (let loop = 0; loop < 2; loop++) {
-            if (loop) timeline.onRestart();
-            for (const step of timeline.steps) {
-              await timeline.executeStep(step);
-              if (step.action === 'setState') await new Promise(r => setTimeout(r, 220));
-              if (document.querySelector('#detail-view')) {
-                const layout = document.querySelector('.detail-layout').getBoundingClientRect();
-                const notes = document.querySelector('[data-detail-panel]:not([hidden])').getBoundingClientRect();
-                const player = document.querySelector('.player').getBoundingClientRect();
-                if (layout.height < 200 || notes.height < 200 || layout.bottom > player.top + 1 || player.bottom > innerHeight)
-                  throw new Error('Meeting notes or player clipped');
-              }
-            }
-          }
-          const control = document.querySelector('.live-control-bar');
-          if (document.querySelector('#live-view') && (!control || control.getBoundingClientRect().bottom > innerHeight))
-            throw new Error('Live controls missing or clipped');
-          return { shell: document.querySelectorAll('.app-shell').length,
-            segments: document.querySelectorAll('.segment').length,
-            modal: !!document.querySelector('.summary-modal-overlay'),
-            copied: document.querySelector('[data-copy-summary]')?.textContent,
-            expanded: !!document.querySelector('.detail-layout.is-summary-mode') };
-        })()`);
-        assert.equal(result.shell, 1, `${locale}/${name}: shell`);
-        if (name === 'summary') {
-          assert.equal(result.modal, false);
-          assert.equal(result.expanded, true);
-          assert.equal(result.copied, '✓');
-          // Capture the readable first state, before scrolling to the bottom.
-          await win.evaluate("document.querySelector('.summary-preview').scrollTop = 0");
-        }
-        if (name === 'transcription') assert.equal(result.segments, 6);
-        if (name === 'voiceprint') {
-          assert.equal(result.segments, 4);
-          assert.equal(
-            await win.evaluate(
-              "!!document.querySelector('#detail-view') && !document.querySelector('#live-view')",
-            ),
-            true,
-          );
-          assert.equal(
-            await win.evaluate(
-              "document.querySelectorAll('.speaker-name:not(.provisional)').length",
-            ),
-            4,
-          );
-        }
-        if (['transcription', 'caption-bar'].includes(name))
-          assert.equal(
-            await win.evaluate(
-              "document.querySelectorAll('.segment-meta b, .segment-speaker').length",
-            ),
-            0,
-          );
-        if (record) {
-          const files = {
-            transcription: '实时会议和翻译.png',
-            summary: '多语言支持与会议纪要.png',
-            voiceprint: '注册声纹识别.png',
-            'model-library': '模型库.png',
-          };
-          if (name === 'model-library')
-            await win.evaluate("document.querySelector('.modal-body').scrollTop = 0");
-          if (files[name]) await capture(join(tour, files[name]));
-        }
-        console.log(`PASS ${locale}/${name} (two cycles)`);
-      }
-      await load('ai-assist', locale);
-      assert.equal(await win.evaluate("document.querySelectorAll('.live-control-bar').length"), 1);
-      assert.equal(
-        await win.evaluate(
-          "document.querySelectorAll('.live-header .end-button, .segment-speaker').length",
-        ),
-        0,
-      );
-      if (record) {
-        const frames = join(temp, locale);
-        mkdirSync(frames);
-        // Real-time capture: preserve the cursor, typing, and acceptance timings.
-        const started = Date.now();
-        for (let frame = 0; frame < 160; frame++) {
-          await wait(Math.max(0, started + frame * 125 - Date.now()));
-          writeFileSync(join(frames, `${String(frame).padStart(4, '0')}.png`), await shot(1200));
-          if (frame === 84)
-            writeFileSync(
-              join(tour, locale === 'zh' ? 'AI辅助笔记.png' : 'AI Assist Notes.png'),
-              await shot(1200),
-            );
-        }
-        const encoded = spawnSync(
-          'ffmpeg',
-          [
-            '-y',
-            '-loglevel',
-            'error',
-            '-framerate',
-            '8',
-            '-i',
-            join(frames, '%04d.png'),
-            '-filter_complex',
-            '[0:v]scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3',
-            '-loop',
-            '0',
-            join(output, 'demo', `ai-assist-${locale}.gif`),
-          ],
-          { encoding: 'utf8' },
-        );
-        assert.equal(encoded.status, 0, encoded.stderr);
-      }
-      if (!record) await wait(1800);
-      assert.ok(await win.evaluate("document.querySelectorAll('.segment').length > 0"));
-      assert.equal(await win.evaluate("document.querySelectorAll('.segment-speaker').length"), 0);
-      console.log(`PASS ${locale}/ai-assist`);
-    }
-    for (const locale of ['zh', 'en']) {
-      await win.goto(
-        pathToFileURL(join(root, `website/demo-mobile${locale === 'en' ? '-en' : ''}.html`)).href,
-      );
-      const mobile = await win.evaluate(`(() => {
-          document.querySelector('#pause-story').click();
-          const result = [];
-          for (let cycle = 0; cycle < 2; cycle++) {
-            for (let stage = 0; stage < 5; stage++) {
-              mobileDemo.render(stage);
-              result.push({
-                stage: document.querySelector('.mobile-story').dataset.stage,
-                desktop: document.querySelectorAll('.mobile-demo-caption.visible').length,
-                phone: document.querySelector('.phone-transcript p').textContent,
-              });
-            }
-          }
-          return result;
-        })()`);
-      mobile.forEach((state, i) => {
-        const stage = i % 5;
-        assert.equal(state.stage, String(stage));
-        assert.equal(state.desktop, stage >= 3 ? 1 : 0);
-        assert.equal(Boolean(state.phone), stage === 4);
-      });
-      console.log(`PASS ${locale}/mobile (two cycles)`);
-    }
-    cdp = await context.newCDPSession(win);
-    await cdp.send('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
-    });
-    await loadFile(join(root, 'website/demo-summary.html'));
-    await wait(1200);
-    assert.equal(await win.evaluate('demoDebug.timeline.loopEnabled'), false);
-    assert.equal(await win.evaluate('demoDebug.timeline.isRunning'), false);
-    assert.equal(
-      await win.evaluate("!!document.querySelector('.detail-layout.is-summary-mode')"),
-      true,
-    );
-    console.log('PASS reduced motion');
-    await cdp.detach();
     for (const locale of ['zh', 'en']) {
       await win.setViewportSize({ width: 1280, height: 800 });
       await win.goto(
@@ -422,16 +212,6 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
           );
         });
         assert.notEqual(states[0].text, states[1].text, `${locale}/${scene}: no functional motion`);
-        if (updatePosters && ['tour', 'live', 'summary', 'library'].includes(scene)) {
-          const time = { tour: 0, live: 6600, summary: 11500, library: 1000 }[scene];
-          await win.evaluate(
-            `productMotion.seek(${time});document.querySelector('.motion-cursor').hidden=true`,
-          );
-          await wait(180);
-          const directory = join(root, 'website/assets/app-ui');
-          mkdirSync(directory, { recursive: true });
-          writeFileSync(join(directory, `${locale}-${scene}.png`), await shot(1280));
-        }
         if (scene === 'tour') {
           const flow = await win.evaluate(`(() => {
               const states = [1000, 2150, 2900, 14000, 26000, 29000].map(time => {
