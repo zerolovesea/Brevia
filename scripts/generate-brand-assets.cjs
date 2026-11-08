@@ -32,8 +32,24 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-brand-'));
       'website/assets/brevia-mark.svg',
     ])
       add(path, mark);
-    for (const path of ['website/assets/brevia-logo.svg', 'docs/assets/brevia-mark.svg'])
-      add(path, logo);
+    add('website/assets/brevia-logo.svg', logo);
+    // README 内嵌图片不会继承 GitHub 主题，用不透明白色颗粒底保证深色模式可读。
+    add(
+      'docs/assets/brevia-mark.svg',
+      svg(
+        '-24 -24 554 208',
+        `  <defs>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" seed="7" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+  </defs>
+  <path fill="#ffffff" d="M-24-24h554v208H-24z"/>
+  <path fill="#ffffff" d="M-24-24h554v208H-24z" filter="url(#grain)" opacity="0.06"/>
+  ${group('mark')}
+  ${group('wordmark')}`,
+      ),
+    );
     add('frontend/assets/brevia-wordmark.svg', wordmark);
 
     browser = await chromium.launch({ headless: true });
