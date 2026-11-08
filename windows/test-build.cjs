@@ -5,8 +5,59 @@ const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { once } = require('node:events');
+const { execFileSync } = require('node:child_process');
+const { runInNewContext } = require('node:vm');
 const { test } = require('node:test');
 const { download } = require('./build.cjs');
+
+test('installer tools rebuild from verified archives and preserve tools on download failure', async (t) => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-installer-tools-'));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const tools = path.join(scratch, '工具 缓存');
+  const fixture = path.join(scratch, 'nsis-3.11');
+  fs.mkdirSync(fixture);
+  fs.writeFileSync(path.join(fixture, 'makensis.exe'), 'verified compiler');
+  const archive = path.join(scratch, 'fixture.zip');
+  execFileSync('tar', ['-cf', archive, '-C', scratch, 'nsis-3.11']);
+  let fail = false;
+  const calls = [];
+  const output = { exports: {} };
+  runInNewContext(fs.readFileSync(path.join(__dirname, 'installer-tools.cjs'), 'utf8'), {
+    __dirname: path.join(scratch, 'windows'),
+    module: output,
+    require(name) {
+      if (name !== './build.cjs') return require(name);
+      return {
+        async download(url, file, sha) {
+          calls.push({ url, sha });
+          assert.match(sha, /^[a-f0-9]{64}$/);
+          if (fail && url.endsWith('.dll')) throw new Error('Download failed after 3 attempts');
+          fs.mkdirSync(path.dirname(file), { recursive: true });
+          if (url.endsWith('.zip')) fs.copyFileSync(archive, file);
+          else fs.writeFileSync(file, 'verified plugin');
+        },
+        run(command, args) {
+          execFileSync(command, Array.from(args));
+        },
+      };
+    },
+  });
+  const compiler = path.join(tools, 'NSIS/makensis.exe');
+  const plugin = path.join(tools, 'NSIS/Plugins/x86-unicode/additional/nsis_tauri_utils.dll');
+  for (let pass = 0; pass < 2; pass++) {
+    fs.mkdirSync(path.dirname(compiler), { recursive: true });
+    fs.writeFileSync(compiler, 'stale compiler');
+    await output.exports.prepareInstallerTools(tools);
+    assert.equal(fs.readFileSync(compiler, 'utf8'), 'verified compiler');
+    assert.equal(fs.readFileSync(plugin, 'utf8'), 'verified plugin');
+  }
+  assert.equal(calls.length, 4, 'Even warm builds must verify both cached archives');
+  assert.ok(calls.every(({ url }) => url.startsWith('https://github.com/tauri-apps/')));
+  fail = true;
+  await assert.rejects(output.exports.prepareInstallerTools(tools), /after 3 attempts/);
+  assert.equal(fs.readFileSync(compiler, 'utf8'), 'verified compiler');
+  assert.equal(fs.readFileSync(plugin, 'utf8'), 'verified plugin');
+});
 
 test('native downloads recover bounded network failures without accepting corrupt artifacts', async (t) => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-download-'));
@@ -26,6 +77,7 @@ test('native downloads recover bounded network failures without accepting corrup
     }
     if (route === '/missing') response.statusCode = 404;
     if (route === '/busy' && count === 1) response.statusCode = 503;
+    if (route === '/bad-gateway' && count === 1) response.statusCode = 502;
     response.end(route === '/corrupt' ? 'wrong bytes' : payload);
   });
   t.after(async () => {
@@ -79,10 +131,12 @@ test('native downloads recover bounded network failures without accepting corrup
   await t.test(
     'temporary HTTP failures retry while permanent failures preserve the original error',
     async () => {
-      const busy = path.join(scratch, 'busy.bin');
-      await download('https://dependency.test/busy', busy, sha);
-      assert.equal(requests.get('/busy'), 2);
-      assert.deepEqual(fs.readFileSync(busy), payload);
+      for (const route of ['busy', 'bad-gateway']) {
+        const file = path.join(scratch, route + '.bin');
+        await download(`https://dependency.test/${route}`, file, sha);
+        assert.equal(requests.get('/' + route), 2);
+        assert.deepEqual(fs.readFileSync(file), payload);
+      }
       for (const [route, message] of [
         ['corrupt', /Checksum mismatch/],
         ['missing', /HTTP 404/],

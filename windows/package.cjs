@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { build } = require('esbuild');
 const { buildNative, run, download, digest } = require('./build.cjs');
+const { prepareInstallerTools } = require('./installer-tools.cjs');
 const { ModelManager } = require('../macos/backend/models.cjs');
 const { TaskControl } = require('../macos/backend/tasks.cjs');
 const { packageAgent } = require('../scripts/package-agent.cjs');
@@ -129,6 +130,7 @@ async function main() {
       env,
     });
   } else {
+    await prepareInstallerTools(path.join(process.env.LOCALAPPDATA, 'tauri'));
     // Run the CPU probe from the installer before removing any older installation.
     run('rustc', [
       'windows/check-avx2.rs',
