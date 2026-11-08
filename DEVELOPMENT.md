@@ -120,6 +120,8 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 
 品牌图形以 `frontend/assets/brevia-logo.svg` 为唯一静态源，字形沿用开屏动画最终定格。安装 Playwright Chromium 后运行 `npm run assets:brand` 同步桌面、官网、文档和手机资源；`npm run assets:brand:check` 校验产物。不要直接修改生成的图标。
 
+README 使用同一命令生成的 `docs/assets/brevia-hero.gif`：白底动态点阵、50 fps、4 秒无缝循环；应用与手机资源保持静态。
+
 官网导航使用独立的手绘版本 `website/assets/brevia-logo-handdrawn.svg`，其他入口沿用统一品牌图形。
 
 ### 代码书写

@@ -163,6 +163,81 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-brand-'));
     assert.equal(header.readUInt32BE(4), icns.length);
     add('desktop/assets/icon.icns', icns);
 
+    // GIF 使用 20ms 帧间隔（50fps），按时间采样设备连接页的点阵波纹，首尾连续循环。
+    await win.evaluate(
+      async ({ background, logo }) => {
+        const images = await Promise.all(
+          [background, logo].map(async (source) => {
+            const image = new Image();
+            image.src = source;
+            await image.decode();
+            return image;
+          }),
+        );
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 240;
+        const context = canvas.getContext('2d');
+        window.readmeHeroFrame = (frame) => {
+          const phase = ((frame % 200) / 200) * Math.PI * 2;
+          context.drawImage(images[0], 0, 0, 1280, 240);
+          context.fillStyle = '#171717';
+          for (let y = 10; y < 240; y += 18) {
+            for (let x = 10; x < 1280; x += 18) {
+              const distance = Math.hypot(x - 1280 * 0.76, (y - 240 * 0.42) * 0.8);
+              const ridge = Math.pow((Math.sin(distance / 58 - phase) + 1) / 2, 5);
+              const prominence = Math.max(0.12, 1 - distance / 1280);
+              context.globalAlpha = 0.05 + ridge * prominence * 0.3;
+              context.beginPath();
+              context.arc(
+                x,
+                y + Math.sin(x / 100 + phase) * ridge * 2,
+                0.7 + ridge,
+                0,
+                Math.PI * 2,
+              );
+              context.fill();
+            }
+          }
+          context.globalAlpha = 1;
+          context.drawImage(images[1], 387, 40, 505, 160);
+          return canvas.toDataURL('image/png').split(',')[1];
+        };
+      },
+      {
+        background: `data:image/svg+xml;base64,${outputs.get('docs/assets/brevia-mark.svg').toString('base64')}`,
+        logo: `data:image/svg+xml;base64,${Buffer.from(logo).toString('base64')}`,
+      },
+    );
+    const frames = [];
+    for (let frame = 0; frame < 200; frame++) {
+      const file = join(temp, `hero-${String(frame).padStart(3, '0')}.png`);
+      const data = await win.evaluate((frame) => window.readmeHeroFrame(frame), frame);
+      writeFileSync(file, Buffer.from(data, 'base64'));
+      frames.push(file);
+    }
+    assert.notDeepEqual(readFileSync(frames[0]), readFileSync(frames[50]), '点阵必须实际运动');
+    const gif = join(temp, 'brevia-hero.gif');
+    const animated = spawnSync('magick', [
+      '-delay',
+      '2',
+      '-loop',
+      '0',
+      ...frames,
+      '-dither',
+      'None',
+      '-colors',
+      '64',
+      '-layers',
+      'Optimize',
+      gif,
+    ]);
+    assert.equal(animated.status, 0, animated.error?.message || animated.stderr.toString());
+    const timing = spawnSync('magick', ['identify', '-format', '%T\n', gif]);
+    assert.equal(timing.status, 0, timing.error?.message || timing.stderr.toString());
+    assert.deepEqual(timing.stdout.toString().trim().split('\n'), Array(200).fill('2'));
+    add('docs/assets/brevia-hero.gif', readFileSync(gif));
+
     for (const [path, data] of outputs) {
       const target = join(root, path);
       if (check) assert.ok(readFileSync(target).equals(data), `${path} 需要重新生成`);

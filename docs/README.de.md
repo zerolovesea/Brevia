@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg?v=3" width="100%" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-hero.gif" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>Auf das Gespräch konzentrieren. Das Wichtige festhalten.</strong><br />Ein KI-Meetingassistent mit lokaler Verarbeitung. Gespräche aufnehmen, transkribieren und übersetzen – mit bearbeitbaren Notizen und Aufgaben, die zur Originalaufnahme zurückführen.</p>
 

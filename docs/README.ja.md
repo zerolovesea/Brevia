@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg?v=3" width="100%" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-hero.gif" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>会話に集中し、大切なことを残す。</strong><br />ローカル処理を中心とした AI 会議アシスタント。録音・文字起こし・翻訳から、元の音声を確認できるノートやアクション項目まで。</p>
 
