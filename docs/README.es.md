@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>Concéntrate en la conversación. Conserva lo importante.</strong><br />Un asistente de reuniones con IA que prioriza tus dispositivos. Graba, transcribe y traduce conversaciones; conviértelas en notas y acciones vinculadas al audio original.</p>
 

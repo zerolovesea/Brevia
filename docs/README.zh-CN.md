@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia · 言录" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia · 言录" /></h1>
 
 <p align="center"><strong>Brevia 2.0 · 本地 AI 会议助手</strong><br />会中看双语字幕、记下决定，会后从纪要回到每一句原话。</p>
 

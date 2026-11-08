@@ -37,17 +37,19 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-brand-'));
     add(
       'docs/assets/brevia-mark.svg',
       svg(
-        '-24 -24 554 208',
+        '0 0 1280 240',
         `  <defs>
     <filter id="grain" x="0" y="0" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" seed="7" stitchTiles="stitch"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="7" stitchTiles="stitch"/>
       <feColorMatrix type="saturate" values="0"/>
     </filter>
   </defs>
-  <path fill="#ffffff" d="M-24-24h554v208H-24z"/>
-  <path fill="#ffffff" d="M-24-24h554v208H-24z" filter="url(#grain)" opacity="0.06"/>
+  <path fill="#ffffff" d="M0 0h1280v240H0z"/>
+  <path fill="#ffffff" d="M0 0h1280v240H0z" filter="url(#grain)" opacity="0.22"/>
+  <g transform="translate(387 40)">
   ${group('mark')}
-  ${group('wordmark')}`,
+  ${group('wordmark')}
+  </g>`,
       ),
     );
     add('frontend/assets/brevia-wordmark.svg', wordmark);

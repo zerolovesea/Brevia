@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>대화에 집중하고, 중요한 내용을 남기세요.</strong><br />로컬 처리를 우선하는 AI 회의 도우미. 녹음, 전사, 번역부터 원본 음성을 확인할 수 있는 노트와 실행 항목까지 한곳에서 관리합니다.</p>
 

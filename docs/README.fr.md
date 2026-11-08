@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></h1>
+<h1 align="center"><img src="assets/brevia-mark.svg?v=2" width="100%" alt="Brevia" /></h1>
 
 <p align="center"><strong>Concentrez-vous sur la conversation. Gardez l’essentiel.</strong><br />Un assistant de réunion IA qui privilégie le traitement local. Enregistrez, transcrivez et traduisez vos échanges, puis retrouvez vos notes et actions dans l’audio d’origine.</p>
 
