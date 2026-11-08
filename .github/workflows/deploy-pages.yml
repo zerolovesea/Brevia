@@ -2,9 +2,8 @@ name: Deploy website to GitHub Pages
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
+  pull_request:
+    paths: &website-paths
       - 'website/**'
       - 'mobile/lib/**'
       - 'mobile/web/**'
@@ -12,25 +11,33 @@ on:
       - 'mobile/pubspec.*'
       - 'frontend/**'
       - 'docs/assets/**'
+      - 'scripts/test-website-demos.cjs'
+      - 'scripts/update-release-links.mjs'
+      - 'package*.json'
       - '.github/workflows/deploy-pages.yml'
+  push:
+    branches: [main]
+    paths: *website-paths
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: github-pages
+  group: website-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.6'
@@ -38,8 +45,11 @@ jobs:
       - name: Build mobile product demo
         working-directory: mobile
         run: flutter build web --target=web/preview.dart --output=../website/mobile-preview --no-web-resources-cdn --no-tree-shake-icons
-      - uses: actions/configure-pages@v5
+      - run: npm run build
+      - name: Check website demos
+        run: node scripts/test-website-demos.cjs
       - name: Assemble static site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           mkdir -p site/docs
           rsync -a --exclude='.DS_Store' website/ site/
@@ -49,8 +59,22 @@ jobs:
           printf 'brevia.work\n' > site/CNAME
           touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
           path: site
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
       - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4

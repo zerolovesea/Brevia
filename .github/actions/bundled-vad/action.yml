@@ -1,0 +1,29 @@
+name: Prepare bundled VAD
+description: Restore, verify and stage the pinned Silero model before packaging
+runs:
+  using: composite
+  steps:
+    - name: Identify bundled VAD
+      id: model
+      shell: bash
+      run: |
+        node <<'NODE' >> "$GITHUB_OUTPUT"
+        const model = require('./backend/models.json').find(m => m.id === 'silero-vad' && m.archive_sha256);
+        console.log('sha=' + model.archive_sha256);
+        console.log('revision=' + model.revision.replaceAll('/', '-'));
+        NODE
+    - name: Restore bundled VAD
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: dist/bundled-vad
+        key: bundled-vad-v1-${{ runner.os }}-${{ steps.model.outputs.revision }}-${{ steps.model.outputs.sha }}
+    - name: Verify and stage bundled VAD
+      shell: bash
+      run: node scripts/prepare-bundled-vad.cjs
+    - name: Save verified bundled VAD
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: dist/bundled-vad
+        key: ${{ steps.cache.outputs.cache-primary-key }}

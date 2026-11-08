@@ -153,13 +153,15 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 | Native Windows validation      | Windows 与共享桌面代码的测试、MSVC / NSIS 构建、WebView2 / PDF、旧版升级和真实模型验证；macOS 专属代码、手机、官网和说明文档不触发。                  |
 | Release                        | 标签或手动运行时构建两端正式签名成品，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                                                      |
 | Mobile CI and distribution     | 手机改动的 Flutter / 原生检查；main 按共享、iOS、Android 改动选择分发平台，文档不触发，Flutter／发布脚本测试改动仅检查；正式 App Store 送审单独触发。 |
-| Deploy website to GitHub Pages | 官网、前端素材相关的 main 改动部署静态站点。                                                                                                          |
+| Deploy website to GitHub Pages | 官网与演示脚本变更独立运行浏览器回归；PR 只检查，main 检查通过后部署静态站点。                                                                        |
 
 Code style 额外运行 `node --test scripts/test-ci.cjs`，验证平台触发范围与缓存兼容性。Mobile check 使用 `scripts/ci-mobile-changes.py` 从上次成功的 main 推送分发开始累计比较差异，避免等待任务被合并后漏发；查询失败或提交不可达时保留两端。共享 Flutter、资源或依赖变更分发两端，平台专属代码只分发对应端，Flutter／发布脚本测试和分析配置变更只检查；Android 原生单测变更仍运行对应构建任务。手动 TestFlight 构建仍覆盖两端，App Store 送审继续复用已有构建。
 
 原生 CI 和 Release 共用编译缓存，按运行器系统、架构、镜像、构建配置与依赖区分，再按提交保存增量结果。只恢复相同配置的最近缓存，缓存成功任务的编译中间产物，不缓存正式安装包或签名材料。缓存命中后仍重新组装、签名并验收成品；新镜像或构建配置第一次运行需要重新预热。
 
 格式检查集中在 Code style；两端业务测试保留各自运行，以覆盖路径、进程及系统差异。Release 重新验证实际签名成品，不能用普通 CI 的未签名构件代替。
+
+官网演示测试、官网全局分析与下载链接更新脚本不触发桌面打包。两端 CI 与 Release 通过 `.github/actions/bundled-vad` 准备 Silero VAD：按平台、模型 revision 和校验值缓存已安装权重，缓存命中仍校验 SHA-256，再复制到现有打包目录。缓存缺失时使用主源，临时网络错误可回退到同一 SHA-256 的 ModelScope 镜像；完整性校验失败直接中止。模型校验成功即保存缓存，不等待整个安装包构建结束；不缓存成品或签名材料，也不改变应用内用户选择的下载源。
 
 完整 `npm test` 中，桌面 Agent 用例归入 `test:desktop`，后端 Agent 用例随 `test:backend` 执行一次；独立 `npm run test:agent` 仍覆盖两端 Agent 用例。后端单测由 `npm test` / `npm run test:backend` 执行；`test:mac:webkit` 专门检查原生平台与成品，不重复后端单测。macOS 验证及 Release 均先执行完整 `npm test`，再检查原生成品。
 

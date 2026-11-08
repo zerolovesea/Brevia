@@ -18,6 +18,7 @@ on:
       - 'frontend/**'
       - 'skills/brevia/**'
       - 'scripts/**'
+      - '.github/actions/bundled-vad/**'
       - 'package*.json'
       - '.github/workflows/windows-backend.yml'
       - '.github/workflows/release.yml'
@@ -27,6 +28,9 @@ on:
       - '!frontend/**/*.md'
       - '!backend/**/*.md'
       - '!scripts/**/*.md'
+      - '!scripts/test-website-demos.cjs'
+      - '!scripts/analyze_website_globals.mjs'
+      - '!scripts/update-release-links.mjs'
       - '!macos/host/src/appkit.m'
       - '!macos/host/Info.plist'
       - '!macos/host/cargo.sh'
@@ -87,6 +91,7 @@ jobs:
           key: native-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-cache-image.outputs.version }}-${{ hashFiles('.github/workflows/native-macos.yml', '.github/workflows/windows-backend.yml', '.github/workflows/release.yml', 'macos/host/Cargo.lock', 'macos/inference/Package.swift', 'macos/inference/Package.resolved', 'macos/inference/build.sh', 'macos/inference/*.patch', 'windows/build.cjs', 'windows/CMakeLists.txt') }}-${{ github.sha }}
           restore-keys: |
             native-build-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-cache-image.outputs.version }}-${{ hashFiles('.github/workflows/native-macos.yml', '.github/workflows/windows-backend.yml', '.github/workflows/release.yml', 'macos/host/Cargo.lock', 'macos/inference/Package.swift', 'macos/inference/Package.resolved', 'macos/inference/build.sh', 'macos/inference/*.patch', 'windows/build.cjs', 'windows/CMakeLists.txt') }}-
+      - uses: ./.github/actions/bundled-vad
       - name: Restore native bundler
         id: tauri-cli-cache
         uses: actions/cache/restore@v4
