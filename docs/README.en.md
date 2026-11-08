@@ -28,29 +28,29 @@ The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **
 - **Speaker recognition.** See who said what, correct a name, and save a voice profile to recognize the same speaker next time.
 - **Fast transcription:** On an M4 Pro, Brevia transcribed a **66 min 40 s** recording in **3 min 33 s**.
 
-### AI notes
-
-Choose which suggested decisions and tasks to keep alongside your own notes as the conversation unfolds.
-
-![An AI suggestion to add a follow-up task to the meeting notes](assets/showcase/desktop/en/ai-notes.png)
-
-### Meeting capsule
-
-With the main window tucked away, pause or stop recording from the floating capsule. Expand it to read live bilingual captions or check your notes.
-
-<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Expanded meeting capsule with bilingual captions, a Notes tab and recording controls" />
-
 ### Minutes and fishbone diagrams
 
 Edit the meeting summary and explore the reasons behind each conclusion. Select a timestamp to hear the original exchange.
 
 [![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
+### AI notes
+
+Choose which suggested decisions and tasks to keep alongside your own notes as the conversation unfolds.
+
+![An AI suggestion to add a follow-up task to the meeting notes](assets/showcase/desktop/en/ai-notes.png)
+
 ## Connect your phone
 
 On the same local network, scan the QR code under **Settings → Device Connection**. Use your phone as a wireless microphone or follow live captions. You can also record on your phone and transfer the meeting to your computer later.
 
 ![Live meeting captions on a paired phone and computer](assets/showcase/desktop/en/phone.png)
+
+## Meeting capsule
+
+With the main window tucked away, pause or stop recording from the floating capsule. Expand it to read live bilingual captions or check your notes.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Expanded meeting capsule with bilingual captions, a Notes tab and recording controls" />
 
 ## Ask your agent
 

@@ -27,37 +27,32 @@ Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat herunterge
 - Mikrofon und Systemton gemeinsam aufnehmen, mit Live-Transkription, Übersetzung, schwebenden Untertiteln und Aufnahmesteuerung.
 - Sprecher im Hintergrund erkennen, während Untertitel sofort erscheinen. Anschließend Transkripte verbessern, Namen korrigieren und Stimmprofile speichern.
 - **Schnelle Transkription:** Auf einem M4 Pro dauerte die vollständige Transkription einer **66 min 40 s** langen Aufnahme **3 min 33 s**.
-- Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
 - Meetings in Arbeitsbereichen organisieren, Inhalte durchsuchen und als Markdown, TXT, JSON, SRT, DOCX, PDF oder WAV exportieren.
 - Vorhandene Audio- und Videodateien transkribieren, übersetzen und nach Sprechern auswerten – auch über einen lokalen Agenten.
 
-![KI schlägt eine Aufgabe für die Notizen vor](assets/showcase/desktop/en/ai-notes.png)
-
-### Meeting-Kapsel
-
-Bei eingeklapptem Hauptfenster lässt sich die Aufnahme über die schwebende Kapsel pausieren oder beenden. Aufgeklappt zeigt sie zweisprachige Live-Untertitel und Notizen.
-
-<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Meeting-Kapsel mit Untertiteln und Aufnahmesteuerung" />
+### Protokoll und Fischgrätendiagramm
 
 [![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
 Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme.
 
-## Erste Schritte
+### KI-Notizen
 
-1. Desktop-App installieren und unter **Einstellungen → Modellbibliothek** ein Transkriptionsmodell herunterladen.
-2. Ein Meeting mit Mikrofon, Systemton oder verbundenem Smartphone starten oder eine Datei importieren.
-3. Notizen machen, das Transkript nachbearbeiten und Ergebnisse bearbeiten oder exportieren.
+Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
 
-Ab macOS 14.4 wird nur die Berechtigung zur Systemaudioaufnahme angefragt, ohne Zugriff auf den Bildschirm. macOS 14.0–14.3 verwendet weiterhin die Berechtigung für Bildschirm und Systemaudio. Nach einer Ablehnung lässt sich der Zugriff in den Systemeinstellungen wieder erlauben.
-
-Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Inferenz-Laufzeitumgebung werden nicht benötigt. Unter Windows lädt das Installationsprogramm WebView2 nur bei Bedarf herunter. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
+![KI schlägt eine Aufgabe für die Notizen vor](assets/showcase/desktop/en/ai-notes.png)
 
 ## Mit dem Smartphone aufnehmen
 
 Offline aufnehmen, Notizen schreiben und wichtige Stellen markieren. Sobald der Computer den Empfang bestätigt, kann die Smartphone-App verlassen werden: Import und Transkription laufen auf dem Desktop weiter. Die lokale Kopie bleibt erhalten. Das Smartphone kann auch als Mikrofon oder zur Anzeige von Live-Untertiteln dienen. Beide Geräte unter **Einstellungen → Geräteverbindung** im selben lokalen Netzwerk koppeln; für den Live-Modus muss der Computer laufen.
 
 ![Live-Untertitel auf Smartphone und Computer](assets/showcase/desktop/en/phone.png)
+
+## Meeting-Kapsel
+
+Bei eingeklapptem Hauptfenster lässt sich die Aufnahme über die schwebende Kapsel pausieren oder beenden. Aufgeklappt zeigt sie zweisprachige Live-Untertitel und Notizen.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Meeting-Kapsel mit Untertiteln und Aufnahmesteuerung" />
 
 ## Lokalen Agenten verbinden
 
@@ -87,6 +82,16 @@ brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
 ```
 
 Ersetze die Beispielpfade und übergib die zurückgegebene `task_id` an `task.get`. Bei `completed` ist die Ausgabedatei fertig. [Alle Befehle und Parameter](../DEVELOPMENT.md#本机-agent-接口)
+
+## Erste Schritte
+
+1. Desktop-App installieren und unter **Einstellungen → Modellbibliothek** ein Transkriptionsmodell herunterladen.
+2. Ein Meeting mit Mikrofon, Systemton oder verbundenem Smartphone starten oder eine Datei importieren.
+3. Notizen machen, das Transkript nachbearbeiten und Ergebnisse bearbeiten oder exportieren.
+
+Ab macOS 14.4 wird nur die Berechtigung zur Systemaudioaufnahme angefragt, ohne Zugriff auf den Bildschirm. macOS 14.0–14.3 verwendet weiterhin die Berechtigung für Bildschirm und Systemaudio. Nach einer Ablehnung lässt sich der Zugriff in den Systemeinstellungen wieder erlauben.
+
+Die Inferenz-Engines sind enthalten. Python oder eine zusätzliche Inferenz-Laufzeitumgebung werden nicht benötigt. Unter Windows lädt das Installationsprogramm WebView2 nur bei Bedarf herunter. Gewünschte Modelle einmal herunterladen und offline nutzen. Je nach Plattform stehen FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen und Hy-MT zur Verfügung.
 
 ## Deine Daten
 

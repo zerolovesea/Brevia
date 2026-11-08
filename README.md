@@ -28,29 +28,29 @@ Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次�
 - **说话人识别**　逐字稿按发言人分段。保存声纹后，下次开会也能认出熟悉的声音；名字和原文都可以修正。
 - **快速转写** 在 M4 Pro 上，一段 **66 分 40 秒**的录音，完整转写共用了 **3 分 33 秒。**
 
-### AI 笔记
-
-讨论过程中，AI 会建议值得记下的决定和待办，你可以选择采纳，也可以随手写下自己的笔记。
-
-![AI 建议将发言中的待办加入会议笔记](docs/assets/showcase/desktop/zh/ai-notes.png)
-
-### 会议胶囊
-
-收起主窗口后，在悬浮的会议胶囊里就能暂停或结束录音。展开胶囊，可以查看实时双语字幕和会议笔记。
-
-<img src="docs/assets/showcase/desktop/zh/capsule.png" width="352" alt="展开的会议胶囊，显示双语字幕、笔记页签和录音控件" />
-
 ### 会议纪要与鱼骨图
 
 会后生成可编辑的纪要。鱼骨图把结论和背后的原因放在一起，点时间戳就能回听对应的原话。
 
 [![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](docs/assets/showcase/desktop/zh/summary.png)](docs/assets/showcase/desktop/zh/summary.gif)
 
+### AI 笔记
+
+讨论过程中，AI 会建议值得记下的决定和待办，你可以选择采纳，也可以随手写下自己的笔记。
+
+![AI 建议将发言中的待办加入会议笔记](docs/assets/showcase/desktop/zh/ai-notes.png)
+
 ## 手机和电脑一起开会
 
 在同一局域网内，用手机扫描电脑 **设置 → 设备连接** 里的二维码。手机可以充当无线麦克风，也可以查看实时字幕。外出时用手机独立录音，回来后传给电脑继续转写、整理。
 
 ![手机与电脑显示同一场会议的实时字幕](docs/assets/showcase/desktop/zh/phone.png)
+
+## 会议胶囊
+
+收起主窗口后，在悬浮的会议胶囊里就能暂停或结束录音。展开胶囊，可以查看实时双语字幕和会议笔记。
+
+<img src="docs/assets/showcase/desktop/zh/capsule.png" width="352" alt="展开的会议胶囊，显示双语字幕、笔记页签和录音控件" />
 
 ## 把任务交给 Agent
 

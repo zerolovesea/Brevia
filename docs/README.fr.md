@@ -27,37 +27,32 @@ Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo su
 - Enregistrez le microphone et le son du système, avec transcription, traduction, sous-titres flottants et commandes d’enregistrement.
 - Identifiez les intervenants en arrière-plan pendant que les sous-titres s’affichent. Affinez ensuite la transcription, corrigez les noms et enregistrez les profils vocaux.
 - **Transcription rapide :** Sur un M4 Pro, Brevia a transcrit un enregistrement de **66 min 40 s** en **3 min 33 s**.
-- Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.
 - Classez les réunions par espace de travail, recherchez leur contenu et exportez en Markdown, TXT, JSON, SRT, DOCX, PDF ou WAV.
 - Importez des fichiers audio ou vidéo pour les transcrire, les traduire et analyser les intervenants, y compris via un agent local.
 
-![L’IA propose une tâche à ajouter aux notes](assets/showcase/desktop/en/ai-notes.png)
-
-### Capsule de réunion
-
-Une fois la fenêtre principale réduite, la capsule flottante permet de suspendre ou d’arrêter l’enregistrement. Déployez-la pour lire les sous-titres bilingues en direct ou consulter vos notes.
-
-<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Capsule avec sous-titres et commandes d’enregistrement" />
+### Compte rendu et diagramme en arêtes de poisson
 
 [![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
 Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement.
 
-## Bien démarrer
+### Notes IA
 
-1. Installez l’application de bureau et téléchargez un modèle de transcription dans **Paramètres → Bibliothèque de modèles**.
-2. Lancez une réunion avec le microphone, le son du système ou un téléphone connecté. Vous pouvez aussi importer un fichier.
-3. Prenez des notes, affinez la transcription et modifiez ou exportez les résultats.
+Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.
 
-Sur macOS 14.4 et versions ultérieures, seul l’accès à l’audio système est demandé, sans accès à l’écran. macOS 14.0–14.3 utilise toujours l’autorisation d’écran et d’audio système. Si vous avez refusé l’accès, réactivez-le dans Réglages Système.
-
-Les moteurs d’inférence sont inclus. Aucun Python ni environnement d’inférence supplémentaire n’est nécessaire. Sous Windows, le programme d’installation télécharge WebView2 uniquement s’il manque. Téléchargez les modèles souhaités pour les utiliser hors ligne. FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen et Hy-MT sont disponibles selon la plateforme.
+![L’IA propose une tâche à ajouter aux notes](assets/showcase/desktop/en/ai-notes.png)
 
 ## Enregistrer avec le téléphone
 
 Enregistrez hors ligne, prenez des notes et marquez les moments importants. Dès que l’ordinateur confirme la réception, vous pouvez quitter l’application mobile : l’importation et la transcription continuent sur le bureau. Le téléphone conserve sa copie. Il peut aussi servir de microphone ou afficher les sous-titres en direct. Associez les appareils sur le même réseau local dans **Paramètres → Connexion des appareils** ; le mode direct exige que l’ordinateur reste allumé.
 
 ![Sous-titres sur le téléphone et l’ordinateur](assets/showcase/desktop/en/phone.png)
+
+## Capsule de réunion
+
+Une fois la fenêtre principale réduite, la capsule flottante permet de suspendre ou d’arrêter l’enregistrement. Déployez-la pour lire les sous-titres bilingues en direct ou consulter vos notes.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Capsule avec sous-titres et commandes d’enregistrement" />
 
 ## Connecter un agent local
 
@@ -87,6 +82,16 @@ brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
 ```
 
 Remplacez les chemins et passez le `task_id` renvoyé à `task.get`. Ouvrez le fichier lorsque l’état passe à `completed`. [Toutes les commandes et tous les paramètres](../DEVELOPMENT.md#本机-agent-接口)
+
+## Bien démarrer
+
+1. Installez l’application de bureau et téléchargez un modèle de transcription dans **Paramètres → Bibliothèque de modèles**.
+2. Lancez une réunion avec le microphone, le son du système ou un téléphone connecté. Vous pouvez aussi importer un fichier.
+3. Prenez des notes, affinez la transcription et modifiez ou exportez les résultats.
+
+Sur macOS 14.4 et versions ultérieures, seul l’accès à l’audio système est demandé, sans accès à l’écran. macOS 14.0–14.3 utilise toujours l’autorisation d’écran et d’audio système. Si vous avez refusé l’accès, réactivez-le dans Réglages Système.
+
+Les moteurs d’inférence sont inclus. Aucun Python ni environnement d’inférence supplémentaire n’est nécessaire. Sous Windows, le programme d’installation télécharge WebView2 uniquement s’il manque. Téléchargez les modèles souhaités pour les utiliser hors ligne. FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen et Hy-MT sont disponibles selon la plateforme.
 
 ## Vos données
 

@@ -27,37 +27,32 @@ El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos
 - Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.
 - Identifica hablantes en segundo plano mientras aparecen los subtítulos. Después puedes refinar el texto, corregir nombres y guardar perfiles de voz.
 - **Transcripción rápida:** En un M4 Pro, Brevia transcribió una grabación de **66 min 40 s** en **3 min 33 s**.
-- Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
 - Organiza reuniones en espacios de trabajo, busca su contenido y exporta Markdown, TXT, JSON, SRT, DOCX, PDF o WAV.
 - Importa audio y vídeo para transcribir, traducir y analizar hablantes, también mediante tu agente local.
 
-![La IA propone añadir una tarea a las notas](assets/showcase/desktop/en/ai-notes.png)
-
-### Cápsula de reunión
-
-Con la ventana principal minimizada, puedes pausar o detener la grabación desde la cápsula flotante. Ábrela para ver los subtítulos bilingües en directo o consultar tus notas.
-
-<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Cápsula con subtítulos y controles de grabación" />
+### Acta y diagrama de espina de pescado
 
 [![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
 Acta y diagrama de espina de pescado con referencias a la grabación.
 
-## Primeros pasos
+### Notas con IA
 
-1. Instala la aplicación de escritorio y descarga un modelo de transcripción en **Ajustes → Biblioteca de modelos**.
-2. Inicia una reunión con el micrófono, el audio del sistema o un teléfono conectado; también puedes importar un archivo.
-3. Toma notas, refina la transcripción y edita o exporta los resultados.
+Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
 
-En macOS 14.4 y posteriores, la grabación del audio del sistema solo necesita permiso de audio, sin acceso a la pantalla. macOS 14.0–14.3 sigue usando el permiso de pantalla y audio del sistema. Si denegaste el acceso, actívalo de nuevo en Ajustes del Sistema.
-
-Los motores de inferencia vienen incluidos. No necesitas instalar Python ni un entorno de inferencia adicional. En Windows, el instalador descarga WebView2 solo si falta. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
+![La IA propone añadir una tarea a las notas](assets/showcase/desktop/en/ai-notes.png)
 
 ## Graba con el móvil
 
 Graba sin conexión, toma notas y marca momentos importantes. Tras subir la grabación y recibir la confirmación del ordenador, puedes salir de la aplicación móvil: la importación y la transcripción continúan en el escritorio. El móvil conserva su copia. También puede funcionar como micrófono o mostrar subtítulos en directo. Empareja ambos dispositivos en la misma red local desde **Ajustes → Conexión de dispositivos**; el modo en directo necesita el ordenador encendido.
 
 ![Subtítulos en el teléfono y el ordenador](assets/showcase/desktop/en/phone.png)
+
+## Cápsula de reunión
+
+Con la ventana principal minimizada, puedes pausar o detener la grabación desde la cápsula flotante. Ábrela para ver los subtítulos bilingües en directo o consultar tus notas.
+
+<img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Cápsula con subtítulos y controles de grabación" />
 
 ## Conecta tu agente local
 
@@ -87,6 +82,16 @@ brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
 ```
 
 Sustituye las rutas del ejemplo y pasa el `task_id` devuelto a `task.get`. Cuando el estado sea `completed`, abre el archivo de salida. [Todos los comandos y parámetros](../DEVELOPMENT.md#本机-agent-接口)
+
+## Primeros pasos
+
+1. Instala la aplicación de escritorio y descarga un modelo de transcripción en **Ajustes → Biblioteca de modelos**.
+2. Inicia una reunión con el micrófono, el audio del sistema o un teléfono conectado; también puedes importar un archivo.
+3. Toma notas, refina la transcripción y edita o exporta los resultados.
+
+En macOS 14.4 y posteriores, la grabación del audio del sistema solo necesita permiso de audio, sin acceso a la pantalla. macOS 14.0–14.3 sigue usando el permiso de pantalla y audio del sistema. Si denegaste el acceso, actívalo de nuevo en Ajustes del Sistema.
+
+Los motores de inferencia vienen incluidos. No necesitas instalar Python ni un entorno de inferencia adicional. En Windows, el instalador descarga WebView2 solo si falta. Descarga los modelos que elijas y úsalos sin conexión. La biblioteca incluye FunASR, Qwen3-ASR, Parakeet, Whisper, Qwen y Hy-MT, según la plataforma.
 
 ## Tus datos
 
