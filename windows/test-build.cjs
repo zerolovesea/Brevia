@@ -23,7 +23,7 @@ test('installer tools rebuild from verified archives and preserve tools on downl
   const calls = [];
   const output = { exports: {} };
   runInNewContext(fs.readFileSync(path.join(__dirname, 'installer-tools.cjs'), 'utf8'), {
-    __dirname: path.join(scratch, 'windows'),
+    __dirname: path.join(scratch, '源码/windows'),
     module: output,
     require(name) {
       if (name !== './build.cjs') return require(name);
@@ -36,8 +36,8 @@ test('installer tools rebuild from verified archives and preserve tools on downl
           if (url.endsWith('.zip')) fs.copyFileSync(archive, file);
           else fs.writeFileSync(file, 'verified plugin');
         },
-        run(command, args) {
-          execFileSync(command, Array.from(args));
+        run(command, args, options) {
+          execFileSync(command, Array.from(args), options);
         },
       };
     },

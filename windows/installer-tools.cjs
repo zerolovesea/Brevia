@@ -20,7 +20,12 @@ async function prepareInstallerTools(tools) {
   fs.mkdirSync(tools, { recursive: true });
   const nsis = path.join(tools, 'NSIS');
   fs.rmSync(path.join(tools, 'nsis-3.11'), { recursive: true, force: true });
-  run('tar', ['-xf', archive, '-C', tools]);
+  // Windows tar 的路径参数可能丢失 Unicode；归档走 stdin，目录由进程 cwd 指定。
+  run('tar', ['-xf', '-'], {
+    cwd: tools,
+    input: fs.readFileSync(archive),
+    stdio: ['pipe', 'inherit', 'inherit'],
+  });
   fs.rmSync(nsis, { recursive: true, force: true });
   fs.renameSync(path.join(tools, 'nsis-3.11'), nsis);
   const plugins = path.join(nsis, 'Plugins/x86-unicode/additional');
