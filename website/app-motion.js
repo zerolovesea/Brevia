@@ -9,7 +9,7 @@ const editingMeetingIndex = null;
   if (!response.ok) throw new Error(`Application template: ${response.status}`);
   const template = new DOMParser().parseFromString(await response.text(), 'text/html');
   document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN';
-  document.documentElement.dataset.theme = 'dark';
+  document.documentElement.dataset.theme = 'light';
   const stylesReady = Promise.all(
     [...template.querySelectorAll('link[rel="stylesheet"]')].map(
       (link) =>

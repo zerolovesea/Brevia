@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   gap: 32px;
-  background: #080808;
+  background: var(--color-bg);
   transition:
     opacity 240ms,
     visibility 240ms;
@@ -26,9 +26,9 @@
   flex: none;
   width: 390px;
   height: 740px;
-  border: 7px solid #383838;
+  border: 7px solid #d4d4d4;
   border-radius: 36px;
-  background: #191919;
+  background: #fafafa;
   box-shadow: 0 0 0 1px #777;
   pointer-events: none;
 }
@@ -53,7 +53,7 @@
   visibility: hidden;
 }
 .pair-scene:not([data-step="scan"]) {
-  background: rgb(8 8 8 / 65%);
+  background: rgb(250 250 250 / 65%);
 }
 
 .agent-demo {
@@ -79,8 +79,8 @@
   grid-template-rows: 42px minmax(0, 1fr);
   height: 100%;
   padding: 0 5px 5px 0;
-  background: #242424;
-  color: #ececec;
+  background: #f3f3f3;
+  color: #242424;
   line-height: 1.45;
 }
 .codex-title {
@@ -90,11 +90,11 @@
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  color: #aaa;
+  color: #666;
   font-size: 14px;
 }
 .codex-title strong {
-  color: #ddd;
+  color: #303030;
   font-weight: 500;
 }
 .codex-rail {
@@ -103,7 +103,7 @@
   align-items: center;
   gap: 20px;
   padding: 15px 0;
-  color: #aaa;
+  color: #666;
 }
 .codex-rail svg,
 .codex-nav svg {
@@ -114,9 +114,9 @@
   margin-top: auto;
 }
 .codex-nav {
-  background: #1d1d1d;
+  background: #f7f7f7;
   border-radius: 10px 0 0 10px;
-  border-right: 1px solid #303030;
+  border-right: 1px solid #e5e5e5;
   padding: 16px 10px;
   font-size: 15px;
 }
@@ -127,7 +127,7 @@
 }
 .codex-nav small {
   display: block;
-  color: #999;
+  color: #686868;
   margin: 18px 6px 4px;
 }
 .codex-nav div {
@@ -138,12 +138,12 @@
   border-radius: 7px;
 }
 .codex-active {
-  background: #303030;
+  background: #e5e5e5;
 }
 .codex-thread {
   min-width: 0;
   min-height: 0;
-  background: #181818;
+  background: #fff;
   border-radius: 0 10px 10px 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -166,13 +166,13 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   border-radius: 16px 16px 4px 16px;
-  background: #303030;
+  background: #e5e5e5;
   padding: 12px 16px;
   font-size: 16px;
 }
 .agent-work small,
 .codex-placeholder {
-  color: #aaa;
+  color: #666;
 }
 .agent-work code {
   display: block;
@@ -191,7 +191,7 @@
     monospace;
 }
 .codex-code {
-  background: #272727;
+  background: #f3f3f3;
   border-radius: 16px;
   padding: 14px 18px;
   margin-top: 6px;
@@ -200,7 +200,7 @@
   font:
     13px ui-monospace,
     monospace;
-  color: #bbb;
+  color: #606060;
   margin-bottom: 8px;
 }
 .codex-code pre,
@@ -222,7 +222,7 @@
 }
 .codex-composer {
   border-radius: 20px;
-  background: #343434;
+  background: #eee;
   padding: 14px 16px;
   margin-top: 10px;
 }
@@ -234,7 +234,7 @@
 .codex-composer footer {
   justify-content: space-between;
   gap: 12px;
-  color: #bbb;
+  color: #606060;
   font-size: 13px;
   margin-top: 17px;
 }
@@ -243,8 +243,8 @@
   width: 25px;
   height: 25px;
   border-radius: 50%;
-  background: #ddd;
-  color: #151515;
+  background: #303030;
+  color: #fff;
   font-size: 17px;
 }
 @media (max-width: 740px) {

@@ -72,9 +72,25 @@ nav a {
   font-size: 12px;
   color: #aaa;
 }
+.github-link {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
 .github-link svg {
   width: 24px;
   height: 24px;
+}
+.github-stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.github-link .github-star {
+  width: 14px;
+  height: 14px;
+  color: #aaa;
 }
 main {
   min-height: 0;

@@ -658,6 +658,8 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
             demos: document.querySelectorAll('.demo').length,
             media: app.querySelectorAll('video,img[src$=".png"]:not(#mobile-qr),img[src$=".webp"]')
               .length,
+            theme: app.documentElement.dataset.theme,
+            stars: document.querySelector('[data-github-stars]').textContent,
             currentStyles: !!app.querySelector('link[href$="/desktop-workspace.css"]'),
             controls: document.querySelectorAll('.motion-toggle,.demo-controls').length,
             frameWidth: frame.getBoundingClientRect().width,
@@ -670,6 +672,8 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         });
         assert.equal(layout.overflow, false, `${locale}/${width}: horizontal overflow`);
         assert.equal(layout.demos, 1);
+        assert.equal(layout.theme, 'light');
+        assert.equal(layout.stars, '1.2K');
         assert.equal(layout.media, 0, 'Application renders live DOM, not screenshots');
         assert.equal(layout.controls, 0);
         assert.ok(layout.currentStyles && layout.fits && layout.canvas >= 150);

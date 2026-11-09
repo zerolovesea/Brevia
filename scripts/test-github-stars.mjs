@@ -54,3 +54,10 @@ for (const result of [
   assert.deepEqual(await render(result), { text: '—', label: 'GitHub' });
 }
 console.log('PASS GitHub stars: localization, compact counts, validation, and offline fallback');
+
+// 核对真实页面接线，避免只有孤立脚本测试通过。
+for (const lang of ['en', 'zh']) {
+  const html = readFileSync(new URL(`../website/index-${lang}.html`, import.meta.url), 'utf8');
+  assert.match(html, /<script defer src="\.\/github-stars\.js"><\/script>/);
+  assert.match(html, /<span data-github-stars aria-hidden="true">—<\/span>/);
+}

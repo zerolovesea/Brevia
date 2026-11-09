@@ -19,7 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   uiLanguage = Uri.base.queryParameters['lang'] == 'en' ? 'en' : 'zh';
   const family = 'Brevia Preview';
-  final theme = breviaTheme(Brightness.dark, fontFamily: family);
+  final theme = breviaTheme(Brightness.light, fontFamily: family);
   await (FontLoader(
         family,
       )..addFont(previewFont.toDart.then((bytes) => bytes.toDart.asByteData())))

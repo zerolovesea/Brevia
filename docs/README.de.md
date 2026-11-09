@@ -2,6 +2,13 @@
 
 <p align="center"><strong>Auf das Gespräch konzentrieren. Das Wichtige festhalten.</strong><br />Ein KI-Meetingassistent mit lokaler Verarbeitung. Gespräche aufnehmen, transkribieren und übersetzen – mit bearbeitbaren Notizen und Aufgaben, die zur Originalaufnahme zurückführen.</p>
 
+<p align="center">
+  <a href="https://github.com/zerolovesea/Brevia/releases/latest"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Latest release" /></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-ISC-blue?style=flat-square" alt="ISC License" /></a>
+  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="GitHub downloads" /></a>
+  <a href="https://github.com/zerolovesea/Brevia/stargazers"><img src="https://img.shields.io/github/stars/zerolovesea/Brevia?style=flat-square" alt="GitHub stars" /></a>
+</p>
+
 <p align="center"><a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <strong>Deutsch</strong> · <a href="README.ru.md">Русский</a></p>
 
 ![Brevia](assets/showcase/desktop/en/live.gif)

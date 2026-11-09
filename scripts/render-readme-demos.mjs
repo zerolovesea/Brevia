@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
+import { createServer } from 'node:http';
+import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 
 // 只给官网现有的可定位动画接上导出时钟，不重新绘制应用界面。
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const project = join(root, 'output/readme-gif-export');
 const assets = join(root, 'docs/assets/showcase/desktop');
 const scenes = {
@@ -20,8 +22,84 @@ const scenes = {
   },
 };
 const [onlyScene, onlyLanguage] = process.argv.slice(2);
-assert(!onlyScene || Object.hasOwn(scenes, onlyScene), 'Unknown scene');
+assert(
+  !onlyScene || onlyScene === '--screenshots' || Object.hasOwn(scenes, onlyScene),
+  'Unknown scene',
+);
 assert(!onlyLanguage || ['zh', 'en'].includes(onlyLanguage), 'Unknown language');
+if (onlyScene === '--screenshots') {
+  const server = createServer((request, response) => {
+    const file = resolve(root, '.' + new URL(request.url, 'http://localhost').pathname);
+    if (!file.startsWith(root + sep)) return response.writeHead(403).end();
+    try {
+      const types = {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.wasm': 'application/wasm',
+        '.svg': 'image/svg+xml',
+      };
+      response
+        .writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream' })
+        .end(readFileSync(file));
+    } catch {
+      response.writeHead(404).end();
+    }
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 800 },
+      deviceScaleFactor: 2,
+    });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    for (const lang of onlyLanguage ? [onlyLanguage] : ['zh', 'en']) {
+      await page.goto(
+        `http://127.0.0.1:${server.address().port}/website/app-motion.html?lang=${lang}`,
+      );
+      await page.waitForFunction(() => !!window.appMotion);
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+      for (const [name, time] of Object.entries({
+        'ai-notes': 12500,
+        summary: 28000,
+        phone: 39000,
+        agent: 54500,
+        capsule: 17000,
+      })) {
+        await page.evaluate((time) => {
+          window.appMotion.render(time);
+          for (const animation of document.getAnimations())
+            if (Number.isFinite(animation.effect?.getComputedTiming().endTime)) animation.finish();
+        }, time);
+        if (name === 'phone')
+          await page.waitForFunction(
+            () => !!document.querySelector('.pair-phone').contentWindow.showMeetingPreview,
+          );
+        if (name === 'phone') await page.evaluate((time) => window.appMotion.render(time), time);
+        if (name === 'capsule')
+          await page.locator('.app-shell').evaluate((shell) => (shell.style.visibility = 'hidden'));
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(500);
+        const target =
+          name === 'capsule'
+            ? page.frameLocator('iframe:not(.pair-phone)').locator('.capsule-shell')
+            : page.locator('body');
+        assert.deepEqual(errors, [], `${lang}/${name}: page errors`);
+        if (name === 'ai-notes') assert(await page.locator('[data-ai-suggestion]').isVisible());
+        await target.screenshot({ path: join(assets, lang, `${name}.png`) });
+      }
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+  process.exit(0);
+}
 mkdirSync(project, { recursive: true });
 for (const name of ['frontend', 'website'])
   cpSync(join(root, name), join(project, name), { recursive: true });

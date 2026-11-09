@@ -25,7 +25,7 @@
   let state = {
     meetingId: 'website-demo',
     phase: 'recording',
-    theme: 'dark',
+    theme: 'light',
     locale: new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh',
     title: '',
     elapsed: 0,
