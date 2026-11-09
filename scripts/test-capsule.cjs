@@ -21,7 +21,7 @@ const path = require('node:path');
         canPause: true,
         expanded: false,
         activeCaptionId: '15',
-        captions: Array.from({ length: 40 }, (_, index) => ({
+        captions: Array.from({ length: 240 }, (_, index) => ({
           id: String(index),
           time: `00:${String(index).padStart(2, '0')}`,
           text: `第 ${index} 段完整字幕`,
@@ -31,14 +31,17 @@ const path = require('node:path');
         notes: '',
       };
       window.capsuleCalls = [];
-      window.updateCapsule = (next) => {
+      window.updateCapsule = (next, omitCaptions = false) => {
         Object.assign(state, next);
-        handlers.get('desktop.state')(state);
+        handlers.get('desktop.state')({
+          ...structuredClone(state),
+          ...(omitCaptions ? { captions: undefined } : {}),
+        });
       };
       window.brevia = {
         on: (name, fn) => handlers.set(name, fn),
         desktop: {
-          state: async () => state,
+          state: async () => structuredClone(state),
           expand: async ({ expanded }) => {
             window.capsuleCalls.push(expanded);
             await new Promise((resolve) => setTimeout(resolve, 100));
@@ -54,7 +57,7 @@ const path = require('node:path');
     );
     await page.locator('.capsule-identity').hover();
     await page.waitForFunction(() => !document.querySelector('#capsule-panel').hidden);
-    assert.equal(await page.locator('.capsule-line').count(), 40);
+    assert.equal(await page.locator('.capsule-line').count(), 240);
     assert.equal(
       await page.locator('[aria-current="true"] [data-caption-text]').textContent(),
       '第 15 段完整字幕',
@@ -64,8 +67,25 @@ const path = require('node:path');
       node.scrollTop = 0;
     });
     await page.waitForFunction(() => !document.querySelector('#capsule-follow').hidden);
-    await page.evaluate(() => window.updateCapsule({ activeCaptionId: '16' }));
+    await page.evaluate(() => window.updateCapsule({ activeCaptionId: '16' }, true));
     assert.equal(await page.locator('#captions-panel').evaluate((node) => node.scrollTop), 0);
+    await page.locator('#captions-panel').evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    const last = await page.locator('.capsule-line').last().boundingBox();
+    const body = await page.locator('#captions-panel').boundingBox();
+    assert.ok(
+      last.y >= body.y && last.y + last.height <= body.y + body.height + 1,
+      '末段字幕可以滚动到可见区域',
+    );
+    assert.equal(
+      await page.locator('.capsule-line').first().locator('[data-caption-text]').textContent(),
+      '第 0 段完整字幕',
+    );
+    assert.equal(
+      await page.locator('.capsule-line').last().locator('[data-caption-text]').textContent(),
+      '第 239 段完整字幕',
+    );
     await page.locator('#capsule-follow').click();
     assert.ok(await page.locator('#captions-panel').evaluate((node) => node.scrollTop > 0));
     // 窗口 IPC 比淡出慢时，淡出的面板也必须一直保持透明。

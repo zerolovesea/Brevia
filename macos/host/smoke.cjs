@@ -172,6 +172,7 @@ async function proxy() {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   const pending = new Map();
+  const nativePending = new Map();
   const mainAction = randomUUID();
   const capsuleAction = randomUUID();
   const routed = Promise.withResolvers();
@@ -185,6 +186,12 @@ async function proxy() {
       const requestId = 'smoke-' + ++id;
       pending.set(requestId, { resolve, reject });
       write(worker.stdin, { id: requestId, channel, payload, label: 'main' });
+    });
+  const hostCommand = (method, args) =>
+    new Promise((resolve, reject) => {
+      const requestId = 'geometry-' + ++id;
+      nativePending.set(requestId, { resolve, reject });
+      write(process.stdout, { native: requestId, method, args });
     });
   const fail = (error) => {
     console.error('Brevia native webview smoke failed:', error);
@@ -210,6 +217,57 @@ async function proxy() {
     const meeting = initial.meetings[0];
     const detail = await command('meeting.get', { meeting_id: meeting.id });
     assert.ok(detail.segments.length, 'stored example transcript');
+    await command('desktop.publish', {
+      ready: true,
+      meetingId: meeting.id,
+      title: meeting.title,
+      phase: 'playing',
+      elapsed: 0,
+      level: 0,
+      input: 'Playback',
+      canPause: true,
+      locale: 'en',
+      theme: 'light',
+      captions: [],
+      notes: '',
+      suggestion: null,
+      aiEnabled: false,
+      aiBusy: false,
+      error: '',
+    });
+    for (let iteration = 0; iteration < 3; iteration++) {
+      await command('desktop.expand', { expanded: false });
+      const closed = await hostCommand('window.getBounds', { label: 'recording-capsule' });
+      await command('desktop.expand', { expanded: true });
+      const opened = await hostCommand('window.getBounds', { label: 'recording-capsule' });
+      const state = await command('desktop.state');
+      assert.ok(opened.height > closed.height, 'native capsule expands');
+      const closedAnchor = state.above ? closed.y + closed.height : closed.y;
+      const openedAnchor = state.above ? opened.y + opened.height : opened.y;
+      assert.ok(
+        Math.abs(closedAnchor - openedAnchor) <= 1,
+        'native capsule keeps its screen anchor',
+      );
+    }
+    await command('desktop.publish', {
+      ready: true,
+      meetingId: null,
+      title: '',
+      phase: 'idle',
+      elapsed: 0,
+      level: 0,
+      input: '',
+      canPause: false,
+      locale: 'en',
+      theme: 'light',
+      captions: [],
+      notes: '',
+      suggestion: null,
+      aiEnabled: false,
+      aiBusy: false,
+      error: '',
+    });
+
     const locations = await command('storage.locations');
     const folder = path.join(locations.recordings, meeting.id, 'audio');
     const source = fs.readdirSync(folder).find((file) => file.endsWith('.wav'));
@@ -261,6 +319,13 @@ async function proxy() {
   createInterface({ input: process.stdin })
     .on('line', (line) => {
       const message = JSON.parse(line);
+      const nativeReply = nativePending.get(message.native);
+      if (nativeReply) {
+        nativePending.delete(message.native);
+        if (message.error) nativeReply.reject(new Error(String(message.error)));
+        else nativeReply.resolve(message.result);
+        return;
+      }
       if (message.host === 'window.loaded' && message.label === 'main') loaded = true;
       if (message.channel === 'desktop.publish' && message.label === 'main') published = true;
       if (message.channel === 'desktop.complete' && message.label === 'main') {

@@ -1374,12 +1374,12 @@ function registerIpc() {
     );
     return true;
   });
-  handleIpc('desktop.expand', (_, payload) => {
-    desktop.expand(z.object({ expanded: z.boolean() }).parse(payload).expanded);
+  handleIpc('desktop.expand', async (_, payload) => {
+    await desktop.expand(z.object({ expanded: z.boolean() }).parse(payload).expanded);
     return true;
   });
-  handleIpc('desktop.move', (_, payload) => {
-    desktop.move(
+  handleIpc('desktop.move', async (_, payload) => {
+    await desktop.move(
       z
         .object({
           dx: z.number().finite().min(-10000).max(10000),
@@ -2359,11 +2359,11 @@ function registerIpc() {
     return true;
   });
 
-  handleIpc('floating-caption.move', (_, payload) => {
+  handleIpc('floating-caption.move', async (_, payload) => {
     const value = z.object({ deltaX: z.number(), deltaY: z.number() }).parse(payload ?? {});
     if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
       const bounds = floatingCaptionWindow.getBounds();
-      floatingCaptionWindow.setBounds({
+      await floatingCaptionWindow.setBounds({
         x: bounds.x + Math.round(value.deltaX),
         y: bounds.y + Math.round(value.deltaY),
       });

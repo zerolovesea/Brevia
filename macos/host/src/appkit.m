@@ -98,7 +98,26 @@ static NSString *dialogPath(NSString *value) {
 }
 
 static void perform(NSString *method, NSDictionary *args, NSWindow *window, Completion done) {
-    if ([method isEqual:@"dialog.open"] || [method isEqual:@"dialog.save"]) {
+    if ([method isEqual:@"window.setBounds"]) {
+        if (!window) { done(nil, @"Window closed"); return; }
+        double x = [args[@"x"] doubleValue], y = [args[@"y"] doubleValue];
+        double width = [args[@"width"] doubleValue], height = [args[@"height"] doubleValue];
+        if (!isfinite(x) || !isfinite(y) || !isfinite(width) || !isfinite(height) || width <= 0 || height <= 0) {
+            done(nil, @"Invalid window bounds"); return;
+        }
+        NSRect frame = NSMakeRect(x, NSMaxY(NSScreen.screens.firstObject.frame) - y - height, width, height);
+        // 同一次 AppKit 刷新完成移动与缩放，避免透明窗口的中间尺寸露出底色。
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+            context.duration = 0;
+            context.allowsImplicitAnimation = NO;
+            window.opaque = NO;
+            window.backgroundColor = NSColor.clearColor;
+            window.animationBehavior = NSWindowAnimationBehaviorNone;
+            [window setFrame:frame display:YES animate:NO];
+            [window.contentView layoutSubtreeIfNeeded];
+        } completionHandler:nil];
+        done(@YES, nil);
+    } else if ([method isEqual:@"dialog.open"] || [method isEqual:@"dialog.save"]) {
         BOOL save = [method isEqual:@"dialog.save"];
         NSSavePanel *panel = save ? NSSavePanel.savePanel : NSOpenPanel.openPanel;
         NSString *path = dialogPath(args[@"defaultPath"]);

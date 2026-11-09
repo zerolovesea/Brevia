@@ -166,19 +166,37 @@ class Tray extends EventEmitter {
     assert.equal(controller.capsule.getBounds().height, 80);
     assert.equal(controller.capsule.getBounds().x, -622, '胶囊默认在工作区水平居中');
     assert.equal(controller.capsule.getBounds().y, 588, '胶囊默认靠工作区底部，留出 32px');
-    controller.expand(true);
+    await controller.expand(true);
     assert.equal(controller.above, true, '默认位置向上展开');
     assert.equal(controller.capsule.getBounds().y + 470, 668, '展开保持胶囊底部锚点');
-    controller.expand(false);
+    await controller.expand(false);
     assert.equal(controller.capsule.getBounds().y, 588, '收起保持默认位置');
+    assert.equal(controller.above, true, '收起时保留展开方向，避免 CSS 布局在窗口缩放前翻转');
+    const originalBounds = controller.capsule.setBounds.bind(controller.capsule);
+    let finishBounds;
+    controller.capsule.setBounds = (bounds) => {
+      originalBounds(bounds);
+      return new Promise((resolve) => {
+        finishBounds = resolve;
+      });
+    };
+    const previousEvent = controller.capsule.sent;
+    const waitingForBounds = controller.expand(true);
+    assert.equal(controller.capsule.sent, previousEvent, '原生窗口确认尺寸前不发送布局状态');
+    finishBounds();
+    await waitingForBounds;
+    assert.equal(controller.capsule.sent[1].payload.expanded, true);
+    controller.capsule.setBounds = originalBounds;
+    await controller.expand(false);
+
     controller.bounds = { x: -1100, y: 680, width: 344, height: 80 };
-    controller.expand(true);
+    await controller.expand(true);
     assert.equal(controller.above, true);
     assert.equal(controller.capsule.getBounds().x, -900);
     assert.ok(controller.capsule.getBounds().y >= 0);
     assert.ok(controller.capsule.getBounds().y + controller.capsule.getBounds().height <= 700);
     controller.bounds = { x: -400, y: 40, width: 344, height: 80 };
-    controller.expand(true);
+    await controller.expand(true);
     assert.equal(controller.capsule.getBounds().width, 464, '展开面板保留阅读宽度');
     assert.equal(
       controller.capsule.getBounds().x + controller.pillOffset,
@@ -187,7 +205,7 @@ class Tray extends EventEmitter {
     );
     assert.ok(controller.capsule.getBounds().x >= -900);
     assert.ok(controller.capsule.getBounds().x + controller.capsule.getBounds().width <= 0);
-    controller.expand(false);
+    await controller.expand(false);
     assert.equal(controller.capsule.getBounds().x, -400);
     assert.equal(controller.capsule.getBounds().width, 344);
     assert.equal(controller.pillOffset, 0);
@@ -203,6 +221,23 @@ class Tray extends EventEmitter {
     assert.equal(controller.capsule.isVisible(), true, '手动胶囊回主窗后保留');
     controller.override = null;
     controller.update({ ...state, phase: 'playing' });
+    const fullCaptions = Array.from({ length: 240 }, (_, index) => ({
+      id: String(index),
+      time: '00:00',
+      text: `字幕 ${index}`,
+      translation: '',
+      draft: false,
+    }));
+    controller.update({ ...state, phase: 'playing', captions: fullCaptions });
+    const { captions: omitted, ...progressOnly } = { ...state, phase: 'playing', elapsed: 20 };
+    controller.update(progressOnly);
+    assert.equal(controller.state.captions.length, 240, '进度更新保留完整字幕');
+    assert.equal(
+      controller.capsule.sent[1].payload.captions,
+      undefined,
+      '进度事件不反复传输完整正文',
+    );
+
     assert.equal(Boolean(controller.active()), false, '播放不能被当成正在录音');
     assert.equal(controller.capsule.isVisible(), true, '主窗可见时播放也自动显示胶囊');
     controller.update({ ...state, phase: 'playback-paused' });

@@ -35,11 +35,12 @@
   async function expand(value) {
     if (!value && closingAnimation) return;
     const revision = ++expandRevision;
+    const wasClosing = Boolean(closingAnimation);
     closingAnimation?.cancel();
     closingAnimation = null;
     clearTimeout(openTimer);
     clearTimeout(closeTimer);
-    if (expanded === value) return;
+    if (expanded === value && !wasClosing) return;
     try {
       if (!value && window.BreviaMotion.duration('exit')) {
         closingAnimation = panel.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -151,6 +152,9 @@
   }
   function render(next) {
     if (!next?.phase) return;
+    const captionsChanged = Array.isArray(next.captions);
+    if (!captionsChanged)
+      next = { ...next, captions: state?.meetingId === next.meetingId ? state.captions : [] };
     const changed =
       state?.meetingId !== next.meetingId ||
       ['playing', 'playback-paused'].includes(state?.phase) !==
@@ -207,42 +211,53 @@
     select('#captions-tab').textContent = t('实时字幕');
     select('#notes-tab').textContent = t('笔记');
     // 逐段更新正文，保留滚动容器和已确认节点，电平刷新不会重建阅读内容。
-    const existing = new Map([...captions.children].map((node) => [node.dataset.id, node]));
-    let previous = null;
-    for (const entry of state.captions) {
-      let node = existing.get(entry.id);
-      if (!node) {
-        node = document.createElement('article');
-        node.className = 'capsule-line';
-        node.dataset.id = entry.id;
-        node.innerHTML =
-          '<time></time><div><p><span data-caption-text></span><span class="button-spinner capsule-progress" role="img" hidden></span></p><p class="capsule-translation"></p></div>';
-        captions.append(node);
+    if (captionsChanged) {
+      const existing = new Map([...captions.children].map((node) => [node.dataset.id, node]));
+      let previous = null;
+      for (const entry of state.captions) {
+        let node = existing.get(entry.id);
+        if (!node) {
+          node = document.createElement('article');
+          node.className = 'capsule-line';
+          node.dataset.id = entry.id;
+          node.innerHTML =
+            '<time></time><div><p><span data-caption-text></span><span class="button-spinner capsule-progress" role="img" hidden></span></p><p class="capsule-translation"></p></div>';
+          captions.append(node);
+        }
+        if (node !== (previous ? previous.nextSibling : captions.firstChild))
+          captions.insertBefore(node, previous ? previous.nextSibling : captions.firstChild);
+        previous = node;
+        existing.delete(entry.id);
+        node.dataset.draft = String(entry.draft);
+        const time = node.querySelector('time'),
+          text = node.querySelector('[data-caption-text]'),
+          progress = node.querySelector('.capsule-progress'),
+          translation = node.querySelector('.capsule-translation');
+        if (time.textContent !== entry.time) time.textContent = entry.time;
+        if (text.textContent !== entry.text) text.textContent = entry.text;
+        progress.hidden = !entry.draft || state.phase !== 'recording';
+        progress.setAttribute('aria-label', t('识别中'));
+        progress.title = t('识别中');
+        if (translation.textContent !== entry.translation)
+          translation.textContent = entry.translation;
+        translation.hidden = !entry.translation;
       }
-      if (node !== (previous ? previous.nextSibling : captions.firstChild))
-        captions.insertBefore(node, previous ? previous.nextSibling : captions.firstChild);
-      previous = node;
-      existing.delete(entry.id);
-      node.dataset.draft = String(entry.draft);
-      node.dataset.current = String(entry.id === state.activeCaptionId);
-      if (entry.id === state.activeCaptionId) node.setAttribute('aria-current', 'true');
-      else node.removeAttribute('aria-current');
-      const time = node.querySelector('time'),
-        text = node.querySelector('[data-caption-text]'),
-        progress = node.querySelector('.capsule-progress'),
-        translation = node.querySelector('.capsule-translation');
-      if (time.textContent !== entry.time) time.textContent = entry.time;
-      if (text.textContent !== entry.text) text.textContent = entry.text;
-      progress.hidden = !entry.draft || state.phase !== 'recording';
-      progress.setAttribute('aria-label', t('识别中'));
-      progress.title = t('识别中');
-      if (translation.textContent !== entry.translation)
-        translation.textContent = entry.translation;
-      translation.hidden = !entry.translation;
+      existing.forEach((node) => node.remove());
+      if (!state.captions.length)
+        captions.innerHTML = `<div class="capsule-empty">${escape(state.captionNotice || t(['playing', 'playback-paused'].includes(state.phase) ? '暂无内容' : '等待语音'))}${state.captionNotice ? `<p><button data-action="models" type="button">${escape(t('模型库'))}</button></p>` : ''}</div>`;
     }
-    existing.forEach((node) => node.remove());
-    if (!state.captions.length)
-      captions.innerHTML = `<div class="capsule-empty">${escape(state.captionNotice || t(['playing', 'playback-paused'].includes(state.phase) ? '暂无内容' : '等待语音'))}${state.captionNotice ? `<p><button data-action="models" type="button">${escape(t('模型库'))}</button></p>` : ''}</div>`;
+    const previousCurrent = captions.querySelector('[aria-current="true"]');
+    if (previousCurrent?.dataset.id !== state.activeCaptionId) {
+      previousCurrent?.removeAttribute('aria-current');
+      if (previousCurrent) delete previousCurrent.dataset.current;
+      const current =
+        state.activeCaptionId &&
+        captions.querySelector(`[data-id="${CSS.escape(state.activeCaptionId)}"]`);
+      if (current) {
+        current.dataset.current = 'true';
+        current.setAttribute('aria-current', 'true');
+      }
+    }
     if (
       follow &&
       (!['playing', 'playback-paused'].includes(state.phase) ||

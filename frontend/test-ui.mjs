@@ -9623,6 +9623,7 @@ for (const failure of ['notes', 'request', null]) {
     published = 0;
   const context = {
     desktopPublishTimer: 7,
+    desktopPublishedCaptions: null,
     clearTimeout() {},
     setTimeout() {
       scheduled++;
@@ -9647,6 +9648,47 @@ for (const failure of ['notes', 'request', null]) {
   context.scheduleDesktopRecording();
   assert.equal(published, 1);
   assert.equal(scheduled, 1);
+}
+
+// 完整字幕只在正文或可见识别状态变化时发布，进度更新沿用已加载的正文。
+{
+  const sent = [];
+  const snapshot = {
+    meetingId: 'meeting',
+    phase: 'playing',
+    locale: 'zh',
+    captions: [{ text: '第一段', translation: '' }],
+  };
+  const context = {
+    desktopPublishedCaptions: null,
+    desktopPublishTimer: null,
+    clearTimeout() {},
+    desktopRecordingSnapshot: () => ({ ...snapshot }),
+    window: {
+      brevia: {
+        desktop: {
+          publish: async (state) => {
+            sent.push(state);
+          },
+        },
+      },
+    },
+  };
+  runInNewContext(summaryFn('publishDesktopRecording'), context);
+  context.publishDesktopRecording();
+  await Promise.resolve();
+  context.publishDesktopRecording();
+  await Promise.resolve();
+  assert.equal(sent[0].captions.length, 1);
+  assert.equal(sent[1].captions, undefined);
+  snapshot.phase = 'playback-paused';
+  context.publishDesktopRecording();
+  await Promise.resolve();
+  assert.equal(sent[2].captions.length, 1);
+  snapshot.captions[0].translation = 'First paragraph';
+  context.publishDesktopRecording();
+  await Promise.resolve();
+  assert.equal(sent[3].captions[0].translation, 'First paragraph');
 }
 
 // 播放胶囊读取当前稿，动作不得操作已切换的会议或正在录音的会话。
@@ -9728,10 +9770,10 @@ for (const failure of ['notes', 'request', null]) {
   }));
   context.playerAudio.currentTime = 201;
   const surrounding = context.desktopRecordingSnapshot();
-  assert.equal(surrounding.captions.length, 80);
+  assert.equal(surrounding.captions.length, 150);
   assert.equal(surrounding.activeCaptionId, '200');
-  assert.equal(surrounding.captions[0].text, '段落 60');
-  assert.equal(surrounding.captions.at(-1).text, '段落 139');
+  assert.equal(surrounding.captions[0].text, '段落 0');
+  assert.equal(surrounding.captions.at(-1).text, '段落 149');
   context.uiData.detail.transcript = beforeContext;
   context.playerAudio.currentTime = 20;
   await handler({ action: 'playback-pause', meetingId: 'playback' });

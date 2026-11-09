@@ -162,7 +162,8 @@ class NativeWindow extends EventEmitter {
   }
   setBounds(bounds) {
     Object.assign(this.bounds, bounds);
-    this.call('setBounds', this.bounds);
+    if (this.label && !this.destroyed)
+      return native('window.setBounds', { label: this.label, ...this.bounds });
   }
   getBounds() {
     return { ...this.bounds };

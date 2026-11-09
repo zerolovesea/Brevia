@@ -26,45 +26,53 @@ const desktopPreferencesSchema = z.object({
   // 兼容旧偏好文件；胶囊现在固定悬浮，不再提供置顶开关。
   capsuleOnTop: z.boolean().default(true),
 });
-const desktopStateSchema = z.object({
-  ready: z.boolean().default(false),
-  meetingId: z.string().nullable(),
-  title: z.string().max(500),
-  phase: z.enum([
-    'idle',
-    'recording',
-    'paused',
-    'saving',
-    'failed',
-    'saved',
-    'playing',
-    'playback-paused',
-  ]),
-  elapsed: z.number().int().nonnegative(),
-  level: z.number().min(0).max(1),
-  input: z.string().max(500),
-  canPause: z.boolean(),
-  locale: z.string().max(10),
-  theme: z.enum(['light', 'dark']),
-  captions: z
-    .array(
-      z.object({
-        id: z.string(),
-        time: z.string().max(30),
-        text: z.string().max(20000),
-        translation: z.string().max(20000),
-        draft: z.boolean(),
-      }),
-    )
-    .max(80),
-  notes: z.string().max(200000),
-  suggestion: z.object({ id: z.string(), text: z.string().max(20000) }).nullable(),
-  aiEnabled: z.boolean(),
-  aiBusy: z.boolean(),
-  error: z.string().max(2000),
-  captionNotice: z.string().max(2000).default(''),
-  activeCaptionId: z.string().nullable().default(null),
-});
+const desktopStateSchema = z
+  .object({
+    ready: z.boolean().default(false),
+    meetingId: z.string().nullable(),
+    title: z.string().max(500),
+    phase: z.enum([
+      'idle',
+      'recording',
+      'paused',
+      'saving',
+      'failed',
+      'saved',
+      'playing',
+      'playback-paused',
+    ]),
+    elapsed: z.number().int().nonnegative(),
+    level: z.number().min(0).max(1),
+    input: z.string().max(500),
+    canPause: z.boolean(),
+    locale: z.string().max(10),
+    theme: z.enum(['light', 'dark']),
+    captions: z
+      .array(
+        z.object({
+          id: z.string(),
+          time: z.string().max(30),
+          text: z.string().max(20000),
+          translation: z.string().max(20000),
+          draft: z.boolean(),
+        }),
+      )
+      .optional(),
+    notes: z.string().max(200000),
+    suggestion: z.object({ id: z.string(), text: z.string().max(20000) }).nullable(),
+    aiEnabled: z.boolean(),
+    aiBusy: z.boolean(),
+    error: z.string().max(2000),
+    captionNotice: z.string().max(2000).default(''),
+    activeCaptionId: z.string().nullable().default(null),
+  })
+  .refine(
+    (state) =>
+      ['playing', 'playback-paused'].includes(state.phase) ||
+      !state.captions ||
+      state.captions.length <= 80,
+    { message: 'Too many live captions', path: ['captions'] },
+  );
 
 // 同一窗口拥有采集；胶囊与原生菜单只发送动作，不能另开一套录音。
 class DesktopController {
@@ -274,6 +282,7 @@ class DesktopController {
       this.override = null;
       this.expanded = false;
     }
+    state.captions ??= changed ? [] : this.state?.captions || [];
     this.state = state;
     if (state.ready && !this.shortcutsReady) {
       this.shortcutsReady = true;
@@ -283,7 +292,7 @@ class DesktopController {
       });
     }
     this.sync(menuChanged);
-    this.sendState();
+    this.sendState(changed || payload.captions !== undefined);
   }
 
   level({ meetingId, level }) {
@@ -560,17 +569,16 @@ class DesktopController {
   updateMenuIfPresent() {
     if (this.tray) this.updateMenu();
   }
-  sendState() {
-    if (this.ready && this.capsule && !this.capsule.isDestroyed())
-      this.capsule.webContents.send('brevia:event', {
-        type: 'desktop.state',
-        payload: {
-          ...this.state,
-          expanded: this.expanded,
-          above: this.above,
-          pillOffset: this.pillOffset,
-        },
-      });
+  sendState(includeCaptions = true) {
+    if (!this.ready || !this.capsule || this.capsule.isDestroyed()) return;
+    const payload = {
+      ...this.state,
+      expanded: this.expanded,
+      above: this.above,
+      pillOffset: this.pillOffset,
+    };
+    if (!includeCaptions) delete payload.captions;
+    this.capsule.webContents.send('brevia:event', { type: 'desktop.state', payload });
   }
 
   layout(expanded) {
@@ -593,24 +601,24 @@ class DesktopController {
       Math.min(this.bounds?.y ?? area.y + area.height - 80 - 32, area.y + area.height - 80),
     );
     const height = expanded ? Math.min(470, area.height) : 80;
-    this.above = expanded && pillY + height > area.y + area.height;
+    this.above = pillY + Math.min(470, area.height) > area.y + area.height;
     const y = this.above ? Math.max(area.y, pillY + 80 - height) : pillY;
     this.bounds = { x: pillX, y: pillY, width: pillWidth, height: 80 };
     this.expanded = expanded;
-    this.capsule.setBounds({ x, y, width, height });
+    return this.capsule.setBounds({ x, y, width, height });
   }
 
-  move({ dx, dy }) {
+  async move({ dx, dy }) {
     if (!this.bounds) return;
     this.bounds.x += dx;
     this.bounds.y += dy;
-    this.layout(this.expanded);
-    this.sendState();
+    await this.layout(this.expanded);
+    this.sendState(false);
   }
 
-  expand(expanded) {
-    this.layout(expanded);
-    this.sendState();
+  async expand(expanded) {
+    await this.layout(expanded);
+    this.sendState(false);
   }
   destroy() {
     this.editShortcuts(false);

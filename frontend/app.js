@@ -11922,14 +11922,6 @@ function desktopRecordingSnapshot() {
       (item) =>
         playerAudio.currentTime >= item.startSeconds && playerAudio.currentTime < item.endSeconds,
     );
-    const nextIndex =
-      activeIndex >= 0
-        ? activeIndex
-        : transcript.findIndex((item) => item.startSeconds > playerAudio.currentTime);
-    const start = Math.max(
-      0,
-      Math.min((nextIndex >= 0 ? nextIndex : transcript.length) - 40, transcript.length - 80),
-    );
     const captionId = (item) => String(item.speaker?.segmentId ?? item.startSeconds);
     return {
       ready: Boolean(breviaClient?.state.initialized && desktopPreferences),
@@ -11943,7 +11935,7 @@ function desktopRecordingSnapshot() {
       locale,
       theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
       activeCaptionId: activeIndex >= 0 ? captionId(transcript[activeIndex]) : null,
-      captions: transcript.slice(start, start + 80).map((item) => ({
+      captions: transcript.map((item) => ({
         id: captionId(item),
         time: item.time || '',
         text: (item.text || '').slice(0, 20000),
@@ -12008,14 +12000,29 @@ function desktopRecordingSnapshot() {
         : '',
   };
 }
+let desktopPublishedCaptions = null;
 function publishDesktopRecording() {
   clearTimeout(desktopPublishTimer);
   desktopPublishTimer = null;
   const state = desktopRecordingSnapshot();
-  if (window.brevia?.desktop)
-    void window.brevia.desktop
-      .publish(state)
-      .catch((error) => console.error('Desktop state update failed', error));
+  if (!window.brevia?.desktop) return;
+  const captionsKey = JSON.stringify([
+    state.meetingId,
+    state.phase,
+    state.locale,
+    state.captionNotice,
+    state.captions,
+  ]);
+  if (captionsKey === desktopPublishedCaptions) delete state.captions;
+  void window.brevia.desktop
+    .publish(state)
+    .then(() => {
+      desktopPublishedCaptions = captionsKey;
+    })
+    .catch((error) => {
+      desktopPublishedCaptions = null;
+      console.error('Desktop state update failed', error);
+    });
 }
 function scheduleDesktopRecording() {
   if (!desktopPublishTimer)
