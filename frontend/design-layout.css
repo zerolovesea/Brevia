@@ -4178,16 +4178,6 @@ textarea,
   max-height: min(320px, 55dvh);
   overflow: auto;
 }
-.summary-participant-list > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.summary-participant-list > span > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
 .summary-participant-list .speaker-avatar {
   flex: none;
   font-style: normal;

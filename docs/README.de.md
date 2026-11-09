@@ -43,7 +43,7 @@ Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat herunterge
 
 [![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme.
+Das Protokoll hat sieben Abschnitte. Über das Ursachendiagramm können Sie Aussagen im Transkript prüfen und anhören. Protokoll und Ursachenanalyse lassen sich getrennt exportieren. Sie können nach Sprechern filtern und Namen für eine ganze Besprechung ändern.
 
 ### KI-Notizen
 
@@ -59,7 +59,7 @@ Offline aufnehmen, Notizen schreiben und wichtige Stellen markieren. Sobald der 
 
 ## Meeting-Kapsel
 
-Bei eingeklapptem Hauptfenster lässt sich die Aufnahme über die schwebende Kapsel pausieren oder beenden. Aufgeklappt zeigt sie zweisprachige Live-Untertitel und Notizen.
+Minimieren Sie das Hauptfenster, um in der Kapsel Aufnahme oder Wiedergabe zu steuern, Untertitel zu lesen, Notizen zu bearbeiten und Bilder einzufügen. Im Hintergrund kann Brevia bei Ton aus einer unterstützten Konferenz-App an die Aufnahme erinnern.
 
 <img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Meeting-Kapsel mit Untertiteln und Aufnahmesteuerung" />
 

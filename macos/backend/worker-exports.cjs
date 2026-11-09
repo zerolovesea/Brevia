@@ -165,7 +165,7 @@ function markdownHTML(markdown) {
   let index = 0;
   while (index < lines.length) {
     const line = lines[index],
-      heading = /^(#{1,3})\s+(.+)$/.exec(line);
+      heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (!line.trim()) {
       index++;
       continue;
@@ -299,8 +299,8 @@ function createExportHandlers(worker) {
     }
     if (!['transcript', 'notes', 'analysis', 'mynotes'].includes(contentType))
       throw new Error('Export content must be transcript, notes, analysis, mynotes, or audio');
-    if (contentType === 'analysis' && !['md', 'txt', 'docx', 'pdf'].includes(format))
-      throw new Error('Unsupported cause analysis format');
+    if (contentType !== 'transcript' && !['md', 'txt', 'docx', 'pdf'].includes(format))
+      throw new Error('Unsupported document export format');
     if (!['md', 'txt', 'json', 'srt', 'docx', 'pdf'].includes(format))
       throw new Error('Unsupported text export format');
     const stale = new Set(meeting.correction?.stale_translations || []),

@@ -3,6 +3,14 @@ const path = require('node:path');
 const { complete } = require('./llm-client.cjs');
 const { ModelNotInstalled } = require('./models.cjs');
 const prompts = require('./summary-prompts.json');
+const { createHash } = require('node:crypto');
+const {
+  estimatedTokens,
+  splitByBudget,
+  coverFacts,
+  verifyFactSources,
+  emptySummaryLine,
+} = require('./summary-facts.cjs');
 const evidence = require('./meeting-evidence.cjs');
 
 const languages = {
@@ -29,37 +37,23 @@ function clean(text) {
   text = text.replace(/<\/?think>/gi, '').trim();
   // 小模型也会只返回段号。先统一标记，让分段归并继续按允许的来源集合过滤。
   text = text.replace(/\[\[(S[1-9]\d*(?:\s*,\s*S[1-9]\d*)*)\]\]/g, '[[conclusion:$1]]');
-  const heading = text.search(/^#{1,6}\s+/m);
-  return heading >= 0 ? text.slice(heading) : text;
+  return text.replace(
+    /\[\[(?:fact|number|date|data):((?:S[1-9]\d*)(?:\s*,\s*S[1-9]\d*)*)\]\]/gi,
+    '[[conclusion:$1]]',
+  );
 }
 
-function splitTranscript(transcript, budget) {
-  if (!Number.isInteger(budget) || budget < 1) throw new Error('Invalid transcript budget');
-  const chunks = [];
-  let current = [];
-  let length = 0;
-  for (const line of transcript.split('\n')) {
-    if (line.length > budget) {
-      if (current.length) chunks.push(current.join('\n'));
-      current = [];
-      length = 0;
-      const label = /^(S[1-9]\d* \[\d+:\d+\] )/.exec(line)?.[1] || '';
-      const prefix = label.length < budget ? label : '';
-      const body = line.slice(prefix.length);
-      for (let offset = 0; offset < body.length; offset += budget - prefix.length)
-        chunks.push(prefix + body.slice(offset, offset + budget - prefix.length));
-    } else {
-      if (current.length && length + line.length + 1 > budget) {
-        chunks.push(current.join('\n'));
-        current = [];
-        length = 0;
-      }
-      current.push(line);
-      length += line.length + 1;
-    }
-  }
-  if (current.length) chunks.push(current.join('\n'));
-  return chunks.length ? chunks : [''];
+const summaryLimit = (error) =>
+  /output token limit|output limit|exceed.*context|context_length_exceeded|maximum context length/i.test(
+    error.message,
+  );
+
+function summaryReferences(text) {
+  return new Set(
+    [...text.matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g)].flatMap((m) =>
+      m[1].split(',').map((id) => id.trim()),
+    ),
+  );
 }
 
 function createLLMHandlers(worker) {
@@ -119,6 +113,7 @@ function createLLMHandlers(worker) {
       : task;
     const result = await pending.catch((error) => {
       if (
+        channel === 'translation' &&
         payload.require_complete &&
         error.message.startsWith('Translation exceeded output token limit')
       )
@@ -153,7 +148,7 @@ function createLLMHandlers(worker) {
 
   async function response(payload, prompt, signal) {
     let request = prompt + '\n\nPut every Markdown heading and list item on its own line.';
-    request = worker.prompts?.apply('summary', request) ?? request;
+    request += payload.summaryPreference;
     const result =
       clean(await generate(payload, request, { signal })) ||
       clean(await generate(payload, request, { signal }));
@@ -163,7 +158,7 @@ function createLLMHandlers(worker) {
   async function structuredMinutes(options, prompt, language, signal) {
     const headings = evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en;
     const outline = headings.map((title) => '## ' + title).join('\n');
-    const request = `${prompt}\n\nUse these seven level-two headings in this order, with content under each. Where nothing was stated, say so briefly in the output language. Use level-three headings for individual discussion topics.\n${outline}`;
+    const request = `${prompt}\n\nUse these seven level-two headings in this order, with content under each. Where nothing was stated, put a single em dash (—) under that heading. Use level-three headings for individual discussion topics.\n${outline}`;
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await response(
         options,
@@ -179,7 +174,7 @@ function createLLMHandlers(worker) {
         sections.every(
           (match, i) =>
             match[1].trim().replace(/^\*\*(.+)\*\*$/, '$1') === headings[i] &&
-            /[\p{L}\p{N}]/u.test(
+            /(?:[\p{L}\p{N}]|^\s*—\s*$)/u.test(
               result
                 .slice(match.index + match[0].length, sections[i + 1]?.index)
                 .replace(/^#{1,6}\s+.*$|\[\[[^\]\n]*\]\]/gm, ''),
@@ -226,88 +221,253 @@ function createLLMHandlers(worker) {
           total: 100,
           stage: 'summary.prepare',
         });
-        const options = { ...payload, max_tokens: payload.max_tokens ?? 3072 };
+        const catalogContext = worker.models.catalog.get(
+          payload.model_id || payload.model,
+        )?.context_size;
+        const context =
+          payload.context_size ??
+          (local(payload) ? Math.min(16384, catalogContext || 16384) : 8192);
+        const options = {
+          ...payload,
+          context_size: context,
+          require_complete: true,
+          summaryPreference: worker.prompts?.apply('summary', '') || '',
+          max_tokens: Math.min(payload.max_tokens ?? 3072, Math.floor(context / 3)),
+        };
+        const headings = evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en;
+        const instructions = prompts[language] || prompts.en;
+        const merge = (prompts.merge[language] || prompts.merge.en).replaceAll(
+          '{title}',
+          meeting.title,
+        );
+        const overhead = options.summaryPreference;
+        const rulesCost = Math.max(
+          ...Object.keys(evidence.TEMPLATES).map((id) =>
+            estimatedTokens(evidence.evidenceInstructions(id, language)),
+          ),
+        );
+        const budget =
+          context -
+          options.max_tokens -
+          estimatedTokens(overhead + headings.join('\n')) -
+          rulesCost -
+          Math.max(
+            estimatedTokens(instructions + meeting.title),
+            estimatedTokens(merge),
+            estimatedTokens(prompts.chunk[language] || prompts.chunk.en),
+          ) -
+          384;
+        if (budget < 128)
+          throw failure(
+            'error.summary.failed',
+            'Summary prompt exceeds the available model context',
+          );
         let markdown;
         try {
           await control.wait();
           progress(meeting.id, 60);
-          const instructions = prompts[language] || prompts.en;
-          // 本地引擎串行；在线每批最多三条，失败后等待同批收尾，避免遗留请求。
+          // 先完成的请求可立即处理下一段；失败后等待在途请求结束，再向调用方报告。
           const mapChunks = async (chunks, summarize) => {
-            const results = [];
-            const concurrency = local(options) ? 1 : 3;
-            for (let start = 0; start < chunks.length; start += concurrency) {
-              await control.wait();
-              const batch = await Promise.allSettled(
-                chunks.slice(start, start + concurrency).map(summarize),
-              );
-              const failed = batch.find((result) => result.status === 'rejected');
-              if (failed) throw failed.reason;
-              results.push(...batch.map((result) => result.value));
-            }
+            const results = new Array(chunks.length);
+            let next = 0,
+              failure;
+            const run = async () => {
+              try {
+                while (!failure && next < chunks.length) {
+                  await control.wait();
+                  if (failure || next >= chunks.length) return;
+                  const index = next++;
+                  results[index] = await summarize(chunks[index], index);
+                }
+              } catch (error) {
+                failure ||= error;
+              }
+            };
+            await Promise.all(
+              Array.from({ length: Math.min(chunks.length, local(options) ? 1 : 3) }, run),
+            );
+            if (failure) throw failure;
             return results;
           };
-          if (transcript.length <= 10000) {
-            markdown = await structuredMinutes(
-              options,
-              `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
-              language,
-              control.signal,
+          if (estimatedTokens(transcript) <= budget) {
+            try {
+              markdown = await structuredMinutes(
+                options,
+                `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
+                language,
+                control.signal,
+              );
+            } catch (error) {
+              if (control.signal.aborted || !summaryLimit(error)) throw error;
+            }
+          }
+          if (!markdown) {
+            const chunkBudget =
+              estimatedTokens(transcript) <= budget
+                ? Math.max(128, Math.ceil(estimatedTokens(transcript) / 2))
+                : budget;
+            const chunks = splitByBudget(transcript, chunkBudget);
+            worker.store.run?.(
+              'DELETE FROM summary_chunks WHERE meeting_id=? AND position>=?',
+              meeting.id,
+              chunks.length,
             );
-          } else {
-            const chunks = splitTranscript(transcript, 9000);
             let completed = 0;
-            const summaries = await mapChunks(chunks, async (chunk) => {
+            const summaries = await mapChunks(chunks, async (chunk, index) => {
               await control.wait();
-              const prompt = `${prompts.chunk[language] || prompts.chunk.en}\n\n${rules}\n\n<transcript>\n${chunk}\n</transcript>`;
-              const visible = new Set(
-                [...chunk.matchAll(/^(S[1-9]\d*) \[/gm)].map((match) => match[1]),
-              );
-              const summary = evidence.restrictSources(
-                await response({ ...options, max_tokens: 512 }, prompt, control.signal),
-                visible,
-              );
+              const previous = index ? chunks[index - 1].split('\n').at(-1) : '';
+              const contextLine = previous && estimatedTokens(previous) <= 120 ? previous : '';
+              const factPrompt = (part, previousLine) =>
+                `${prompts.chunk[language] || prompts.chunk.en}\nExtract a compact list of facts, including every decision, action, date and figure, explicit cause and open question. Use verbatim wording for decisions, tasks and quantities where possible. Preserve numbers exactly. End each factual bullet with its source marker [[action:S1]], [[decision:S2]], [[conclusion:S3]] or [[cause:S4]]. Use only IDs from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
+              const prompt = factPrompt(chunk, contextLine);
+              const fingerprint = createHash('sha256')
+                .update(
+                  JSON.stringify([
+                    2,
+                    language,
+                    options.provider,
+                    options.endpoint,
+                    options.format,
+                    options.model,
+                    options.model_id,
+                    context,
+                    options.max_tokens,
+                    options.temperature,
+                    options.top_k,
+                    options.top_p,
+                    overhead,
+                    prompt,
+                  ]),
+                )
+                .digest('hex');
+              let summary = worker.store.one?.(
+                'SELECT facts FROM summary_chunks WHERE meeting_id=? AND position=? AND fingerprint=?',
+                meeting.id,
+                index,
+                fingerprint,
+              )?.facts;
+              if (!summary) {
+                async function extract(part, previousLine, depth) {
+                  await control.wait();
+                  const visible = new Set([...part.matchAll(/^(S[1-9]\d*) \[/gm)].map((m) => m[1]));
+                  try {
+                    return evidence.restrictSources(
+                      await response(
+                        { ...options, max_tokens: Math.min(1536, options.max_tokens) },
+                        factPrompt(part, previousLine),
+                        control.signal,
+                      ),
+                      visible,
+                    );
+                  } catch (error) {
+                    if (control.signal.aborted || depth >= 3 || !summaryLimit(error)) throw error;
+                    const smaller = splitByBudget(
+                      part,
+                      Math.max(128, Math.ceil(estimatedTokens(part) / 2)),
+                    );
+                    if (smaller.length < 2) throw error;
+                    const facts = [];
+                    for (const piece of smaller) facts.push(await extract(piece, '', depth + 1));
+                    return facts.join('\n');
+                  }
+                }
+                summary = await extract(chunk, contextLine, 0);
+                await control.wait();
+                if (/\[\[(?:action|decision|cause|conclusion):S\d+/.test(summary))
+                  worker.store.run?.(
+                    'INSERT OR REPLACE INTO summary_chunks SELECT id,?,?,? FROM meetings WHERE id=? AND deleted_at IS NULL',
+                    index,
+                    fingerprint,
+                    summary,
+                    meeting.id,
+                  );
+              }
               progress(meeting.id, 60 + Math.floor((30 * ++completed) / chunks.length));
               return summary;
             });
             let blocks = summaries.join('\n\n---\n\n');
-            let rounds = 0;
-            while (blocks.length > 16000) {
-              if (++rounds > 8) throw new Error('Summary reduction exceeded eight rounds');
-              const reduced = await mapChunks(splitTranscript(blocks, 9000), async (chunk) => {
-                await control.wait();
-                return evidence.restrictSources(
-                  await response(
-                    { ...options, max_tokens: 512 },
-                    `${(prompts.merge[language] || prompts.merge.en).replaceAll('{title}', meeting.title)}\n${rules}\nCompress these partial summaries while retaining decisions, actions and source markers:\n${chunk}`,
-                    control.signal,
-                  ),
-                  new Set(
-                    [
-                      ...chunk.matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g),
-                    ].flatMap((match) => match[1].split(',').map((label) => label.trim())),
-                  ),
+            const writeMinutes = async (facts) =>
+              evidence.restrictSources(
+                await structuredMinutes(
+                  options,
+                  `${merge}\n\n${rules}\n\n<partial summaries>\n${facts}\n</partial summaries>`,
+                  language,
+                  control.signal,
+                ),
+                summaryReferences(facts),
+              );
+            if (estimatedTokens(blocks) > budget) {
+              try {
+                const reduced = await mapChunks(
+                  splitByBudget(blocks, budget, true),
+                  async (chunk) =>
+                    evidence.restrictSources(
+                      await response(
+                        { ...options, max_tokens: Math.min(1536, options.max_tokens) },
+                        `${rules}\nCompress these partial summaries into a shorter fact list, not a finished document. Preserve source markers for decisions, actions, causes and figures:\n${chunk}`,
+                        control.signal,
+                      ),
+                      summaryReferences(chunk),
+                    ),
                 );
-              });
-              const next = reduced.join('\n\n---\n\n');
-              if (next.length >= blocks.length)
-                throw new Error('Summary reduction did not converge');
-              blocks = next;
+                const candidate = reduced.join('\n\n---\n\n');
+                const retained = summaryReferences(candidate);
+                if (
+                  estimatedTokens(candidate) <= budget &&
+                  [...summaryReferences(blocks)].every((id) => retained.has(id))
+                )
+                  blocks = candidate;
+              } catch (error) {
+                if (control.signal.aborted || !summaryLimit(error)) throw error;
+              }
             }
-            const visible = new Set(
-              [
-                ...blocks.matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g),
-              ].flatMap((match) => match[1].split(',').map((label) => label.trim())),
-            );
-            markdown = evidence.restrictSources(
-              await structuredMinutes(
-                options,
-                `${(prompts.merge[language] || prompts.merge.en).replaceAll('{title}', meeting.title)}\n\n${rules}\n\n<partial summaries>\n${blocks}\n</partial summaries>`,
-                language,
-                control.signal,
-              ),
-              visible,
-            );
+            if (estimatedTokens(blocks) <= budget) {
+              try {
+                markdown = await writeMinutes(blocks);
+              } catch (error) {
+                if (control.signal.aborted || !summaryLimit(error)) throw error;
+              }
+            }
+            if (!markdown) {
+              // 成稿过长或压缩没有缩小时，按组写七章再拼接，不截去末尾的事实。
+              const parts = splitByBudget(
+                blocks,
+                Math.min(budget, Math.max(128, Math.ceil(estimatedTokens(blocks) / 2))),
+                true,
+              );
+              const writePart = async (part, depth = 0) => {
+                try {
+                  await control.wait();
+                  return [await writeMinutes(part)];
+                } catch (error) {
+                  if (control.signal.aborted || !summaryLimit(error) || depth >= 3) throw error;
+                  const smaller = splitByBudget(
+                    part,
+                    Math.max(128, Math.ceil(estimatedTokens(part) / 2)),
+                    true,
+                  );
+                  if (smaller.length < 2) throw error;
+                  const written = [];
+                  for (const piece of smaller) written.push(...(await writePart(piece, depth + 1)));
+                  return written;
+                }
+              };
+              const drafts = (await mapChunks(parts, (part) => writePart(part))).flat();
+              const bodies = headings.map(() => new Set());
+              for (const draft of drafts) {
+                const sections = [...draft.matchAll(/^##[ \t]+.+$/gm)];
+                sections.forEach((match, i) => {
+                  const body = draft
+                    .slice(match.index + match[0].length, sections[i + 1]?.index)
+                    .trim();
+                  if (body && !emptySummaryLine.test(body)) bodies[i].add(body);
+                });
+              }
+              markdown = headings
+                .map((heading, i) => '## ' + heading + '\n' + ([...bodies[i]].join('\n\n') || '—'))
+                .join('\n\n');
+            }
+            markdown = coverFacts(markdown, summaries, headings, segments);
           }
           await control.wait();
           if (!markdown)
@@ -328,6 +488,7 @@ function createLLMHandlers(worker) {
         const timed =
           meeting.transcript_revision == null ||
           (model?.stages?.includes('refined') && !model.retired);
+        markdown = verifyFactSources(markdown, segments);
         const [rendered, claims] = evidence.parseClaims(
           markdown,
           segments,
@@ -397,4 +558,4 @@ function createLLMHandlers(worker) {
   };
 }
 
-module.exports = { createLLMHandlers, splitTranscript, clean };
+module.exports = { createLLMHandlers, clean };

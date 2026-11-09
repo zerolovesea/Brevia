@@ -2637,15 +2637,6 @@ brevia-cause-tree {
   outline-offset: 8px;
   border-radius: 4px;
 }
-@container (min-width: 741px) {
-  #detail-view
-    .detail-layout
-    .final-transcript.has-cause-rail:has(.detail-summary-panel:not([hidden])):has(
-      brevia-cause-tree
-    ) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 @container (max-width: 740px) {
   #detail-view .detail-layout .final-transcript.has-cause-rail {
     grid-template-columns: minmax(0, 1fr);

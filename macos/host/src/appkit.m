@@ -204,7 +204,8 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
         if (web && window.visible && !NSEqualSizes(previous.size, frame.size)) {
             // WebContent 异常时也必须释放串行原生操作队列；迟到的快照不能再改窗口。
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                finish(nil, @"Window redraw timed out");
+                if (NSEqualRects(window.frame, frame)) finish(@YES, nil);
+                else finish(nil, @"Window redraw timed out");
             });
             [web takeSnapshotWithConfiguration:nil completionHandler:^(NSImage *image, NSError *error) {
                 (void)error;

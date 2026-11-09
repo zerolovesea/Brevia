@@ -284,6 +284,11 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
     end_ms: 1000,
     text: '测试 <script>alert(1)</script> 😀',
   });
+  for (const content of ['notes', 'mynotes', 'analysis'])
+    await assert.rejects(
+      handlers['meeting.export']({ meeting_id: 'export', content, format: 'json' }),
+      /Unsupported document export format/,
+    );
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.match(readArchive(docx.path).files['word/document.xml'], /&lt;script&gt;/);
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });

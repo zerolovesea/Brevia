@@ -1662,9 +1662,6 @@
     border-color: #767676;
     color: var(--color-text);
   }
-  .speaker-name-input {
-    @apply w-full border-b border-black bg-transparent py-0 text-[13px] outline-none;
-  }
   .segment-speaker {
     @apply w-full p-0 text-left text-[12px] leading-5 font-medium text-[#444444] hover:underline;
   }
@@ -3743,8 +3740,7 @@ select,
 .notes-find-pop input,
 .notes-table-fields input,
 .refine-menu-speakers input,
-.config-fields input,
-.speaker-name-input {
+.config-fields input {
   border-radius: 8px;
 }
 .settings-card,
@@ -4804,7 +4800,6 @@ html[data-theme="dark"] .meeting-title-rename {
 html[data-theme="dark"] .model-actions {
   border-color: #666666;
 }
-html[data-theme="dark"] .speaker-name-input,
 html[data-theme="dark"] .meeting-title-rename {
   color: #fff;
   border-color: #fff;

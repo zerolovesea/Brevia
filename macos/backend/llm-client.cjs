@@ -44,9 +44,10 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
     else headers.Authorization = `Bearer ${payload.api_key}`;
   }
   const body = { model: payload.model, messages: [{ role: 'user', content: prompt }] };
-  if (anthropic) body.max_tokens = 2048;
+  if (anthropic) body.max_tokens = payload.max_tokens ?? 2048;
   else {
     body.stream = false;
+    if (payload.max_tokens) body.max_tokens = payload.max_tokens;
     if (jsonMode) body.response_format = { type: 'json_object' };
   }
   const seconds = Number(payload.timeout ?? timeout);
@@ -58,21 +59,38 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
   try {
     data = await post(url, body, headers, combined);
   } catch (error) {
-    const missing =
-      /model.{0,80}?(?:not\s+(?:found|supported|exist)|does\s+not\s+exist|unsupported|unknown)|\bmodel_not_found\b|(?:unknown|no\s+such)\s+model\b|模型.{0,20}?(?:不存在|不支持)/i;
     if (
-      anthropic ||
-      body.model === body.model.toLowerCase() ||
-      !/LLM request failed \((400|404)\)/.test(error.message) ||
-      !missing.test(error.message)
-    )
-      throw error;
-    try {
-      data = await post(url, { ...body, model: body.model.toLowerCase() }, headers, combined);
-    } catch {
-      throw error;
+      !anthropic &&
+      body.max_tokens &&
+      /LLM request failed \(400\)/.test(error.message) &&
+      /max_tokens/.test(error.message) &&
+      /max_completion_tokens/.test(error.message)
+    ) {
+      body.max_completion_tokens = body.max_tokens;
+      delete body.max_tokens;
+      data = await post(url, body, headers, combined);
+    } else {
+      const missing =
+        /model.{0,80}?(?:not\s+(?:found|supported|exist)|does\s+not\s+exist|unsupported|unknown)|\bmodel_not_found\b|(?:unknown|no\s+such)\s+model\b|模型.{0,20}?(?:不存在|不支持)/i;
+      if (
+        anthropic ||
+        body.model === body.model.toLowerCase() ||
+        !/LLM request failed \((400|404)\)/.test(error.message) ||
+        !missing.test(error.message)
+      )
+        throw error;
+      try {
+        data = await post(url, { ...body, model: body.model.toLowerCase() }, headers, combined);
+      } catch {
+        throw error;
+      }
     }
   }
+  if (
+    payload.require_complete &&
+    (data.stop_reason === 'max_tokens' || data.choices?.[0]?.finish_reason === 'length')
+  )
+    throw new Error('Model response reached the output limit');
   const message = data.message?.content != null ? data.message : data.choices?.[0]?.message || {};
   const content = message.content ?? data.content;
   const calls = [...(message.tool_calls || [])];

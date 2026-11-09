@@ -127,3 +127,13 @@ test('note images keep their bytes across the native JSON bridge and reject malf
     await assert.rejects(request({ bytes: value }), /Invalid note image data/);
   assert.equal(pending.size, 0);
 });
+
+test('disposing audio terminates an in-flight meeting probe', async () => {
+  const { NativeAudio } = require('./native-audio.cjs');
+  const audio = new NativeAudio();
+  audio.binary = () => process.execPath;
+  const probe = audio.query('meeting-audio', { apps: {}, excluded: [] });
+  audio.dispose();
+  await assert.rejects(probe, { name: 'AbortError' });
+  assert.equal(audio.meetingProbe, null);
+});

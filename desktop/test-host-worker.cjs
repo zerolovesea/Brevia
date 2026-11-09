@@ -2,7 +2,9 @@
 const { EventEmitter } = require('node:events');
 const path = require('node:path');
 class TestAudio extends EventEmitter {
+  cancelMeetingProbe() {} // Test probes resolve immediately without starting a helper.
   async query(command) {
+    if (command === 'meeting-audio') return { active: [], audible: null };
     if (command === 'devices') return [{ deviceId: 'test-mic', label: 'Test microphone' }];
     if (command.startsWith('request-')) return true;
     return { microphone: 'granted', screen: 'granted', systemAudioSupported: true };

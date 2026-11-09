@@ -43,7 +43,7 @@ Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo su
 
 [![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement.
+Le compte rendu comporte sept rubriques. Le diagramme des causes permet de vérifier les citations et de réécouter les interventions. Le compte rendu et l’analyse sont exportables séparément. Filtrez la transcription par intervenant ou modifiez son nom pour toute la réunion.
 
 ### Notes IA
 
@@ -59,7 +59,7 @@ Enregistrez hors ligne, prenez des notes et marquez les moments importants. Dès
 
 ## Capsule de réunion
 
-Une fois la fenêtre principale réduite, la capsule flottante permet de suspendre ou d’arrêter l’enregistrement. Déployez-la pour lire les sous-titres bilingues en direct ou consulter vos notes.
+Réduisez la fenêtre principale pour contrôler l’enregistrement ou la lecture, consulter les sous-titres, modifier les notes et coller des images dans la capsule. En arrière-plan, Brevia peut proposer un enregistrement lorsqu’une application de réunion compatible émet du son.
 
 <img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Capsule avec sous-titres et commandes d’enregistrement" />
 

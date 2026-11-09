@@ -116,9 +116,9 @@ int main(void) {
             __block BOOL finished = NO;
             perform(@"window.setBounds", @{@"x":@100,@"y":@100,@"width":@464,@"height":@470}, window,
                 ^(id result, NSString *error) {
-                    (void)result;
                     assert(!finished);
-                    assert([error isEqual:@"Window redraw timed out"]);
+                    if (count.integerValue == 0) assert([error isEqual:@"Window redraw timed out"]);
+                    else assert(!error && [result boolValue]);
                     assert(web.alphaValue == 1 && window.contentView.subviews.count == 1);
                     finished = YES;
                 });

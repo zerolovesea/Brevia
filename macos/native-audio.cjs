@@ -17,18 +17,32 @@ class NativeAudio {
   }
   async query(command, ...args) {
     const probe = command === 'meeting-audio' && typeof args[0] === 'object';
-    const request = run(this.binary(), probe ? [command, '--stdin'] : [command, ...args], {
-      timeout: 120000,
-      maxBuffer: 256 * 1024,
-      windowsHide: true,
-    });
-    if (probe) {
-      request.child.stdin.on('error', () => {}); // execFile reports helper startup and exit errors.
-      request.child.stdin.end(JSON.stringify(args[0]));
+    const scan = probe ? new AbortController() : null;
+    if (scan) {
+      this.cancelMeetingProbe();
+      this.meetingProbe = scan;
     }
-    return JSON.parse((await request).stdout);
+    try {
+      const request = run(this.binary(), probe ? [command, '--stdin'] : [command, ...args], {
+        timeout: 120000,
+        maxBuffer: 256 * 1024,
+        windowsHide: true,
+        signal: scan?.signal,
+      });
+      if (probe) {
+        request.child.stdin.on('error', () => {}); // execFile reports helper startup and exit errors.
+        request.child.stdin.end(JSON.stringify(args[0]));
+      }
+      return JSON.parse((await request).stdout);
+    } finally {
+      if (scan && this.meetingProbe === scan) this.meetingProbe = null;
+    }
+  }
+  cancelMeetingProbe() {
+    this.meetingProbe?.abort();
   }
   async prepare({ mic, system, deviceId, preview }, append, publish) {
+    this.cancelMeetingProbe();
     if (this.session) throw new Error('Audio capture is busy');
     const args = ['capture'];
     if (mic) args.push('--mic');
@@ -127,6 +141,7 @@ class NativeAudio {
     }
   }
   dispose() {
+    this.cancelMeetingProbe();
     this.session?.proc.kill();
   }
 }

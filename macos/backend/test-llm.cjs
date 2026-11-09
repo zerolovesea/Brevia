@@ -6,7 +6,8 @@ const path = require('node:path');
 const os = require('node:os');
 const { once } = require('node:events');
 const { complete } = require('./llm-client.cjs');
-const { createLLMHandlers, splitTranscript } = require('./worker-llm.cjs');
+const { splitByBudget, estimatedTokens } = require('./summary-facts.cjs');
+const { createLLMHandlers } = require('./worker-llm.cjs');
 const { createAiNoteHandlers, parseSuggestions, similarity } = require('./worker-ai-note.cjs');
 const { TaskRegistry } = require('./tasks.cjs');
 
@@ -159,11 +160,22 @@ test('本地请求同一引擎的加载/生成不交错，翻译使用模型聊�
 
 test('长段落分块保留来源且小预算不会死循环', () => {
   const source = 'S1 [00:00] ' + '内容'.repeat(100);
-  const chunks = splitTranscript(source, 30);
-  assert.ok(chunks.every((chunk) => chunk.length <= 30 && chunk.startsWith('S1 [00:00] ')));
+  const chunks = splitByBudget(source, 128);
+  assert.ok(
+    chunks.every((chunk) => estimatedTokens(chunk) <= 128 && chunk.startsWith('S1 [00:00] ')),
+  );
   assert.equal(chunks.map((chunk) => chunk.slice(11)).join(''), '内容'.repeat(100));
-  assert.equal(splitTranscript(source, 4).join(''), source);
-  assert.throws(() => splitTranscript(source, 0));
+  const fact = '原话'.repeat(100) + ' [[cause:S1,S3]]';
+  const fragments = splitByBudget(fact, 128, true);
+  assert.ok(
+    fragments.length > 1 &&
+      fragments.every(
+        (piece) => estimatedTokens(piece) <= 128 && piece.endsWith(' [[cause:S1,S3]]'),
+      ),
+  );
+  assert.equal(fragments.map((piece) => piece.split(' [[')[0]).join(''), fact.split(' [[')[0]);
+  assert.throws(() => splitByBudget(source, 4));
+  assert.throws(() => splitByBudget(source, 0));
 });
 
 test(
@@ -498,6 +510,7 @@ test('长纪要覆盖第六段之后并拒绝空分段', async (t) => {
   const handler = createLLMHandlers(worker)['summary.generate'];
   const payload = {
     meeting_id: 'long',
+    context_size: 12000,
     endpoint,
     provider: 'openai',
     model: 'test',
@@ -516,6 +529,89 @@ test('长纪要覆盖第六段之后并拒绝空分段', async (t) => {
   empty = true;
   await assert.rejects(handler(payload), (e) => e.code === 'error.summary.empty_response');
   assert.equal(saves, 2);
+});
+
+test('归并膨胀、拒绝压缩或成稿截断时保留每组来源并只保存一份七章纪要', async (t) => {
+  const segments = Array.from({ length: 5 }, (_, index) => ({
+    id: 'seg' + (index + 1),
+    start_ms: index * 1000,
+    end_ms: (index + 1) * 1000,
+    speaker_name: 'A',
+    text: 'Item ' + (index + 1) + '. ' + '内容'.repeat(1500),
+  }));
+  let mode, reductions, writes;
+  const endpoint = await server(t, (_req, res, body) => {
+    const prompt = body.messages[0].content;
+    const map = [...prompt.matchAll(/^S(\d+) \[/gm)].map((m) => m[1]);
+    let result,
+      truncated = false;
+    if (map.length) {
+      result = map
+        .map((id) => '- Item ' + id + '. [[conclusion:S' + id + ']]' + '\n' + '细节。'.repeat(260))
+        .join('\n');
+    } else if (prompt.includes('Compress these partial summaries')) {
+      reductions++;
+      result = mode === 'expand' ? '冗长。'.repeat(2000) : '- Item 1. [[conclusion:S1]]';
+      truncated = mode === 'limit';
+    } else {
+      const ids = [...prompt.matchAll(/Item (\d+)\./g)].map((m) => m[1]);
+      result = completeMinutes(
+        ids.length
+          ? ids.map((id) => '- Item ' + id + '. [[conclusion:S' + id + ']]').join('\n')
+          : '—',
+      ).replaceAll('Not discussed.', '—');
+      // 始终要求跨组的引用，检查每组自己的证据边界。
+      result = result.replace(
+        '## Key Conclusions\n—',
+        '## Key Conclusions\n- Unsupported [[conclusion:S99]]',
+      );
+      writes++;
+      if (mode === 'final limit' && writes === 1) truncated = true;
+    }
+    res.end(
+      JSON.stringify({
+        choices: [{ finish_reason: truncated ? 'length' : 'stop', message: { content: result } }],
+      }),
+    );
+  });
+  const meeting = { id: 'bounded', title: 'Meeting', segments };
+  let saved;
+  const worker = {
+    tasks: new TaskRegistry(),
+    settings: { llm: { timeout_seconds: 3 } },
+    models: { catalog: new Map() },
+    emit() {},
+    store: {
+      getMeeting: () => meeting,
+      meetingExists: () => true,
+      saveSummary(id, data) {
+        saved = data;
+        return false;
+      },
+    },
+  };
+  for (mode of ['expand', 'limit', 'final limit']) {
+    saved = null;
+    reductions = writes = 0;
+    await createLLMHandlers(worker)['summary.generate']({
+      meeting_id: meeting.id,
+      context_size: 8192,
+      endpoint,
+      model: 'test',
+      provider: 'openai',
+      consent: true,
+    });
+    assert.ok(reductions > 0 && writes > 1);
+    assert.equal((saved.markdown.match(/^## /gm) || []).length, 7);
+    for (let i = 1; i <= segments.length; i++)
+      assert.ok(
+        saved.claims.some(
+          (c) => c.text === 'Item ' + i + '.' && c.sources.some((s) => s.segment_id === 'seg' + i),
+        ),
+        'lost ' + i,
+      );
+    assert.ok(saved.claims.filter((c) => c.text === 'Unsupported').every((c) => !c.sources.length));
+  }
 });
 
 test('纪要在线最多三路并行，本地串行，乱序完成仍按原文合并', { timeout: 5000 }, async (t) => {
@@ -573,6 +669,7 @@ test('纪要在线最多三路并行，本地串行，乱序完成仍按原文�
     };
     await createLLMHandlers(worker)['summary.generate']({
       meeting_id: meeting.id,
+      context_size: 12000,
       provider,
       model: 'test',
       endpoint,
@@ -636,4 +733,158 @@ test('并行纪要失败或取消后不启动下一批、不保存部分结果',
     assert.equal(calls, 3);
     assert.equal(saved, false);
   }
+});
+
+test('分块缓存跨重启和模板复用，单段变更与截断重试独立，覆盖同段多项事实', async (t) => {
+  const { Store } = require('./store.cjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-chunk-cache-'));
+  let store = new Store(dir);
+  t.after(() => {
+    store.db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const meeting = store.createMeeting({
+    title: 'Review',
+    language: 'en',
+    refined_model_id: 'test',
+  });
+  for (let i = 1; i <= 4; i++)
+    store.saveSegment({
+      meeting_id: meeting.id,
+      segment_id: 'seg' + i,
+      start_ms: i * 1000,
+      end_ms: i * 1000 + 800,
+      text: 'Review budget. Send report. 15 people. ' + 'x'.repeat(8500),
+    });
+  let calls = [],
+    fail = true,
+    truncate = false;
+  const endpoint = await server(t, (_req, res, body) => {
+    const prompt = body.messages[0].content;
+    const id = /^S(\d+) \[/m.exec(prompt)?.[1];
+    calls.push(id || 'final');
+    if (id === '4' && fail) {
+      res.statusCode = 503;
+      return res.end('{}');
+    }
+    const limited = truncate && id === '4';
+    if (limited) truncate = false;
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: limited ? 'length' : 'stop',
+            message: {
+              content: id
+                ? '- Review budget. [[action:S' +
+                  id +
+                  ']]\n- Send report. [[action:S' +
+                  id +
+                  ']]\n- 5 people. [[conclusion:S' +
+                  id +
+                  ']]'
+                : completeMinutes('Summary'),
+            },
+          },
+        ],
+      }),
+    );
+  });
+  const run = (template = 'general') =>
+    createLLMHandlers({
+      tasks: new TaskRegistry(),
+      store,
+      models: { catalog: new Map() },
+      settings: { llm: {} },
+      emit() {},
+    })['summary.generate']({
+      meeting_id: meeting.id,
+      provider: 'openai',
+      model: 'test',
+      endpoint,
+      consent: true,
+      context_size: 12000,
+      template,
+    });
+  await assert.rejects(run(), /503/);
+  store.db.close();
+  store = new Store(dir);
+  calls = [];
+  fail = false;
+  truncate = true;
+  const result = await run();
+  assert.equal(calls.at(-1), 'final');
+  assert.ok(calls.length >= 4 && calls.slice(0, -1).every((id) => id === '4'));
+  assert.match(result.markdown, /Review budget/);
+  assert.match(result.markdown, /Send report/);
+  assert.doesNotMatch(result.markdown, /5 people/);
+  calls = [];
+  await run('review');
+  assert.deepEqual(calls, ['final']);
+  store.saveSegment({
+    meeting_id: meeting.id,
+    segment_id: 'seg2',
+    start_ms: 2000,
+    end_ms: 2800,
+    text: 'Review budget. Send report. ' + 'z'.repeat(8500),
+  });
+  calls = [];
+  await run();
+  assert.deepEqual(calls, ['2', 'final']);
+});
+
+test('纯数字事实不变为原因，有原话解释的数字原因保留', () => {
+  const { verifyFactSources } = require('./summary-facts.cjs');
+  const rows = [
+    { text: '试点中有20家客户，失败率是8%。' },
+    { text: '失败率升高，因为客户端超时只有三秒。' },
+  ];
+  assert.equal(
+    verifyFactSources('- 试点中有20家客户 [[cause:S1,S2]]', rows),
+    '- 试点中有20家客户 [[conclusion:S1]]',
+  );
+  assert.equal(
+    verifyFactSources('- 客户端超时只有3秒 [[cause:S2]]', rows),
+    '- 客户端超时只有3秒 [[cause:S2]]',
+  );
+});
+
+test('只在兼容端点明确要求时换用 max_completion_tokens，截断结果不作为纪要', async (t) => {
+  const requests = [];
+  const endpoint = await server(t, (_req, res, body) => {
+    requests.push(body);
+    if (body.max_tokens) {
+      res.statusCode = 400;
+      return res.end('max_tokens unsupported; use max_completion_tokens');
+    }
+    res.end(
+      JSON.stringify({
+        choices: [{ finish_reason: 'length', message: { content: 'partial answer' } }],
+      }),
+    );
+  });
+  await assert.rejects(
+    complete({ endpoint, model: 'test', max_tokens: 512, require_complete: true }, 'test'),
+    /output limit/,
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].max_completion_tokens, 512);
+  assert.equal(requests[1].max_tokens, undefined);
+});
+
+test('补写只保留逐字成立的整句，不把否定改成决定，替换空章占位', () => {
+  const { coverFacts } = require('./summary-facts.cjs');
+  const { SUMMARY_HEADINGS } = require('./meeting-evidence.cjs');
+  const md = completeMinutes('Meeting').replaceAll(
+    'Not discussed.',
+    'No action items were mentioned.',
+  );
+  const corrected = coverFacts(
+    md,
+    ['- 批准上线。 [[decision:S1]]\n- 提交预算。 [[action:S2]]'],
+    SUMMARY_HEADINGS.en,
+    [{ text: '并未批准上线。' }, { text: '提交预算。' }],
+  );
+  assert.doesNotMatch(corrected, /批准上线/);
+  assert.match(corrected, /## Action Items\n- 提交预算。 \[\[action:S2\]\]/);
 });

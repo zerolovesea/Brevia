@@ -410,6 +410,16 @@ const exportIds = [
   '7b7d84f6-6f54-49d8-8c44-99f59cd98a03',
 ];
 const exportDirectory = path.join(tmpdir(), 'brevia-exports');
+const copyExportFunction = (copyFile) =>
+  runInNewContext(
+    '(' +
+      mainSource.slice(
+        mainSource.indexOf('async function copyExportIntoDirectory('),
+        mainSource.indexOf('async function prepareExport('),
+      ) +
+      ')',
+    { path, constants, copyFile },
+  );
 let batchExportHandler;
 let exportCanceled = false;
 const exportCopies = [];
@@ -428,17 +438,20 @@ runInNewContext(
     dialog: {
       showOpenDialog: async () => ({ canceled: exportCanceled, filePaths: [exportDirectory] }),
     },
-    existsSync: (file) =>
-      file === path.join(exportDirectory, 'transcript.md') ||
-      exportCopies.some(({ destination }) => destination === file),
     prepareExport: async (payload) => {
       exportPrepared.push(payload);
       if (payload.meeting_id === exportIds[1]) throw new Error('recording unavailable');
       return { path: '/source/transcript.md' };
     },
-    copyFile: async (source, destination) => {
+    copyExportIntoDirectory: copyExportFunction(async (source, destination, flags) => {
+      assert.equal(flags, constants.COPYFILE_EXCL);
+      if (
+        destination === path.join(exportDirectory, 'transcript.md') ||
+        exportCopies.some((f) => f.destination === destination)
+      )
+        throw Object.assign(new Error('exists'), { code: 'EEXIST' });
       exportCopies.push({ source, destination });
-    },
+    }),
   },
 );
 const exportResult = JSON.parse(
@@ -490,8 +503,7 @@ for (const content of ['mynotes', 'notes', 'analysis']) {
       {
         z,
         path,
-        constants,
-        copyFile,
+        copyExportIntoDirectory: copyExportFunction(copyFile),
         rm,
         handleIpc: (_, handler) => (save = handler),
         dialog: { showOpenDialog: async () => ({ filePaths: [dest] }) },

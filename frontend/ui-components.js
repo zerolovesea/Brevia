@@ -452,6 +452,7 @@ function renderTranscriptSegment({
   translationStale = false,
   translationPending = false,
   translationAvailable = true,
+  historical = false,
   replacementHighlight = '',
   backlinks = '',
 }) {
@@ -461,7 +462,7 @@ function renderTranscriptSegment({
       : '';
   const overlap =
     showSpeaker && speaker.overlapNames?.length
-      ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>`
+      ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.map(formatSpeakerName).join('、'))}</small>`
       : '';
   // 人工编辑态下原文本正在被改写，依赖文本的信号徽标会立刻过期，因此只在只读态显示。
   const signalBadge =
@@ -492,10 +493,10 @@ function renderTranscriptSegment({
       : []),
     ...(!live && segmentId && translationAvailable ? [['translate', 'translate', '翻译']] : []),
     ...(live || !showSpeaker ? [['edit', 'edit', '编辑']] : []),
-    ['speaker', 'person', '标记说话人'],
+    ...(!historical ? [['speaker', 'person', '标记说话人']] : []),
     ['note', 'notes', '加入笔记'],
     ['highlight', 'bookmark', '重点'],
-    ['profile', 'waveform', '添加到声纹库'],
+    ...(!historical ? [['profile', 'waveform', '添加到声纹库']] : []),
   ];
   const tools =
     contextSegmentId && !textEditable
@@ -508,7 +509,9 @@ function renderTranscriptSegment({
             '',
           )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
       : '';
-  const liveName = live ? escapeHtml(showSpeaker && speaker.name ? speaker.name : t('说话人')) : '';
+  const liveName = live
+    ? escapeHtml(showSpeaker && speaker.name ? formatSpeakerName(speaker) : t('说话人'))
+    : '';
   const identity = live
     ? `${renderSpeakerAvatar(showSpeaker ? speaker : '', palette)}${contextSegmentId ? `<button type="button" class="segment-speaker" data-live-speaker title="${escapeHtml(t('标记说话人'))}">${liveName}</button>` : `<span class="segment-speaker">${liveName}</span>`}`
     : showSpeaker && speaker.name
@@ -1862,7 +1865,8 @@ function renderTranscriptSpeakerFilter(d) {
     d.transcriptSpeaker &&
     detailTranscriptEntries(d).find((item) => item.speaker?.id === d.transcriptSpeaker);
   if (!entry) return '';
-  return `<button class="transcript-speaker-filter" type="button" data-clear-speaker-filter title="${escapeHtml(t('清除说话人筛选'))}" aria-label="${escapeHtml(t('清除说话人筛选') + ' · ' + entry.speaker.name)}">${interfaceIcon('person')}${escapeHtml(entry.speaker.name)}${interfaceIcon('close')}</button>`;
+  const name = formatSpeakerName(entry.speaker);
+  return `<button class="transcript-speaker-filter" type="button" data-clear-speaker-filter title="${escapeHtml(t('清除说话人筛选'))}" aria-label="${escapeHtml(t('清除说话人筛选') + ' · ' + name)}">${interfaceIcon('person')}${escapeHtml(name)}${interfaceIcon('close')}</button>`;
 }
 /** 文档导航与操作栏共用更新入口，切换文档时保留编辑器和草稿。 */
 function renderDetailTabbar() {
@@ -1969,11 +1973,13 @@ function renderMeetingDetail() {
   );
   const palette =
     currentMeetingDetail?.id === livePaletteMeetingId ? liveSpeakerPalette : new Map();
-  for (const person of currentMeetingDetail?.speakers || [])
-    speakerColor(person.id || person.name, palette);
   const entries = detailTranscriptEntries(d);
-  if (d.transcriptSpeaker && !entries.some((entry) => entry.speaker?.id === d.transcriptSpeaker))
-    d.transcriptSpeaker = '';
+  const participants = new Map();
+  for (const { speaker } of entries) {
+    if (speaker?.id && !participants.has(speaker.id)) participants.set(speaker.id, speaker);
+  }
+  for (const id of participants.keys()) speakerColor(id, palette);
+  if (!participants.has(d.transcriptSpeaker)) d.transcriptSpeaker = '';
   const visibleEntries = d.transcriptSpeaker
     ? entries.filter((entry) => entry.speaker?.id === d.transcriptSpeaker)
     : entries;
@@ -1990,6 +1996,7 @@ function renderMeetingDetail() {
         text: draft[entry.segmentId] ?? entry.text,
         backlinks: d.transcriptEditing ? '' : evidenceLinks.get(entry.segmentId) || '',
         textEditable: Boolean(d.transcriptEditing),
+        historical: hasRefined && d.transcriptVersion === 'original',
         textModified: Boolean(
           d.transcriptEditing &&
             draft[entry.segmentId] !== undefined &&
@@ -2064,7 +2071,7 @@ function renderMeetingDetail() {
     ...d.summary,
     editing: d.summaryEditing,
     saveState: d.summarySaveState,
-    participants: currentMeetingDetail?.speakers || [],
+    participants: [...participants.values()],
     palette,
   });
   syncDetailSummaryPanel();

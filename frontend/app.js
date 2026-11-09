@@ -3098,7 +3098,7 @@ function markdownToPlainText(markdown) {
 }
 function shareTranscriptText() {
   return (uiData.detail.transcript || [])
-    .map((row) => `[${row.time}] ${row.speaker.name}: ${row.text}`)
+    .map((row) => `[${row.time}] ${formatSpeakerName(row.speaker)}: ${row.text}`)
     .join('\n');
 }
 // mailto: 正文经 URL 编码后 CJK 字符会膨胀约 9 倍;邮件客户端与主进程都对 URL 长度有上限。
@@ -9355,7 +9355,12 @@ function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   const personItem = person
     ? `<button type="button" data-context-person="${escapeHtml(person.dataset.speakerMenu)}" aria-haspopup="menu">${interfaceIcon('person')}<span>${escapeHtml(t('说话人') + ' · ' + person.title)}</span>${interfaceIcon('chevron-right')}</button>`
     : '';
-  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('waveform')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>${personItem}${typeof openCorrection === 'function' ? `<button type="button" data-context-correction>${interfaceIcon('search')}<span>${t('替换此词…')}</span></button>` : ''}`;
+  const canMark = !(
+    activeView === 'detail' &&
+    uiData.detail.hasRefined &&
+    uiData.detail.transcriptVersion === 'original'
+  );
+  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button>${canMark ? `<button type="button" data-open-segment-profile-menu>${interfaceIcon('waveform')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>` : ''}${personItem}${canMark && typeof openCorrection === 'function' ? `<button type="button" data-context-correction>${interfaceIcon('search')}<span>${t('替换此词…')}</span></button>` : ''}`;
   segmentContextMenu.dataset.correctionQuery = source?.contains(window.getSelection()?.anchorNode)
     ? window.getSelection().toString()
     : '';
@@ -9446,10 +9451,14 @@ document.addEventListener('click', (event) => {
 });
 /** 根据会议与段落 id 解析字幕元数据（live 视图从内存映射取，详情页从后端段落取）。@param {string} meetingId 会议 id。@param {string} segmentId 段落 id。@returns {{text:string, start_ms:number, speaker:string}|null} */
 function segmentInfoFor(meetingId, segmentId) {
-  if (meetingId === breviaClient?.state.meeting?.id) {
+  if (activeView === 'live' && meetingId === breviaClient?.state.meeting?.id) {
     return liveSegmentData.get(segmentId) || null;
   }
-  const segment = currentMeetingDetail?.segments?.find((item) => item.id === segmentId);
+  const segment = detailSegmentFor(
+    meetingId,
+    segmentId,
+    uiData.detail.hasRefined && uiData.detail.transcriptVersion === 'original',
+  );
   return segment
     ? {
         text: segment.text,
@@ -9461,12 +9470,15 @@ function segmentInfoFor(meetingId, segmentId) {
 }
 function detailSegmentFor(meetingId, segmentId, original = false) {
   if (currentMeetingDetail?.id !== meetingId) return;
-  for (const key of original
-    ? ['original_segments', 'current_segments', 'segments']
-    : ['current_segments', 'segments']) {
-    const segment = currentMeetingDetail[key]?.find((item) => item.id === segmentId);
-    if (segment) return segment;
+  if (original) {
+    const originalSegments =
+      currentMeetingDetail.original_segments ||
+      currentMeetingDetail.segments?.filter((item) => item.version === 'live');
+    return originalSegments?.find((item) => item.id === segmentId);
   }
+  return (currentMeetingDetail.current_segments || currentMeetingDetail.segments)?.find(
+    (item) => item.id === segmentId,
+  );
 }
 let segmentPlayback;
 let segmentPlaybackTimer;
@@ -10080,12 +10092,9 @@ function openSpeakerMenu(anchor, trigger = anchor) {
   if (speakerMenu.matches(':popover-open')) speakerMenu.hidePopover();
   const id = anchor.dataset.speakerMenu;
   const d = uiData.detail;
-  const visible = detailTranscriptEntries(d).some((entry) => entry.speaker?.id === id);
-  const current = d.transcript?.find((entry) => entry.speaker?.id === id);
-  const original = d.originalTranscript?.some((entry) => entry.speaker?.id === id);
-  const canFilter = visible || (!d.transcriptEditing && (current || original));
+  const canFilter = detailTranscriptEntries(d).some((entry) => entry.speaker?.id === id);
   const canRename =
-    current &&
+    canFilter &&
     d.transcriptEditable &&
     !d.transcriptEditing &&
     d.refineState !== 'refining' &&
@@ -10144,10 +10153,6 @@ speakerMenu.addEventListener('click', (event) => {
   }
   closeMeetingPopovers();
   if (!switchDetailDocument('transcript')) return;
-  if (!detailTranscriptEntries(d).some((entry) => entry.speaker?.id === id))
-    d.transcriptVersion = d.transcript.some((entry) => entry.speaker?.id === id)
-      ? 'refined'
-      : 'original';
   d.transcriptSpeaker = id;
   renderMeetingDetail();
   finalTranscript.querySelector('[data-clear-speaker-filter]')?.focus({ preventScroll: true });
@@ -11557,13 +11562,7 @@ if (window.brevia) {
   window.brevia.on('transcript.refined', (payload) => {
     if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
     const data = liveSegmentData.get(payload.segment_id);
-    const element = liveSegments.get(payload.segment_id);
-    if (
-      !data ||
-      !element ||
-      Number(payload.revision) <= data.revision ||
-      element.querySelector('.speaker-name-input')
-    )
+    if (!data || !liveSegments.has(payload.segment_id) || Number(payload.revision) <= data.revision)
       return;
     updateLiveSpeaker(payload.meeting_id, { ...payload, id: payload.segment_id });
   });

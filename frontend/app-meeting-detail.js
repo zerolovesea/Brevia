@@ -10,12 +10,10 @@ function renderSegmentData(segment, speakerNames) {
     endSeconds: segment.end_ms / 1000,
     speaker: {
       id: segment.speaker,
-      name: formatSpeakerName(segment.speaker_name),
+      name: speakerNames.get(segment.speaker) || segment.speaker_name || segment.speaker,
       overlapNames:
         overlapSpeakers.length > 1
-          ? overlapSpeakers.map((speaker) =>
-              formatSpeakerName(speakerNames.get(speaker) || speaker),
-            )
+          ? overlapSpeakers.map((speaker) => speakerNames.get(speaker) || speaker)
           : [],
     },
     text: segment.text,
@@ -118,12 +116,6 @@ function applyBackendDetail(meeting) {
   uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, speakerNames));
   uiData.detail.refinedTranscript =
     revision === null ? [] : ordered.map((segment) => renderSegmentData(segment, speakerNames));
-  uiData.detail.refinedFulltext =
-    revision === null
-      ? ''
-      : ordered
-          .map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`)
-          .join('\n\n');
   uiData.detail.refinedMode =
     revision === null
       ? null

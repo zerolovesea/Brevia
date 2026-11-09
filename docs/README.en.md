@@ -39,7 +39,7 @@ The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **
 
 ### Minutes and fishbone diagrams
 
-Edit the meeting summary and explore the reasons behind each conclusion. Select a timestamp to hear the original exchange.
+Generate minutes with seven sections. Use the cause diagram to check transcript quotes and replay the recording. Export the minutes and cause analysis separately. Filter the transcript by speaker or rename a speaker throughout one meeting.
 
 [![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
@@ -57,7 +57,7 @@ On the same local network, scan the QR code under **Settings → Device Connecti
 
 ## Meeting capsule
 
-With the main window tucked away, pause or stop recording from the floating capsule. Expand it to read live bilingual captions or check your notes.
+Minimize the main window to control recording or playback, read captions, edit notes, and paste images in the capsule. When Brevia is in the background, audio from a supported meeting app can trigger a recording reminder.
 
 <img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Expanded meeting capsule with bilingual captions, a Notes tab and recording controls" />
 

@@ -7830,6 +7830,7 @@ const liveElement = () => ({
   remove() {},
 });
 const liveCacheContext = {
+  activeView: 'live',
   segmentSpeakerDraft: null,
   correctionDraft: null,
   correctionPanel: { hidden: true },

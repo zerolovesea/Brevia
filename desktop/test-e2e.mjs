@@ -1710,7 +1710,10 @@ try {
         const participants=Array.from({length:50},(_,i)=>({id:'participant-'+i,name:i===0?'Alexandria Constantinopoulos '.repeat(3):'Participant <'+i+'> 名称'}));
         for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
           applyLanguage(code);applyTheme(appearance);
-          currentMeetingDetail={...meeting,speakers:participants};uiData.detail.refinedMode='timestamps';renderMeetingDetail();
+          currentMeetingDetail={...meeting,speakers:participants.slice(0,1)};
+          const original=uiData.detail.transcript[0];
+          uiData.detail.refinedTranscript=participants.map((speaker,i)=>({...original,segmentId:i===0?original.segmentId:'roster-'+i,speaker}));
+          uiData.detail.refinedMode='timestamps';renderMeetingDetail();
           await new Promise(r=>setTimeout(r,180));
           document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
           const row=finalTranscript.querySelector('.segment'),speaker=row.querySelector('.segment-speaker'),copy=row.querySelector('.segment-copy');
@@ -2194,7 +2197,7 @@ try {
       const panel=reading.querySelector('[data-detail-panel="'+scope+'"]');
       const a=panel.getBoundingClientRect(),b=rail.getBoundingClientRect();
       if(getComputedStyle(reading).display!=='grid'||!rail.checkVisibility()||b.left<a.right-1||Math.abs(a.top-b.top)>1)throw Error(scope+' cause rail not beside document: '+JSON.stringify({panel:a,rail:b}));
-      if(scope==='summary' && Math.abs(a.width-b.width)>2)throw Error('minutes and analysis must have equal widths');
+      if(scope==='summary' && Math.abs(b.width-Math.max(290,(a.width+b.width)*0.36))>2)throw Error('cause analysis must use the narrower column');
       if(rail.querySelectorAll('brevia-cause-tree').length!==1||rail.querySelectorAll('.cause-tree-spine').length!==1)throw Error('disconnected cause trees');
     }
     const body=document.querySelector('.summary-body');
@@ -3215,9 +3218,18 @@ try {
       const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-content.left)<2 && Math.abs(player.right-content.right)<2;
       const threeTabs=detail.querySelectorAll('[role=tab]').length===3 && detailActiveTab==='summary';
       detail.querySelector('[data-detail-tab="transcript"]').click();
-      applyBackendDetail({...meeting,transcript_revision:0,original_segments:[{...meeting.segments[0],version:'live',text:'原始稿切换测试'}]});
+      const raw=Array.from({length:78},(_,index)=>({...meeting.segments[0],id:index===0?meeting.segments[0].id:'raw-'+index,version:'live',speaker:'raw-'+index,speaker_name:'Raw '+index,text:'原始稿切换测试 '+index}));
+      const refined=Array.from({length:9},(_,index)=>({...meeting.segments[0],id:index===0?meeting.segments[0].id:'refined-'+index,version:'postprocess',speaker:'spk-'+(index+1),speaker_name:null,text:'精修内容 '+index}));
+      const named={id:'spk-1',name:'参会人'};
+      applyBackendDetail({...meeting,speakers:[named],transcript_revision:0,transcript_model_id:'funasr-nano-mlx',current_segments:refined,segments:[...raw,...refined]});
+      const roster=()=>[...detail.querySelectorAll('.summary-participant-list [data-speaker-menu]')];
+      if(roster().length!==9 || roster()[0].textContent!=='参会人'||!roster().at(-1).textContent.includes('9'))throw Error('latest transcript lost unregistered participants or included obsolete speakers');
       detail.querySelector('[data-transcript-version="original"]').click();
       const rawAvailable=!detail.querySelector('[data-transcript-version="original"]').disabled && uiData.detail.transcriptVersion==='original' && detail.querySelector('.transcript-body').textContent.includes('原始稿切换测试');
+      if(roster().length!==78 || roster()[0].dataset.speakerMenu!=='raw-0' || detail.querySelector('.segment-tools [data-segment-tool="speaker"],.segment-tools [data-segment-tool="profile"]'))throw Error('historical transcript has wrong participants or writable identity');
+      if(segmentInfoFor(meeting.id,raw[0].id)?.text!==raw[0].text || detailSegmentFor(meeting.id,raw[0].id,true)?.speaker!==raw[0].speaker)throw Error('overlapping segment IDs resolve to the wrong version');
+      detail.querySelector('[data-transcript-version="refined"]').click();
+      if(roster().length!==9 || segmentInfoFor(meeting.id,refined[0].id)?.text!==refined[0].text)throw Error('refined transcript did not restore participants and current text');
       applyBackendDetail(meeting);
       const search=detail.querySelector('[data-transcript-search]');
       search.value='__no_matching_segment__'; search.dispatchEvent(new Event('input',{bubbles:true}));

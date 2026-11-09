@@ -88,6 +88,8 @@ class DesktopController {
     this.pending = new Map();
     this.override = null;
     this.expanded = false;
+    this.targetExpanded = false;
+    this.layoutVersion = 0;
     this.ready = false;
     this.bounds = null;
     this.shortcuts = new Map();
@@ -152,6 +154,7 @@ class DesktopController {
       this.updatingShortcuts = false;
     }
     if (Object.hasOwn(payload, 'meetingApps')) {
+      this.nativeAudio?.cancelMeetingProbe();
       for (const { id } of previous.meetingApps) {
         if (next.meetingApps.some((app) => app.id === id)) continue;
         const source = 'app:' + id;
@@ -245,6 +248,7 @@ class DesktopController {
     this.mainBlurred = false;
     window.on('focus', () => {
       this.mainBlurred = false;
+      this.nativeAudio?.cancelMeetingProbe();
       this.prompt?.destroy();
     });
     window.on('blur', () => {
@@ -334,6 +338,7 @@ class DesktopController {
       const timer = setTimeout(() => prompt.destroy(), 30000);
       await prompt.loadFile(path.join(this.root, 'frontend', 'meeting-prompt.html'));
     } catch (error) {
+      if (error.name === 'AbortError') return;
       this.prompt?.destroy();
       // A missing device or revoked permission must never interrupt the foreground app.
       console.warn('Meeting detection:', error.message);
@@ -382,7 +387,7 @@ class DesktopController {
       state.elapsed !== this.state.elapsed;
     if (changed) {
       this.override = null;
-      this.expanded = false;
+      if (this.expanded || this.targetExpanded) void this.expand(false).catch(this.reportError);
     }
     state.captions ??= changed ? [] : this.state?.captions || [];
     this.state = state;
@@ -433,7 +438,10 @@ class DesktopController {
   }
 
   sync(rebuildMenu = true) {
-    if (this.prompt && !this.canPrompt()) this.prompt.destroy();
+    if (!this.canPrompt()) {
+      this.nativeAudio?.cancelMeetingProbe();
+      this.prompt?.destroy();
+    }
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     try {
       if (this.preferences.trayVisibility === 'always' || this.background()) {
@@ -647,7 +655,7 @@ class DesktopController {
         backgroundThrottling: false,
       },
     }));
-    this.layout(false);
+    void this.layout(false).catch(this.reportError);
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -660,6 +668,7 @@ class DesktopController {
     });
     window.on('closed', () => {
       this.capsule = null;
+      this.expanded = this.targetExpanded = false;
       this.ready = false;
     });
     void window.loadFile(path.join(this.root, 'frontend', 'recording-capsule.html'));
@@ -680,8 +689,9 @@ class DesktopController {
     this.capsule.webContents.send('brevia:event', { type: 'desktop.state', payload });
   }
 
-  layout(expanded) {
-    if (!this.capsule || this.capsule.isDestroyed()) return;
+  async layout(expanded) {
+    const capsule = this.capsule;
+    if (!capsule || capsule.isDestroyed()) return;
     const display = this.screen.getDisplayMatching(this.bounds || this.mainWindow.getBounds());
     const area = display.workArea;
     const pillWidth = Math.min(344, area.width);
@@ -705,15 +715,24 @@ class DesktopController {
     this.above = pillY + Math.min(470, area.height) > area.y + area.height;
     const y = this.above ? Math.max(area.y, pillY + 80 - height) : pillY;
     this.bounds = { x: pillX, y: pillY, width: pillWidth, height: 80 };
-    this.expanded = expanded;
-    return this.capsule.setBounds({ x, y, width, height });
+    this.targetExpanded = expanded;
+    const version = ++this.layoutVersion;
+    try {
+      await capsule.setBounds({ x, y, width, height });
+    } catch (error) {
+      if (this.capsule === capsule && this.layoutVersion === version)
+        this.targetExpanded = this.expanded;
+      throw error;
+    }
+    // Native bounds requests complete in order; the next request may still fail.
+    if (this.capsule === capsule) this.expanded = expanded;
   }
 
   async move({ dx, dy }) {
     if (!this.bounds) return;
     this.bounds.x += dx;
     this.bounds.y += dy;
-    await this.layout(this.expanded);
+    await this.layout(this.targetExpanded);
     this.sendState(false);
   }
 
@@ -723,6 +742,7 @@ class DesktopController {
   }
   destroy() {
     clearInterval(this.meetingTimer);
+    this.nativeAudio?.cancelMeetingProbe();
     this.prompt?.destroy();
     this.editShortcuts(false);
     for (const binding of this.shortcuts.values()) this.globalShortcut.unregister(binding.value);

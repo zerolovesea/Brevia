@@ -1228,6 +1228,20 @@ async function writeAiAssistConfig(config) {
   );
 }
 
+async function copyExportIntoDirectory(source, directory) {
+  const { name, ext, base } = path.parse(source);
+  for (let n = 1; n <= 10000; n++) {
+    const target = path.join(directory, n === 1 ? base : `${name}-${n}${ext}`);
+    try {
+      await copyFile(source, target, constants.COPYFILE_EXCL);
+      return target;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  throw new Error('Too many exports with the same name');
+}
+
 async function prepareExport(value) {
   const exported = await worker.request('meeting.export', value);
   if (!exported.print_pdf) return exported;
@@ -2007,6 +2021,7 @@ function registerIpc() {
     const value = id
       .extend({
         ...llmRequest.shape,
+        context_size: z.number().int().min(1024).max(65536).optional(),
         template: summaryTemplate.optional(),
         language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'),
         consent: z.literal(true),
@@ -2151,11 +2166,7 @@ function registerIpc() {
           format: value.format,
           ...(value.filename_prefix ? { filename_prefix: value.filename_prefix } : {}),
         });
-        const parsed = path.parse(exported.path);
-        let target = path.join(destination.filePaths[0], parsed.base);
-        for (let copy = 2; existsSync(target); copy += 1)
-          target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
-        await copyFile(exported.path, target);
+        const target = await copyExportIntoDirectory(exported.path, destination.filePaths[0]);
         paths.push(target);
         results.push({ meeting_id: meetingId, path: target });
       } catch (error) {
@@ -2228,20 +2239,7 @@ function registerIpc() {
       const paths = [];
       try {
         for (const file of prepared) {
-          const parsed = path.parse(file.path);
-          for (let n = 1; ; n++) {
-            const target = path.join(
-              destination.filePaths[0],
-              n === 1 ? parsed.base : `${parsed.name}-${n}${parsed.ext}`,
-            );
-            try {
-              await copyFile(file.path, target, constants.COPYFILE_EXCL);
-              paths.push(target);
-              break;
-            } catch (error) {
-              if (error.code !== 'EEXIST') throw error;
-            }
-          }
+          paths.push(await copyExportIntoDirectory(file.path, destination.filePaths[0]));
         }
       } catch (error) {
         await Promise.all(paths.map((target) => rm(target, { force: true })));

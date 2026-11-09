@@ -230,7 +230,11 @@ class Tray extends EventEmitter {
     detection.attach(owner);
     let queries = 0;
     let audio = { active: ['Zoom'] };
+    let cancellations = 0;
     detection.nativeAudio = {
+      cancelMeetingProbe: () => {
+        cancellations++;
+      },
       query: async (command, options) => {
         assert.equal(command, 'meeting-audio');
         assert.deepEqual(options.apps, {
@@ -291,11 +295,13 @@ class Tray extends EventEmitter {
     release({ active: ['app:com.acme.calls'], audible: 'app:com.acme.calls' });
     await pendingCheck;
     assert.equal(detection.prompt, null, '移除期间迟到的检测结果不再弹出提醒');
+    const beforeDisable = cancellations;
     const disabling = detection.checkMeetingSound();
     await detection.save({ meetingPrompts: false });
     release({ active: ['Zoom'], audible: 'Zoom' });
     await disabling;
     assert.equal(detection.prompt, null, '关闭检测后的旧探测作废');
+    assert.ok(cancellations > beforeDisable, '关闭检测时终止原生探测');
     await detection.save({ meetingPrompts: true });
     detection.promptedApps.clear();
     detection.nativeAudio.query = async () => {
@@ -343,9 +349,40 @@ class Tray extends EventEmitter {
     const previousEvent = controller.capsule.sent;
     const waitingForBounds = controller.expand(true);
     assert.equal(controller.capsule.sent, previousEvent, '原生窗口确认尺寸前不发送布局状态');
+    controller.update({ ...state, elapsed: state.elapsed + 1 });
+    assert.equal(
+      controller.capsule.sent[1].payload.expanded,
+      false,
+      '进度更新不能提前发布未确认的尺寸',
+    );
     finishBounds();
     await waitingForBounds;
     assert.equal(controller.capsule.sent[1].payload.expanded, true);
+    controller.capsule.setBounds = originalBounds;
+    await controller.expand(false);
+
+    let failFirstResize;
+    controller.capsule.setBounds = () =>
+      new Promise((_, reject) => {
+        failFirstResize = reject;
+      });
+    const firstResize = controller.expand(true);
+    controller.capsule.setBounds = originalBounds;
+    await controller.expand(false);
+    const latestResize = controller.expand(true);
+    failFirstResize(new Error('old resize timed out'));
+    await assert.rejects(firstResize, /old resize timed out/);
+    await latestResize;
+    assert.equal(controller.targetExpanded, true, '迟到的旧超时不会撤销新展开');
+    assert.equal(controller.expanded, true);
+    await controller.expand(false);
+    const expanding = controller.expand(true);
+    controller.capsule.setBounds = () => Promise.reject(new Error('collapse timed out'));
+    const collapsing = controller.expand(false);
+    await expanding;
+    await assert.rejects(collapsing, /collapse timed out/);
+    assert.equal(controller.expanded, true, '保留最后确认的原生边界');
+    assert.equal(controller.targetExpanded, true);
     controller.capsule.setBounds = originalBounds;
     await controller.expand(false);
 
@@ -410,11 +447,13 @@ class Tray extends EventEmitter {
     assert.equal(controller.capsule.isVisible(), true, '最小化后才显示播放胶囊');
     controller.update({ ...state, phase: 'playback-paused' });
     assert.equal(controller.capsule.isVisible(), true, '暂停保留播放控制');
+    await controller.expand(true);
     controller.override = false;
     controller.update({ ...state, phase: 'playing', elapsed: 10 });
     assert.equal(controller.capsule.isVisible(), false, '进度更新不能撤销手动隐藏');
     controller.update({ ...state, phase: 'playing', meetingId: 'new-playback' });
     assert.equal(controller.capsule.isVisible(), true, '新会议播放恢复自动显示');
+    assert.equal(controller.capsule.getBounds().height, 80, '换场收起同时还原原生窗口尺寸');
     controller.update({ ...state, phase: 'idle' });
     assert.equal(controller.capsule.isVisible(), false, '播放结束关闭胶囊');
     controller.update({ ...state, phase: 'playing' });

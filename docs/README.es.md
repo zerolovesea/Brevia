@@ -43,7 +43,7 @@ El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos
 
 [![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-Acta y diagrama de espina de pescado con referencias a la grabación.
+El acta tiene siete secciones. El diagrama de causas permite comprobar las citas y escuchar la grabación. El acta y el análisis se exportan por separado. Puedes filtrar la transcripción por hablante o cambiar su nombre en toda la reunión.
 
 ### Notas con IA
 
@@ -59,7 +59,7 @@ Graba sin conexión, toma notas y marca momentos importantes. Tras subir la grab
 
 ## Cápsula de reunión
 
-Con la ventana principal minimizada, puedes pausar o detener la grabación desde la cápsula flotante. Ábrela para ver los subtítulos bilingües en directo o consultar tus notas.
+Minimiza la ventana principal para controlar la grabación o reproducción, leer subtítulos, editar notas y pegar imágenes en la cápsula. En segundo plano, Brevia puede avisarte cuando una aplicación de reuniones compatible emita sonido.
 
 <img src="assets/showcase/desktop/en/capsule.png" width="352" alt="Cápsula con subtítulos y controles de grabación" />
 
