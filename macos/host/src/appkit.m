@@ -1,6 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <WebKit/WebKit.h>
+#import <QuartzCore/CADisplayLink.h>
 
 typedef void (^Completion)(id value, NSString *error);
 
@@ -97,6 +98,22 @@ static NSString *dialogPath(NSString *value) {
     return [value isKindOfClass:NSString.class] && value.length ? value : nil;
 }
 
+static UTType *dialogFileType(NSString *extension) {
+    // “app” also names legacy single-file applications, which exclude modern app bundles.
+    return [extension.lowercaseString isEqual:@"app"] ? UTTypeApplicationBundle : [UTType typeWithFilenameExtension:extension];
+}
+
+static NSString *dialogAppName(NSURL *url, NSString *locale) {
+    NSBundle *bundle = [NSBundle bundleWithURL:url];
+    if (!bundle) return nil;
+    NSString *preferred = locale.length ? [NSBundle preferredLocalizationsFromArray:bundle.localizations forPreferences:@[locale]].firstObject : nil;
+    NSURL *strings = preferred ? [bundle URLForResource:@"InfoPlist" withExtension:@"strings" subdirectory:nil localization:preferred] : nil;
+    NSDictionary *localized = strings ? [NSDictionary dictionaryWithContentsOfURL:strings error:NULL] : nil;
+    id name = localized[@"CFBundleDisplayName"] ?: localized[@"CFBundleName"] ?:
+        [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"] ?: [bundle objectForInfoDictionaryKey:@"CFBundleName"];
+    return [name isKindOfClass:NSString.class] ? name : nil;
+}
+
 static WKWebView *capsuleWebView(NSView *view) {
     if ([view isKindOfClass:WKWebView.class]) return (WKWebView *)view;
     for (NSView *child in view.subviews) {
@@ -105,6 +122,19 @@ static WKWebView *capsuleWebView(NSView *view) {
     }
     return nil;
 }
+
+// Keep the overlay until a complete display interval has elapsed after WebKit's paint.
+@interface BreviaPaintHandoff : NSObject
+@property(nonatomic, copy) void (^completion)(void);
+@property NSInteger ticks;
+- (void)frame:(CADisplayLink *)link;
+@end
+@implementation BreviaPaintHandoff
+- (void)frame:(CADisplayLink *)link {
+    if (++self.ticks < 2) return;
+    self.completion();
+}
+@end
 
 static void perform(NSString *method, NSDictionary *args, NSWindow *window, Completion done) {
     if ([method isEqual:@"window.setBounds"]) {
@@ -117,29 +147,41 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
         NSRect frame = NSMakeRect(x, NSMaxY(NSScreen.screens.firstObject.frame) - y - height, width, height);
         NSRect previous = window.frame;
         WKWebView *web = capsuleWebView(window.contentView);
-        CGFloat opacity = web.alphaValue;
-        __block NSImageView *cover = nil;
+        __block NSWindow *cover = nil;
+        __block CADisplayLink *handoff = nil;
         __block BOOL finished = NO;
         Completion finish = ^(id value, NSString *error) {
             if (finished) return;
             finished = YES;
-            if (cover) web.alphaValue = opacity;
-            [cover removeFromSuperview];
+            [handoff invalidate];
+            handoff = nil;
+            [cover orderOut:nil];
+            cover = nil;
             done(value, error);
         };
         void (^resize)(NSImage *) = ^(NSImage *image) {
             if (finished) return;
             if (image) {
-                cover = [[NSImageView alloc] initWithFrame:NSMakeRect(previous.origin.x - frame.origin.x,
-                    previous.origin.y - frame.origin.y, previous.size.width, previous.size.height)];
-                cover.image = image;
-                cover.imageScaling = NSImageScaleAxesIndependently;
-                [window.contentView addSubview:cover positioned:NSWindowAbove relativeTo:nil];
+                // 独立的屏幕表面保留旧画面；胶囊窗口的所有子视图都会随原生 backing 一起缩放。
+                cover = [[NSWindow alloc] initWithContentRect:previous styleMask:NSWindowStyleMaskBorderless
+                    backing:NSBackingStoreBuffered defer:NO];
+                cover.opaque = NO;
+                cover.backgroundColor = NSColor.clearColor;
+                cover.hasShadow = NO;
+                cover.ignoresMouseEvents = YES;
+                cover.animationBehavior = NSWindowAnimationBehaviorNone;
+                cover.level = window.level;
+                cover.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+                NSImageView *surface = [[NSImageView alloc] initWithFrame:cover.contentView.bounds];
+                surface.image = image;
+                surface.imageScaling = NSImageScaleAxesIndependently;
+                cover.contentView = surface;
+                [cover display];
+                [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
             }
             [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
                 context.duration = 0;
                 context.allowsImplicitAnimation = NO;
-                if (cover) web.alphaValue = 0;
                 window.opaque = NO;
                 window.backgroundColor = NSColor.clearColor;
                 window.animationBehavior = NSWindowAnimationBehaviorNone;
@@ -152,7 +194,11 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
             updated.afterScreenUpdates = YES;
             [web takeSnapshotWithConfiguration:updated completionHandler:^(NSImage *result, NSError *error) {
                 (void)result; (void)error;
-                finish(@YES, nil);
+                if (finished) return;
+                BreviaPaintHandoff *paint = [BreviaPaintHandoff new];
+                paint.completion = ^{ finish(@YES, nil); };
+                handoff = [window displayLinkWithTarget:paint selector:@selector(frame:)];
+                [handoff addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
             }];
         };
         if (web && window.visible && !NSEqualSizes(previous.size, frame.size)) {
@@ -183,7 +229,7 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
         NSMutableArray *types = [NSMutableArray array];
         for (NSDictionary *filter in args[@"filters"]) {
             for (NSString *ext in filter[@"extensions"]) {
-                UTType *type = [UTType typeWithFilenameExtension:ext];
+                UTType *type = dialogFileType(ext);
                 if (type) [types addObject:type];
             }
         }
@@ -197,7 +243,14 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
         }
         BOOL ok = [panel runModal] == NSModalResponseOK;
         if (save) done(ok ? @{@"filePath": panel.URL.path, @"canceled": @NO} : @{@"canceled":@YES}, nil);
-        else done(@{@"filePaths":ok ? [((NSOpenPanel *)panel).URLs valueForKey:@"path"] : @[], @"canceled":@(!ok)}, nil);
+        else {
+            NSMutableDictionary *selection = [@{@"filePaths":ok ? [((NSOpenPanel *)panel).URLs valueForKey:@"path"] : @[], @"canceled":@(!ok)} mutableCopy];
+            if (ok && [types containsObject:UTTypeApplicationBundle]) {
+                NSString *name = dialogAppName(panel.URL, args[@"applicationLocale"]);
+                if (name.length) selection[@"localizedAppName"] = name;
+            }
+            done(selection,nil);
+        }
     } else if ([method isEqual:@"dialog.message"]) {
         NSAlert *alert = [NSAlert new];
         alert.messageText = args[@"message"] ?: args[@"title"] ?: @"Brevia";

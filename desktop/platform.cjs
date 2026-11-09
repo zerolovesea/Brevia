@@ -100,7 +100,14 @@ class NativeWindow extends EventEmitter {
       this.printFile = file;
       return;
     }
-    if (!['index.html', 'floating-caption.html', 'recording-capsule.html'].includes(page))
+    if (
+      ![
+        'index.html',
+        'floating-caption.html',
+        'recording-capsule.html',
+        'meeting-prompt.html',
+      ].includes(page)
+    )
       throw new Error('Unsupported window');
     this.label = page === 'index.html' ? 'main' : page.slice(0, -5);
     this.webContents.mainFrame = { url: pathToFileURL(file).href };

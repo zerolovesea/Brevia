@@ -51,7 +51,11 @@ test('all native prompt consumers include saved instructions while retaining the
           return {
             text: payload.prompt.includes('<recent_transcript>')
               ? '{"type":"none"}'
-              : '# Notes\n- Launch confirmed',
+              : payload.prompt.includes('<transcript>')
+                ? [...payload.prompt.matchAll(/^## .+$/gm)]
+                    .map(([heading]) => heading + '\n- Launch confirmed [[decision:S1]]')
+                    .join('\n')
+                : '# Notes\n- Launch confirmed',
           };
         }
         return {};

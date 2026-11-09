@@ -1,8 +1,9 @@
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { mkdtemp, rm } = require('node:fs/promises');
+const { mkdtemp, rm, mkdir, writeFile, realpath } = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { selectedMeetingApp } = require('./meeting-app.cjs');
 const { DesktopController, desktopStateSchema } = require('./desktop-controller');
 
 class Window extends EventEmitter {
@@ -131,6 +132,77 @@ class Tray extends EventEmitter {
     await reloaded.load();
     assert.equal(reloaded.preferences.closeBehavior, 'hide');
     await assert.rejects(controller.save({ ...controller.preferences, closeBehavior: 'destroy' }));
+    assert.deepEqual(reloaded.preferences.meetingApps, [], '旧偏好默认为空名单');
+    const mac = process.platform === 'darwin';
+    if (mac || process.platform === 'win32') {
+      const selected = path.join(dir, mac ? 'Acme会议.app' : 'Acme会议.exe');
+      if (mac) {
+        await mkdir(path.join(selected, 'Contents'), { recursive: true });
+        await writeFile(
+          path.join(selected, 'Contents', 'Info.plist'),
+          JSON.stringify({
+            CFBundleIdentifier: 'com.Acme.Calls',
+            CFBundlePackageType: 'APPL',
+            CFBundleDisplayName: '企业会议',
+          }),
+        );
+      } else await writeFile(selected, 'MZ');
+      const app = await selectedMeetingApp(selected);
+      assert.equal(app.id, mac ? 'com.acme.calls' : await realpath(selected));
+      assert.equal(app.name, mac ? '企业会议' : 'Acme会议');
+      await Promise.all([
+        controller.changeMeetingApp(app),
+        controller.changeMeetingApp(app),
+        controller.save({ meetingPrompts: true }),
+      ]);
+      await reloaded.load();
+      assert.deepEqual(reloaded.preferences.meetingApps, [app]);
+      await controller.changeMeetingApp(null, app.id);
+      await reloaded.load();
+      assert.deepEqual(reloaded.preferences.meetingApps, []);
+      if (mac) {
+        const writeInfo = (id, types = []) =>
+          writeFile(
+            path.join(selected, 'Contents', 'Info.plist'),
+            JSON.stringify({
+              CFBundleIdentifier: id,
+              CFBundlePackageType: 'APPL',
+              CFBundleDisplayName: 'iFlyChat',
+              CFBundleURLTypes: [{ CFBundleURLSchemes: ['https', 'acme-meeting'] }],
+              CFBundleDocumentTypes: types,
+            }),
+          );
+        await writeInfo('com.acme.collaboration', [
+          { CFBundleTypeRole: 'Viewer', LSItemContentTypes: ['com.acme.agenda'] },
+        ]);
+        assert.deepEqual(await selectedMeetingApp(selected, 'i讯飞'), {
+          id: 'com.acme.collaboration',
+          name: 'i讯飞',
+        });
+        for (const [id, type] of [
+          ['com.brevia.app', {}],
+          ['com.google.Chrome.canary', {}],
+          [
+            'org.other.browser',
+            { CFBundleTypeRole: 'Viewer', LSItemContentTypes: ['public.html'] },
+          ],
+          ['org.legacy.browser', { CFBundleTypeRole: 'Viewer', CFBundleTypeExtensions: ['htm'] }],
+          [
+            'org.xhtml.browser',
+            { CFBundleTypeRole: 'Viewer', CFBundleTypeMIMETypes: ['application/xhtml+xml'] },
+          ],
+        ]) {
+          await writeInfo(id, [type]);
+          await assert.rejects(selectedMeetingApp(selected), { code: 'error.meeting_app.invalid' });
+        }
+      } else {
+        for (const name of ['Brevia.exe', 'chrome.exe']) {
+          const file = path.join(dir, name);
+          await writeFile(file, 'MZ');
+          await assert.rejects(selectedMeetingApp(file), { code: 'error.meeting_app.invalid' });
+        }
+      }
+    }
     const main = new Window();
     main.visible = true;
     controller.attach(main);
@@ -152,16 +224,104 @@ class Tray extends EventEmitter {
       aiBusy: false,
       error: '',
     };
+    const detection = make();
+    const owner = new Window();
+    owner.visible = true;
+    detection.attach(owner);
+    let queries = 0;
+    let audio = { active: ['Zoom'] };
+    detection.nativeAudio = {
+      query: async (command, options) => {
+        assert.equal(command, 'meeting-audio');
+        assert.deepEqual(options.apps, {
+          'com.acme.calls': 'app:com.acme.calls',
+          'com.other.calls': 'app:com.other.calls',
+        });
+        queries++;
+        return audio;
+      },
+    };
+    detection.update({
+      ...state,
+      phase: 'idle',
+      ready: false,
+      meetingId: null,
+      systemAudioConfirmed: true,
+    });
+    detection.state.ready = true;
+    await detection.checkMeetingSound();
+    assert.equal(queries, 0, '前台窗口不检测声音');
+    await detection.changeMeetingApp({ id: 'com.acme.calls', name: '企业会议' });
+    await detection.changeMeetingApp({ id: 'com.other.calls', name: '企业会议' });
+    owner.emit('blur');
+    await detection.checkMeetingSound();
+    assert.equal(detection.prompt, undefined, '静音会议不提示');
+    audio.audible = 'Zoom';
+    await detection.checkMeetingSound();
+    assert.equal(detection.prompt.inactive, true);
+    detection.prompt.destroy();
+    await detection.checkMeetingSound();
+    assert.equal(detection.prompt, null, '关闭后同一场不重复提示');
+    audio = { active: ['Zoom', 'Discord'], audible: 'Discord' };
+    await detection.checkMeetingSound();
+    assert.equal(detection.promptName, 'Discord');
+    detection.prompt.destroy();
+    audio.audible = 'Zoom';
+    await detection.checkMeetingSound();
+    assert.equal(detection.prompt, null, '多个会议应用分别去重');
+    audio = {
+      active: ['app:com.acme.calls', 'app:com.other.calls'],
+      audible: 'app:com.acme.calls',
+    };
+    await detection.checkMeetingSound();
+    assert.equal(detection.promptName, '企业会议');
+    detection.prompt.destroy();
+    audio.audible = 'app:com.other.calls';
+    await detection.checkMeetingSound();
+    assert.equal(detection.promptSource, 'app:com.other.calls');
+    await detection.changeMeetingApp(null, 'com.other.calls');
+    assert.equal(detection.prompt, null, '移除正在发声的应用立即关闭对应提醒');
+    let release;
+    detection.nativeAudio.query = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const pendingCheck = detection.checkMeetingSound();
+    await detection.changeMeetingApp(null, 'com.acme.calls');
+    release({ active: ['app:com.acme.calls'], audible: 'app:com.acme.calls' });
+    await pendingCheck;
+    assert.equal(detection.prompt, null, '移除期间迟到的检测结果不再弹出提醒');
+    const disabling = detection.checkMeetingSound();
+    await detection.save({ meetingPrompts: false });
+    release({ active: ['Zoom'], audible: 'Zoom' });
+    await disabling;
+    assert.equal(detection.prompt, null, '关闭检测后的旧探测作废');
+    await detection.save({ meetingPrompts: true });
+    detection.promptedApps.clear();
+    detection.nativeAudio.query = async () => {
+      owner.emit('focus');
+      return audio;
+    };
+    await detection.checkMeetingSound();
+    assert.equal(detection.prompt, null, '探测期间回到前台不弹窗');
+    detection.destroy();
     assert.throws(() => desktopStateSchema.parse({ ...state, level: 9 }));
     assert.throws(() => desktopStateSchema.parse({ ...state, captions: Array(81).fill({}) }));
     controller.update({ ...state, ready: false });
     assert.equal(bindings.size, 0, '初始化完成前不注册快捷键');
     controller.update(state);
     assert.equal(controller.capsule, undefined, '可见主窗不自动弹胶囊');
+    main.hide();
+    assert.equal(controller.capsule, undefined, '仅隐藏到托盘不显示胶囊');
+    main.show();
     main.minimized = true;
     main.emit('minimize');
     assert.equal(controller.capsule.isVisible(), true);
     assert.equal(controller.capsule.inactive, true, '显示胶囊不激活窗口');
+    main.hide();
+    assert.equal(controller.capsule.isVisible(), false, '最小化后隐藏到托盘也收起胶囊');
+    main.show();
+    assert.equal(controller.capsule.isVisible(), true);
     assert.equal(controller.capsule.getBounds().width, 344);
     assert.equal(controller.capsule.getBounds().height, 80);
     assert.equal(controller.capsule.getBounds().x, -622, '胶囊默认在工作区水平居中');
@@ -208,7 +368,7 @@ class Tray extends EventEmitter {
     await controller.expand(false);
     assert.equal(controller.capsule.getBounds().x, -400);
     assert.equal(controller.capsule.getBounds().width, 344);
-    assert.equal(controller.pillOffset, 0);
+    assert.equal(controller.pillOffset, 64, '折叠态提前保留下一次展开的右侧偏移');
     controller.override = false;
     controller.sync();
     controller.update({ ...state, elapsed: 9 });
@@ -216,9 +376,10 @@ class Tray extends EventEmitter {
     controller.update({ ...state, meetingId: 'two', title: '第二场' });
     assert.equal(controller.capsule.isVisible(), true, '新会话恢复自动规则');
     controller.override = true;
-    main.minimized = false;
-    main.show();
-    assert.equal(controller.capsule.isVisible(), true, '手动胶囊回主窗后保留');
+    main.restore();
+    assert.equal(controller.capsule.isVisible(), false, '手动显示也只在最小化期间生效');
+    controller.capsule.webContents.emit('did-finish-load');
+    assert.equal(controller.capsule.isVisible(), false, '恢复窗口后迟到的加载事件不能显示胶囊');
     controller.override = null;
     controller.update({ ...state, phase: 'playing' });
     const fullCaptions = Array.from({ length: 240 }, (_, index) => ({
@@ -239,7 +400,14 @@ class Tray extends EventEmitter {
     );
 
     assert.equal(Boolean(controller.active()), false, '播放不能被当成正在录音');
-    assert.equal(controller.capsule.isVisible(), true, '主窗可见时播放也自动显示胶囊');
+    assert.equal(controller.capsule.isVisible(), false, '主窗播放不显示胶囊');
+    main.emit('blur');
+    main.hide();
+    assert.equal(controller.capsule.isVisible(), false, '播放期间失焦和隐藏不显示胶囊');
+    main.show();
+    main.minimized = true;
+    main.emit('minimize');
+    assert.equal(controller.capsule.isVisible(), true, '最小化后才显示播放胶囊');
     controller.update({ ...state, phase: 'playback-paused' });
     assert.equal(controller.capsule.isVisible(), true, '暂停保留播放控制');
     controller.override = false;
@@ -254,7 +422,9 @@ class Tray extends EventEmitter {
     assert.equal(controller.capsule.isVisible(), false, '关闭自动胶囊同样适用于播放');
     await controller.save({ autoCapsule: true });
     controller.update(state);
-    assert.equal(controller.capsule.isVisible(), false, '同一会议从播放切到录音恢复录音规则');
+    assert.equal(controller.capsule.isVisible(), true, '同一会议从播放切换到录音也遵循最小化状态');
+    main.restore();
+    assert.equal(controller.capsule.isVisible(), false, '恢复窗口立即收起录音胶囊');
     const request = controller.action('pause');
     const payload = main.sent[1].payload;
     assert.equal(payload.action, 'pause');

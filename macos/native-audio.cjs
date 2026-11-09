@@ -15,13 +15,18 @@ class NativeAudio {
       )
     );
   }
-  async query(command) {
-    const { stdout } = await run(this.binary(), [command], {
+  async query(command, ...args) {
+    const probe = command === 'meeting-audio' && typeof args[0] === 'object';
+    const request = run(this.binary(), probe ? [command, '--stdin'] : [command, ...args], {
       timeout: 120000,
       maxBuffer: 256 * 1024,
       windowsHide: true,
     });
-    return JSON.parse(stdout);
+    if (probe) {
+      request.child.stdin.on('error', () => {}); // execFile reports helper startup and exit errors.
+      request.child.stdin.end(JSON.stringify(args[0]));
+    }
+    return JSON.parse((await request).stdout);
   }
   async prepare({ mic, system, deviceId, preview }, append, publish) {
     if (this.session) throw new Error('Audio capture is busy');

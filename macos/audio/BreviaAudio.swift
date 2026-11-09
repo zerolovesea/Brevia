@@ -103,6 +103,229 @@ func containsSystemSound(_ buffer: AVAudioPCMBuffer) -> Bool {
 }
 
 @available(macOS 14.4, *)
+private func audioProcesses() throws -> [AudioObjectID] {
+  var address = AudioObjectPropertyAddress(
+    mSelector: kAudioHardwarePropertyProcessObjectList,
+    mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+  var size: UInt32 = 0
+  let system = AudioObjectID(kAudioObjectSystemObject)
+  guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr else {
+    throw CaptureError("无法枚举系统音频进程")
+  }
+  var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+  if !ids.isEmpty && AudioObjectGetPropertyData(system, &address, 0, nil, &size, &ids) != noErr {
+    throw CaptureError("无法枚举系统音频进程")
+  }
+  return ids
+}
+
+@available(macOS 14.4, *)
+private func processBundle(_ process: AudioObjectID) -> String? {
+  var address = AudioObjectPropertyAddress(
+    mSelector: kAudioProcessPropertyBundleID,
+    mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+  var value: Unmanaged<CFString>?
+  var size = UInt32(MemoryLayout.size(ofValue: value))
+  guard AudioObjectGetPropertyData(process, &address, 0, nil, &size, &value) == noErr else {
+    return nil
+  }
+  return value?.takeRetainedValue() as String?
+}
+
+func meetingApp(_ bundle: String) -> String? {
+  let names = [
+    ("com.cloudmeeting.iflymeeting", "讯飞会议"),
+    ("com.dancesuite.dance.ka.kaahyz17.mac", "i讯飞"),
+    ("us.zoom.xos", "Zoom"), ("com.tencent.meeting", "Tencent Meeting"),
+    ("com.tencent.rqd", "Tencent Meeting"), ("com.tencent.rqm", "Tencent Meeting"),
+    ("com.tencent.rfmmeeting", "Tencent Meeting"), ("com.tencent.wemeet", "Tencent Meeting"),
+    ("com.tencentmeeting", "Tencent Meeting"), ("com.hnc.discord", "Discord"),
+    ("com.microsoft.teams", "Microsoft Teams"), ("com.microsoft.teams2", "Microsoft Teams"),
+    ("com.cisco.webex", "Webex"), ("com.google.chrome", "Google Chrome"),
+    ("com.microsoft.edgemac", "Microsoft Edge"), ("com.apple.safari", "Safari"),
+    ("org.mozilla.firefox", "Firefox"), ("com.brave.browser", "Brave"),
+  ]
+  let id = bundle.lowercased()
+  switch id {
+  case "com.electron.lark", "com.electron.lark.helper", "com.electron.lark.helper.plugin",
+    "com.electron.lark.helper.renderer", "com.electron.lark.iron":
+    return "飞书"
+  case "com.larksuite.larkapp", "com.larksuite.larkapp.helper",
+    "com.larksuite.larkapp.helper.plugin",
+    "com.larksuite.larkapp.helper.renderer", "com.larksuite.larkapp.iron":
+    return "Lark"
+  case "com.alibaba.dingtalkmac", "5zsl2cju2t.com.dingtalk.meeting",
+    "5zsl2cju2t.com.dingtalk.mac.tblive":
+    return "钉钉"
+  case "com.tencent.weworkmac", "com.tencent.wwmapp", "com.tencent.wework-helper",
+    "88l2q4487u.com.tencent.wework.helper", "88l2q4487u.com.tencent.wework.helper.plugin",
+    "88l2q4487u.com.tencent.wework.helper.renderer", "88l2q4487u.com.tencent.wework.helper.gpu":
+    return "企业微信"
+  case "com.tinyspeck.slackmacgap", "com.tinyspeck.slackmacgap.helper":
+    return "Slack"
+  case "com.tencent.tencentmeeting", "com.tencent.tencentmeeting.services.wmexternal":
+    return "VooV Meeting"
+  case "com.huawei.cloudlink", "com.huawei.cloudlink.welinkmeetinghelper":
+    return "华为云会议"
+  default: break
+  }
+  return names.first { id == $0.0 || id.hasPrefix($0.0 + ".") }?.1
+}
+
+private struct MeetingProbe: Decodable {
+  let apps: [String: String]
+  let excluded: Set<String>
+}
+
+func selectedMeetingName(_ bundle: String, apps: [String: String]) -> String? {
+  let id = bundle.lowercased()
+  return meetingApp(bundle) ?? apps[id]
+    ?? apps.first { id == $0.key + ".helper" || id.hasPrefix($0.key + ".helper.") }?.value
+}
+
+private let meetingBrowsers = ["Google Chrome", "Microsoft Edge", "Safari", "Firefox", "Brave"]
+
+private let meetTitlePattern: String = {
+  let code = "[a-z]{3}-[a-z]{4}-[a-z]{3}"
+  let separator = #"\s*[-–—]\s*"#
+  let meet = "(?:google )?meet"
+  let titles = [
+    meet + separator + code, code + separator + meet, #"(?:https://)?meet\.google\.com/"# + code,
+  ]
+  let browser = "(?:google chrome|microsoft edge|mozilla firefox|brave|safari)"
+  return #"^\s*(?:"# + titles.joined(separator: "|") + ")(?:" + separator + browser + #")?\s*$"#
+}()
+
+func isMeetTitle(_ title: String?) -> Bool {
+  return title?.range(of: meetTitlePattern, options: [.regularExpression, .caseInsensitive]) != nil
+}
+
+// Window titles are available only with existing screen permission. Never request it from a probe.
+private func visibleMeetBrowsers() -> Set<String> {
+  guard CGPreflightScreenCaptureAccess(),
+    let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID)
+      as? [[String: Any]]
+  else { return [] }
+  return Set(
+    windows.compactMap { item in
+      guard isMeetTitle(item[kCGWindowName as String] as? String),
+        let owner = item[kCGWindowOwnerName as String] as? String
+      else { return nil }
+      return meetingBrowsers.first { owner.caseInsensitiveCompare($0) == .orderedSame }
+    })
+}
+
+private func sampleBufferAudio(_ buffer: CMSampleBuffer) throws -> AVAudioPCMBuffer {
+  guard let desc = buffer.formatDescription,
+    let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc),
+    let format = AVAudioFormat(streamDescription: asbd),
+    let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: UInt32(buffer.numSamples))
+  else { throw CaptureError("系统音频格式无效") }
+  output.frameLength = UInt32(buffer.numSamples)
+  let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+    buffer, at: 0, frameCount: Int32(buffer.numSamples), into: output.mutableAudioBufferList)
+  guard status == noErr else { throw CaptureError("无法读取系统音频") }
+  return output
+}
+
+private final class MeetingSample: NSObject, SCStreamOutput {
+  let sound = DispatchSemaphore(value: 0)
+  func stream(
+    _ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType
+  ) {
+    if type == .audio, sample.isValid, sample.numSamples > 0,
+      let pcm = try? sampleBufferAudio(sample), containsSystemSound(pcm)
+    {
+      sound.signal()
+    }
+  }
+}
+
+private func legacyMeetingAudio(_ probeOptions: MeetingProbe) async throws -> Any {
+  guard CGPreflightScreenCaptureAccess() else { return ["active": [String]()] }
+  let content = try await SCShareableContent.excludingDesktopWindows(
+    true, onScreenWindowsOnly: false)
+  guard let display = content.displays.first else { return ["active": [String]()] }
+  var active: [String] = []
+  var candidate: String?
+  for app in content.applications {
+    guard var name = selectedMeetingName(app.bundleIdentifier, apps: probeOptions.apps) else {
+      continue
+    }
+    if meetingBrowsers.contains(name) {
+      guard
+        content.windows.contains(where: {
+          $0.isOnScreen && $0.owningApplication?.processID == app.processID && isMeetTitle($0.title)
+        })
+      else { continue }
+      name = "Google Meet"
+    }
+    let filter = SCContentFilter(display: display, including: [app], exceptingWindows: [])
+    let config = SCStreamConfiguration()
+    config.width = 2
+    config.height = 2
+    config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+    config.capturesAudio = true
+    let probe = MeetingSample()
+    let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+    try stream.addStreamOutput(
+      probe, type: .audio, sampleHandlerQueue: DispatchQueue(label: "brevia.meeting-audio"))
+    try await stream.startCapture()
+    let sound = probe.sound
+    let audible = await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        continuation.resume(returning: sound.wait(timeout: .now() + 0.6) == .success)
+      }
+    }
+    try await stream.stopCapture()
+    if audible {
+      active.append(name)
+      if !probeOptions.excluded.contains(name) { candidate = name }
+    }
+  }
+  return ["active": active, "audible": candidate as Any] as [String: Any]
+}
+
+@available(macOS 14.4, *)
+private func meetingAudio(_ probeOptions: MeetingProbe) throws -> Any {
+  func running(_ process: AudioObjectID, _ selector: AudioObjectPropertySelector) -> Bool {
+    var address = AudioObjectPropertyAddress(
+      mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: 0)
+    var flag: UInt32 = 0
+    var size = UInt32(MemoryLayout.size(ofValue: flag))
+    return AudioObjectGetPropertyData(process, &address, 0, nil, &size, &flag) == noErr && flag != 0
+  }
+  let processes = try audioProcesses().compactMap { id -> (AudioObjectID, String)? in
+    guard let name = processBundle(id).flatMap({ selectedMeetingName($0, apps: probeOptions.apps) })
+    else { return nil }
+    return (id, name)
+  }
+  let meetBrowsers = visibleMeetBrowsers()
+  var active: [String] = []
+  var candidate: String?
+  for (name, group) in Dictionary(grouping: processes, by: { $0.1 }).sorted(by: { $0.key < $1.key })
+  {
+    let output = group.map { $0.0 }.filter { running($0, kAudioProcessPropertyIsRunningOutput) }
+    guard !output.isEmpty else { continue }
+    if meetingBrowsers.contains(name) && !meetBrowsers.contains(name) { continue }
+    let label = meetBrowsers.contains(name) ? "Google Meet" : name
+    active.append(label)
+    if probeOptions.excluded.contains(label) || candidate != nil { continue }
+    let done = DispatchSemaphore(value: 0)
+    let tap = SystemAudioTap(delivery: DispatchQueue(label: "brevia.meeting-audio"))
+    try tap.start(
+      included: output,
+      receive: { buffer, _ in
+        if containsSystemSound(buffer) { done.signal() }
+      }, fail: { _ in })
+    let audible = done.wait(timeout: .now() + 0.45) == .success
+    tap.stop()
+    if audible { candidate = label }
+  }
+  return ["active": active, "audible": candidate as Any] as [String: Any]
+}
+
+@available(macOS 14.4, *)
 private final class SystemAudioTap {
   private var tap: AudioObjectID = 0
   private var device: AudioObjectID = 0
@@ -134,32 +357,21 @@ private final class SystemAudioTap {
   }
 
   func start(
+    included: [AudioObjectID]? = nil,
     receive: @escaping (AVAudioPCMBuffer, Double) -> Void, fail: @escaping (Error) -> Void
   ) throws {
     do {
       // 排除归属于本应用的音频进程，避免将其回放再次录入系统音轨。
       var address = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyProcessObjectList, mScope: kAudioObjectPropertyScopeGlobal,
+        mSelector: kAudioTapPropertyFormat, mScope: kAudioObjectPropertyScopeGlobal,
         mElement: kAudioObjectPropertyElementMain)
-      var size: UInt32 = 0
-      let system = AudioObjectID(kAudioObjectSystemObject)
-      try check(AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size))
-      var processes = [AudioObjectID](
-        repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-      if !processes.isEmpty {
-        try check(AudioObjectGetPropertyData(system, &address, 0, nil, &size, &processes))
+      let description: CATapDescription
+      if let included {
+        description = CATapDescription(stereoMixdownOfProcesses: included)
+      } else {
+        let excluded = try audioProcesses().filter { processBundle($0) == "com.brevia.app" }
+        description = CATapDescription(stereoGlobalTapButExcludeProcesses: excluded)
       }
-      let excluded = processes.filter { process in
-        var property = AudioObjectPropertyAddress(
-          mSelector: kAudioProcessPropertyBundleID, mScope: kAudioObjectPropertyScopeGlobal,
-          mElement: kAudioObjectPropertyElementMain)
-        var bundle: Unmanaged<CFString>?
-        var count = UInt32(MemoryLayout.size(ofValue: bundle))
-        guard AudioObjectGetPropertyData(process, &property, 0, nil, &count, &bundle) == noErr
-        else { return false }
-        return (bundle?.takeRetainedValue() as String?) == "com.brevia.app"
-      }
-      let description = CATapDescription(stereoGlobalTapButExcludeProcesses: excluded)
       description.name = "Brevia System Audio"
       description.isPrivate = true
       description.muteBehavior = .unmuted
@@ -499,16 +711,7 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
   ) {
     guard type == .audio, buffer.isValid, buffer.numSamples > 0 else { return }
     submit(system, timestamp: buffer.presentationTimeStamp.seconds) {
-      guard let desc = buffer.formatDescription,
-        let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc),
-        let format = AVAudioFormat(streamDescription: asbd),
-        let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: UInt32(buffer.numSamples))
-      else { throw CaptureError("系统音频格式无效") }
-      output.frameLength = UInt32(buffer.numSamples)
-      let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
-        buffer, at: 0, frameCount: Int32(buffer.numSamples), into: output.mutableAudioBufferList)
-      guard status == noErr else { throw CaptureError("无法读取系统音频") }
-      return output
+      try sampleBufferAudio(buffer)
     }
   }
 
@@ -557,6 +760,19 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
     static func main() async {
       var args = Array(CommandLine.arguments.dropFirst())
       do {
+        if args.first == "meeting-audio" {
+          let options =
+            args.dropFirst().first == "--stdin"
+            ? try JSONDecoder().decode(
+              MeetingProbe.self, from: FileHandle.standardInput.readDataToEndOfFile())
+            : MeetingProbe(apps: [:], excluded: Set(args.dropFirst()))
+          if #available(macOS 14.4, *) {
+            emit(try meetingAudio(options))
+          } else {
+            emit(try await legacyMeetingAudio(options))
+          }
+          return
+        }
         if args == ["permissions"] {
           let microphone: String
           switch AVCaptureDevice.authorizationStatus(for: .audio) {

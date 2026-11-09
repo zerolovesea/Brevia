@@ -14,6 +14,8 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -463,12 +465,56 @@ await assert.rejects(batchExportHandler(null, { meeting_ids: ['invalid'] }));
 await assert.rejects(batchExportHandler(null, { meeting_ids: Array(201).fill(exportIds[0]) }));
 
 exportCanceled = false;
-for (const content of ['mynotes', 'notes']) {
+for (const content of ['mynotes', 'notes', 'analysis']) {
   await batchExportHandler(null, { meeting_ids: [exportIds[0]], content, format: 'md' });
   assert.equal(exportPrepared.at(-1).content, content);
   await assert.rejects(
     batchExportHandler(null, { meeting_ids: exportIds, content, format: 'json' }),
   );
+}
+
+// 成对导出写入两个文件，重名保留，第二个文件失败时撤回本次写入。
+{
+  const dir = await mkdtemp(path.join(tmpdir(), 'brevia-minutes-pair-'));
+  try {
+    const dest = path.join(dir, 'out');
+    await mkdir(dest);
+    for (const name of ['notes', 'analysis']) await writeFile(path.join(dir, name + '.md'), name);
+    await writeFile(path.join(dest, 'notes.md'), 'original');
+    let save;
+    runInNewContext(
+      mainSource.slice(
+        mainSource.indexOf("handleIpc('meeting.export-bundle'"),
+        mainSource.indexOf("handleIpc('share.copy-text'"),
+      ),
+      {
+        z,
+        path,
+        constants,
+        copyFile,
+        rm,
+        handleIpc: (_, handler) => (save = handler),
+        dialog: { showOpenDialog: async () => ({ filePaths: [dest] }) },
+        prepareExport: async ({ content, format }) => ({
+          path: path.join(dir, content + '.' + format),
+          format,
+        }),
+      },
+    );
+    const payload = {
+      meeting_id: exportIds[0],
+      items: ['notes', 'analysis'].map((content) => ({ content, format: 'md' })),
+    };
+    assert.equal((await save(null, payload)).paths.length, 2);
+    assert.equal(await readFile(path.join(dest, 'notes.md'), 'utf8'), 'original');
+    assert.equal(await readFile(path.join(dest, 'notes-2.md'), 'utf8'), 'notes');
+    assert.equal(await readFile(path.join(dest, 'analysis.md'), 'utf8'), 'analysis');
+    await rm(path.join(dir, 'analysis.md'));
+    await assert.rejects(save(null, payload), { code: 'ENOENT' });
+    assert.deepEqual((await readdir(dest)).sort(), ['analysis.md', 'notes-2.md', 'notes.md']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 const workerEventBlock = mainSource.slice(
@@ -1501,3 +1547,48 @@ const unavailableLocations = await diskHandlers.get('storage.locations')();
 assert.equal(unavailableLocations.disk, null);
 assert.equal(unavailableLocations.models, '/models');
 assert.equal(unavailableLocations.recordingsManaged, true);
+
+{
+  let handler;
+  const requests = [];
+  const z = require('zod').z;
+  runInNewContext(
+    mainSource.slice(
+      mainSource.indexOf("  handleIpc('summary.test'"),
+      mainSource.indexOf("  handleIpc('summary.generate'"),
+    ),
+    {
+      z,
+      Date,
+      llmRequest: z.object({
+        provider: z.string(),
+        endpoint: z.string().url(),
+        model: z.string(),
+        key_reference: z.string().optional(),
+      }),
+      isBuiltInProvider: (provider) => provider === 'built-in',
+      getSecret: async (reference) => (reference === 'saved' ? 'saved-secret' : ''),
+      handleIpc: (_name, fn) => {
+        handler = fn;
+      },
+      require: () => ({
+        complete: async (config, prompt) => {
+          requests.push({ config, prompt });
+        },
+      }),
+    },
+  );
+  const config = {
+    provider: 'custom-openai',
+    endpoint: 'https://example.test/v1',
+    model: 'test',
+    key_reference: 'saved',
+  };
+  await handler(null, config);
+  await handler(null, { ...config, apiKey: 'draft-secret' });
+  assert.equal(requests[0].config.api_key, 'saved-secret');
+  assert.equal(requests[1].config.api_key, 'draft-secret');
+  assert.equal(requests[0].prompt, 'Reply only OK.');
+  assert.equal(config.apiKey, undefined);
+  await assert.rejects(handler(null, { ...config, key_reference: undefined }), /API Key/);
+}

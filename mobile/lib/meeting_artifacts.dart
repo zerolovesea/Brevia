@@ -451,13 +451,16 @@ class _MeetingExportButtonState extends State<MeetingExportButton> {
             'docx',
           ],
         ],
-      if (tree.isNotEmpty) '原因分析': ['md'],
+      if (tree.isNotEmpty) '原因分析': ['md', 'txt'],
       if (_rows(m['segments']).isNotEmpty)
         '逐字稿': ['srt', 'vtt', 'md', 'txt', 'json'],
       if (widget.audioFile != null) '会议录音': ['wav'],
     };
     if (outputs.isEmpty) return;
-    final selected = <String>{outputs.keys.first};
+    final selected = <String>{
+      outputs.keys.first,
+      if (outputs.containsKey('会议纪要') && tree.isNotEmpty) '原因分析',
+    };
     final formats = outputs.map((k, v) => MapEntry(k, v.first));
     final origin = context.findRenderObject() as RenderBox;
     final rect = origin.localToGlobal(Offset.zero) & origin.size;
@@ -575,13 +578,9 @@ class _MeetingExportButtonState extends State<MeetingExportButton> {
         var content = switch (key) {
           '会议纪要' => summary,
           '我的笔记' => notes,
-          '原因分析' => tree,
+          '原因分析' => format == 'md' ? tree : causeMarkdown(m, plain: true),
           _ => transcriptExport(m, format),
         };
-        if ((key == '会议纪要' || key == '我的笔记') && tree.isNotEmpty) {
-          content +=
-              '\n\n${format == 'md' ? tree : causeMarkdown(m, plain: true)}';
-        }
         if (format == 'md') {
           content = content.replaceAllMapped(
             RegExp(r'!\[([^\]\n]*)\]\((brevia-note://[^\s)]+)\)'),

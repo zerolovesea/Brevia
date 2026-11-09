@@ -69,7 +69,7 @@ Windows 10/11 x64，CPU 需支持 AVX2。Rust/Tauri 使用 WebView2；界面、N
 
 构建需要 Node.js 22.23.1、Rust MSVC 工具链、Visual Studio C++ Build Tools、Windows SDK、CMake 和 Tauri CLI 2.12.2。
 
-NSIS 3.11 与 Tauri NSIS 插件 0.5.3 在打包前按固定 SHA256 下载并校验，临时网络失败最多尝试三次。归档保存在 `dist/native-win/sources`，复用原生 CI 与 Release 的源码缓存；每次打包从已校验归档准备工具，不依赖 Tauri 的单次在线下载。
+NSIS 3.11 与 Tauri NSIS 插件 0.5.3 在打包前按固定 SHA256 下载并校验，临时网络失败最多尝试三次。Windows 打包和升级测试下载 GitHub Release 资产时，第二次尝试通过官方资产 API 获取相同文件，所有入口使用同一 SHA256。归档保存在 `dist/native-win/sources`，复用原生 CI 与 Release 的源码缓存；每次打包从已校验归档准备工具，不依赖 Tauri 的单次在线下载。
 
 ```powershell
 npm ci

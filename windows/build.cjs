@@ -20,22 +20,26 @@ async function digest(file) {
   for await (const part of fs.createReadStream(file)) hash.update(part);
   return hash.digest('hex');
 }
-async function download(url, file, sha) {
+async function download(url, file, sha, alternate) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file) && (await digest(file)) === sha) return;
   const temporary = file + '.part';
   try {
     for (let attempt = 1; attempt <= 3; attempt++) {
       const signal = AbortSignal.timeout(300000);
+      const source = attempt === 2 && alternate ? alternate : url;
       try {
-        const response = await fetch(url, { signal });
+        const response = await fetch(source, {
+          signal,
+          headers: { Accept: 'application/octet-stream' },
+        });
         if (new URL(response.url).protocol !== 'https:') {
           await response.body?.cancel().catch(() => {});
           throw new Error('Insecure download redirect: ' + url);
         }
         if (!response.ok || !response.body) {
           await response.body?.cancel().catch(() => {});
-          const error = new Error(`Download failed (HTTP ${response.status}): ${url}`);
+          const error = new Error(`Download failed (HTTP ${response.status}): ${source}`);
           error.status = response.status;
           throw error;
         }
@@ -61,7 +65,8 @@ async function download(url, file, sha) {
           ].includes(code) ||
           error.name === 'TimeoutError' ||
           (error.name === 'AbortError' && signal.aborted) ||
-          [408, 429, 500, 502, 503, 504].includes(error.status);
+          [408, 429, 500, 502, 503, 504].includes(error.status) ||
+          (source === alternate && [403, 404].includes(error.status));
         if (!retryable) throw error;
         if (attempt === 3)
           throw new Error('Download failed after 3 attempts: ' + url, { cause: error });
@@ -135,6 +140,7 @@ async function buildNative() {
     `https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/${sherpa}.tar.bz2`,
     path.join(sources, 'sherpa.tar.bz2'),
     '21da6a8b92d63ca02ad41dbfc120012343aaaec2e5e02b14819c6b4f38004509',
+    'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/assets/678775274',
   );
   for (const [archive, directory] of [
     ['libogg-1.3.6.tar.xz', 'libogg-1.3.6'],

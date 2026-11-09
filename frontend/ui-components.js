@@ -426,6 +426,13 @@ function renderCorrectedTranscript(text, word) {
     .map(escapeHtml)
     .join(`<mark class="correction-saved-word">${escapeHtml(word)}</mark>`);
 }
+function speakerMenuTrigger(person, palette, className) {
+  const name = formatSpeakerName(person);
+  const content = `${renderSpeakerAvatar(person, palette)}<span>${escapeHtml(name)}</span>`;
+  if (!person?.id) return `<span class="${className}">${content}</span>`;
+  return `<button type="button" class="${className}" data-speaker-menu="${escapeHtml(person.id)}" title="${escapeHtml(name)}" aria-haspopup="menu" aria-expanded="false">${content}</button>`;
+}
+
 function renderTranscriptSegment({
   time,
   startSeconds,
@@ -452,13 +459,6 @@ function renderTranscriptSegment({
     Number.isFinite(startSeconds) && Number.isFinite(endSeconds)
       ? ` data-start="${startSeconds}" data-end="${endSeconds}"`
       : '';
-  const label = showSpeaker
-    ? speaker.editing
-      ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>`
-      : textEditable
-        ? `<span class="segment-speaker">${escapeHtml(speaker.name)}</span>`
-        : `<button class="segment-speaker" title="${escapeHtml(speaker.name)}"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`
-    : '';
   const overlap =
     showSpeaker && speaker.overlapNames?.length
       ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>`
@@ -511,7 +511,9 @@ function renderTranscriptSegment({
   const liveName = live ? escapeHtml(showSpeaker && speaker.name ? speaker.name : t('说话人')) : '';
   const identity = live
     ? `${renderSpeakerAvatar(showSpeaker ? speaker : '', palette)}${contextSegmentId ? `<button type="button" class="segment-speaker" data-live-speaker title="${escapeHtml(t('标记说话人'))}">${liveName}</button>` : `<span class="segment-speaker">${liveName}</span>`}`
-    : `${showSpeaker && speaker.name ? renderSpeakerAvatar(speaker, palette) : ''}${label}`;
+    : showSpeaker && speaker.name
+      ? speakerMenuTrigger(speaker, palette, 'segment-speaker')
+      : '';
   return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${identity}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
@@ -676,6 +678,13 @@ function renderDesktopPreferences() {
       `<button type="button" class="shortcut-action" data-shortcut-${operation}="${key}" aria-label="${name} · ${escapeHtml(t(text))}" title="${escapeHtml(t(text))}"${disabled ? ' disabled' : ''}>${interfaceIcon(icon)}</button>`;
     return `<div class="desktop-shortcut" role="group" aria-label="${name}"><button type="button" class="shortcut-recorder" data-shortcut-control="${key}" aria-pressed="false" aria-label="${name} · ${escapeHtml(desktopShortcutLabel(value))}" title="${escapeHtml(t('录制快捷键'))}">${desktopShortcutValue(value)}</button>${action('clear', '清除快捷键', 'close', !value)}${action('reset', '恢复默认', 'restore', desktopShortcutLabel(value) === desktopShortcutLabel(desktopShortcutDefault(key)))}</div>`;
   };
+  const meetingApps = (desktopPreferences.meetingApps || [])
+    .map(
+      ({ id, name }) =>
+        `<span class="desktop-meeting-app" title="${escapeHtml(id)}"><span>${escapeHtml(name)}</span><button type="button" class="shortcut-action" data-remove-meeting-app="${escapeHtml(id)}" aria-label="${escapeHtml(t('移除应用') + ' · ' + name)}" title="${escapeHtml(t('移除应用'))}">${interfaceIcon('close')}</button></span>`,
+    )
+    .join('');
+  const appList = `<div class="desktop-meeting-apps">${meetingApps}<button class="secondary" type="button" data-add-meeting-app>${escapeHtml(t('添加会议应用'))}</button></div>`;
   mount.innerHTML = `<div data-desktop-settings><section class="preferences-section" id="preferences-window" aria-labelledby="preferences-window-title"><header class="preferences-section-heading"><h2 id="preferences-window-title">${escapeHtml(t('窗口与后台'))}</h2></header>${renderPreferenceRow(
     '关闭主窗口时',
     desktopPreferences.closeBehavior === 'hide'
@@ -692,7 +701,7 @@ function renderDesktopPreferences() {
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}${renderPreferenceRow('自动显示会议胶囊', t('录音时随主窗口最小化显示，播放录音时自动显示'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '自动显示会议胶囊')}</span>`)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
+  )}${renderPreferenceRow('自动显示会议胶囊', t('录音或回放时，最小化主窗口即可显示'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '自动显示会议胶囊')}</span>`)}${renderPreferenceRow('会议录音提醒', t('后台检测到会议应用发声时提示开始录音'), toggle('meetingPrompts', '会议录音提醒'))}${renderPreferenceRow('自定义会议应用', '', appList)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -1752,7 +1761,7 @@ function renderSaveState(state = 'saved') {
 function summaryDocumentSections(markdown) {
   const sections = [];
   for (const line of cleanSummaryMarkdown(markdown).replace(/\r/g, '').split('\n')) {
-    const heading = line.match(/^(#{1,2})\s+(.+)$/);
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading || !sections.length)
       sections.push({
         id: String(sections.length),
@@ -1783,15 +1792,12 @@ function renderMeetingSummary({
   palette,
 }) {
   const people = participants.length
-    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
+    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span>${interfaceIcon('chevron-down')}</button><span class="summary-participant-avatars">${participants
         .slice(0, 3)
-        .map(
-          (person) =>
-            `<span class="summary-participant-preview-person">${renderSpeakerAvatar(person, palette)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
-        )
+        .map((person) => speakerMenuTrigger(person, palette, 'summary-participant-preview-person'))
         .join(
           '',
-        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="summary-participant-list">${participants.map((person) => `<span>${renderSpeakerAvatar(person, palette)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div></div></section>`
+        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="summary-participant-list">${participants.map((person) => speakerMenuTrigger(person, palette, 'summary-participant-person')).join('')}</div></div></section>`
     : '';
   return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? `<div class="summary-empty" role="status"><span class="summary-empty-mark"><span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span></span><h2>${escapeHtml(t('正在生成会议纪要'))}</h2></div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
@@ -1843,6 +1849,20 @@ function renderRefineStatus(d) {
       ? `<span class="refine-state" role="status">${t('error.tasks.running')}</span>`
       : `<span class="refine-wrap"><button class="detail-icon-action" data-refine-more type="button" aria-label="${t('重新精修')}" title="${t('重新精修')}" aria-expanded="false">${interfaceIcon('refresh')}${t(d.hasRefined ? '重新精修' : '开始精修')}</button><div class="refine-menu" hidden><header>${interfaceIcon('waveform')}<strong>${t('会后精修')}</strong></header>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><footer><button class="primary-action" type="button" data-refine-action="${d.hasRefined ? 're-refine' : 'start'}">${d.hasRefined ? t('重新精修') : t('开始精修')}${interfaceIcon('arrow-right')}</button></footer></div></span>`;
   return `${translationMenu}${refineMenu}`;
+}
+function detailTranscriptEntries(d) {
+  if (d.transcriptEditing && d.transcriptEditEntries) return d.transcriptEditEntries;
+  if (d.hasRefined && d.refinedTranscript?.length && d.transcriptVersion !== 'original')
+    return d.refinedTranscript;
+  return (d.transcriptVersion === 'original' ? d.originalTranscript : null) || d.transcript || [];
+}
+
+function renderTranscriptSpeakerFilter(d) {
+  const entry =
+    d.transcriptSpeaker &&
+    detailTranscriptEntries(d).find((item) => item.speaker?.id === d.transcriptSpeaker);
+  if (!entry) return '';
+  return `<button class="transcript-speaker-filter" type="button" data-clear-speaker-filter title="${escapeHtml(t('清除说话人筛选'))}" aria-label="${escapeHtml(t('清除说话人筛选') + ' · ' + entry.speaker.name)}">${interfaceIcon('person')}${escapeHtml(entry.speaker.name)}${interfaceIcon('close')}</button>`;
 }
 /** 文档导航与操作栏共用更新入口，切换文档时保留编辑器和草稿。 */
 function renderDetailTabbar() {
@@ -1923,6 +1943,7 @@ function resizeTranscriptField(field) {
 }
 /** 刷新选定会议的逐字稿、笔记和摘要面板。@returns {void} */
 function renderMeetingDetail() {
+  document.querySelector('.speaker-action-menu:popover-open')?.hidePopover();
   const d = uiData.detail;
   const actions = document.querySelector('#detail-view .detail-actions');
   if (actions && actions !== actions.parentElement.lastElementChild)
@@ -1941,8 +1962,6 @@ function renderMeetingDetail() {
   const hasRefined = Boolean(d.hasRefined && d.refinedTranscript.length);
   const fulltextMode =
     hasRefined && d.transcriptVersion !== 'original' && d.refinedMode === 'fulltext';
-  const showingRefined =
-    hasRefined && d.transcriptVersion !== 'original' && d.refinedMode === 'timestamps';
   const evidenceLinks = transcriptEvidenceLinks(
     d.summary?.claims || [],
     d.acceptedClaims || [],
@@ -1952,21 +1971,19 @@ function renderMeetingDetail() {
     currentMeetingDetail?.id === livePaletteMeetingId ? liveSpeakerPalette : new Map();
   for (const person of currentMeetingDetail?.speakers || [])
     speakerColor(person.id || person.name, palette);
+  const entries = detailTranscriptEntries(d);
+  if (d.transcriptSpeaker && !entries.some((entry) => entry.speaker?.id === d.transcriptSpeaker))
+    d.transcriptSpeaker = '';
+  const visibleEntries = d.transcriptSpeaker
+    ? entries.filter((entry) => entry.speaker?.id === d.transcriptSpeaker)
+    : entries;
   let transcriptBody;
   if (fulltextMode) {
-    transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${d.refinedTranscript.map((entry) => `<div data-segment-id="${escapeHtml(entry.segmentId)}">${escapeHtml(entry.speaker.name)}：${escapeHtml(entry.text)}${evidenceLinks.get(entry.segmentId) || ''}</div>`).join('')}</div></div>`;
+    transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${visibleEntries.map((entry) => `<div data-segment-id="${escapeHtml(entry.segmentId)}">${speakerMenuTrigger(entry.speaker, palette, 'fulltext-speaker')}：${escapeHtml(entry.text)}${evidenceLinks.get(entry.segmentId) || ''}</div>`).join('')}</div></div>`;
   } else {
     // 编辑态下用草稿覆盖后端文本，使并发刷新不会吞掉尚未保存的输入。
     const draft = d.transcriptEditing ? d.transcriptDraft || {} : {};
-    transcriptBody = (
-      d.transcriptEditing && d.transcriptEditEntries
-        ? d.transcriptEditEntries
-        : showingRefined
-          ? d.refinedTranscript
-          : d.transcriptVersion === 'original'
-            ? d.originalTranscript || d.transcript
-            : d.transcript
-    )
+    transcriptBody = visibleEntries
       .map((entry) => ({
         ...entry,
         palette,
@@ -2011,7 +2028,7 @@ function renderMeetingDetail() {
     currentMeetingDetail?.id,
   );
   reading.classList.toggle('has-cause-rail', Boolean(causeRail));
-  reading.innerHTML = `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
+  reading.innerHTML = `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${renderTranscriptSpeakerFilter(d)}${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
   reading.insertAdjacentHTML('beforeend', causeRail);
   if (railState) {
     reading.querySelectorAll('.detail-cause-rail details').forEach((card) => {

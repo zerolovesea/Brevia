@@ -176,8 +176,7 @@ struct Capture {
       self.failed = true;
       self.active = false;
       self.flush();
-      self.queue(
-          {{"type", "error"}, {"message", "error.audio_backpressure"}});
+      self.queue({{"type", "error"}, {"message", "error.audio_backpressure"}});
       return;
     }
     const auto now = Clock::now();
@@ -284,6 +283,7 @@ struct Capture {
   }
 };
 #ifndef BREVIA_AUDIO_TEST
+JSON meeting_audio(const std::vector<std::string> &excluded, const JSON &apps);
 int main(int argc, char **argv) {
   _setmode(_fileno(stdin), _O_BINARY);
   _setmode(_fileno(stdout), _O_BINARY);
@@ -294,6 +294,16 @@ int main(int argc, char **argv) {
     auto has = [&](const std::string &value) {
       return std::find(args.begin(), args.end(), value) != args.end();
     };
+    if (args[0] == "meeting-audio") {
+      if (args.size() == 2 && args[1] == "--stdin") {
+        const auto options = JSON::parse(std::cin);
+        emit(meeting_audio(
+            options.at("excluded").get<std::vector<std::string>>(),
+            options.at("apps")));
+      } else
+        emit(meeting_audio({args.begin() + 1, args.end()}, JSON::object()));
+      return 0;
+    }
     if (args[0] == "permissions") {
       emit({{"microphone", microphone_allowed() ? "granted" : "denied"},
             {"screen", "granted"},

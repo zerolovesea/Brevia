@@ -3,7 +3,7 @@
 
 @interface CapsuleTestWebView : WKWebView
 @property NSInteger snapshotsBeforeStall;
-@property BOOL checkedHiddenSnapshot;
+@property BOOL checkedUpdatedSnapshot;
 @property BOOL pillAtBottom;
 @property BOOL dark;
 @property(copy) void (^delayedSnapshot)(NSImage *, NSError *);
@@ -13,8 +13,8 @@
     if (self.snapshotsBeforeStall == 0) { self.delayedSnapshot = completion; return; }
     if (self.snapshotsBeforeStall > 0) self.snapshotsBeforeStall--;
     [super takeSnapshotWithConfiguration:configuration completionHandler:^(NSImage *image, NSError *error) {
-        if (self.alphaValue == 0) {
-            // 隐藏原生视图的同时，WebKit 仍必须提交有内容的新尺寸画面。
+        if (configuration.afterScreenUpdates) {
+            // 在被独立表面覆盖时，WebKit 仍保持可见并绘制新尺寸。
             assert(image && !error);
             NSBitmapImageRep *pixels = [NSBitmapImageRep imageRepWithData:image.TIFFRepresentation];
             NSInteger y = 40 * pixels.pixelsHigh / self.bounds.size.height;
@@ -24,7 +24,7 @@
             assert(color.alphaComponent > 0.99);
             assert(self.dark ? color.redComponent < 0.15 : color.redComponent > 0.95);
             assert([pixels colorAtX:0 y:0].alphaComponent == 0);
-            self.checkedHiddenSnapshot = YES;
+            self.checkedUpdatedSnapshot = YES;
         }
         completion(image,error);
     }];
@@ -40,6 +40,8 @@ static void waitUntil(BOOL (^finished)(void)) {
 
 int main(void) {
     @autoreleasepool {
+        assert([UTTypeApplicationBundle conformsToType:dialogFileType(@"app")]);
+        assert([dialogFileType(@"png") isEqual:UTTypePNG]);
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,344,80)
@@ -55,7 +57,7 @@ int main(void) {
         for (NSNumber *dark in @[@NO,@YES]) {
             web.dark = dark.boolValue;
             for (NSNumber *above in @[@NO,@YES]) {
-                web.checkedHiddenSnapshot = NO;
+                web.checkedUpdatedSnapshot = NO;
                 web.pillAtBottom = above.boolValue;
                 NSString *html = [NSString stringWithFormat:
                     @"<style>html,body{margin:0;background:transparent}div{position:absolute;left:12px;%@:12px;width:320px;height:56px;border-radius:28px;background:%@}</style><div></div>",
@@ -77,13 +79,12 @@ int main(void) {
                     id observer = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidResizeNotification
                         object:window queue:nil usingBlock:^(NSNotification *note) {
                             (void)note;
-                            for (NSView *view in window.contentView.subviews) {
-                                if (![view isKindOfClass:NSImageView.class]) continue;
-                                NSImageView *cover = (NSImageView *)view;
-                                assert(web.alphaValue == 0);
-                                assert(!window.opaque && window.backgroundColor.alphaComponent == 0);
-                                // 缩放开始前必须已有正确主题的画面，且原有屏幕位置不变。
-                                assert(fabs(cover.frame.origin.y + target.origin.y - previous.origin.y) < 1);
+                            for (NSWindow *surface in NSApp.orderedWindows) {
+                                if (surface == window) break;
+                                if (!surface.visible || ![surface.contentView isKindOfClass:NSImageView.class]) continue;
+                                assert(surface.ignoresMouseEvents && NSEqualRects(surface.frame, previous));
+                                assert(web.alphaValue == 1 && !surface.opaque);
+                                NSImageView *cover = (NSImageView *)surface.contentView;
                                 NSBitmapImageRep *pixels = [NSBitmapImageRep imageRepWithData:cover.image.TIFFRepresentation];
                                 NSInteger pixelY = above.boolValue ? pixels.pixelsHigh - 40 * pixels.pixelsHigh / previous.size.height
                                     : 40 * pixels.pixelsHigh / previous.size.height;
@@ -107,7 +108,7 @@ int main(void) {
                     waitUntil(^BOOL { return finished; });
                     [NSNotificationCenter.defaultCenter removeObserver:observer];
                 }
-                assert(web.checkedHiddenSnapshot);
+                assert(web.checkedUpdatedSnapshot);
             }
         }
         for (NSNumber *count in @[@0,@1]) {

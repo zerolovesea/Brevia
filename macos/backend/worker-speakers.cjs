@@ -260,6 +260,28 @@ function createSpeakerHandlers(worker) {
       return profile;
     },
     'speaker.rename': managed('speaker.rename', (p) => {
+      if (p.meeting_only) {
+        store.editableMeeting(p.meeting_id);
+        const segments = store.currentSegments(p.meeting_id);
+        if (!segments.some((segment) => segment.speaker === p.speaker_id))
+          throw new Error('Speaker not found');
+        if (
+          store.one(
+            'SELECT 1 FROM speakers WHERE meeting_id=? AND id<>? AND name=?',
+            p.meeting_id,
+            p.speaker_id,
+            p.name,
+          ) ||
+          segments.some(
+            (segment) => segment.speaker !== p.speaker_id && segment.speaker_name === p.name,
+          )
+        )
+          throw Object.assign(new Error('Speaker name already in use'), {
+            code: 'error.speaker_name_taken',
+          });
+        store.renameSpeaker(p.meeting_id, p.speaker_id, p.name, p.locked);
+        return store.getMeeting(p.meeting_id);
+      }
       const profile = defaultName(p.name) ? null : store.ensureSpeakerProfile(p.name);
       store.renameSpeaker(p.meeting_id, p.speaker_id, p.name, p.locked || false, profile?.id);
       if (profile) worker.emit('speaker-profile.updated', { profile });

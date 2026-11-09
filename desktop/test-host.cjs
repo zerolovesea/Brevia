@@ -173,7 +173,13 @@ async function native(method, args) {
     return true;
   }
   if (method === 'window.hide') return true;
-  if (method === 'dialog.open') return { canceled: true, filePaths: [] };
+  if (method === 'dialog.open') {
+    const ext = args.filters?.[0]?.extensions?.[0];
+    const file = path.join(process.env.BREVIA_DATA_DIR, 'Test Conference.' + ext);
+    if (['app', 'exe'].includes(ext) && fs.existsSync(file))
+      return { canceled: false, filePaths: [file] };
+    return { canceled: true, filePaths: [] };
+  }
   if (method === 'dialog.save') return { canceled: true };
   if (method === 'dialog.message') return { response: 0 };
   if (method === 'shell.copyText') {

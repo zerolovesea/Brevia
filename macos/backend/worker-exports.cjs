@@ -245,12 +245,8 @@ async function writeDocx(destination, content, checkpoint) {
     checkpoint,
   );
 }
-function printHTML(content, markdown, appendix) {
-  let body = markdown ? markdownHTML(content) : `<pre>${escape(content)}</pre>`;
-  if (appendix) {
-    const newline = appendix.indexOf('\n');
-    body += `<h2>${escape(appendix.slice(0, newline))}</h2><pre>${escape(appendix.slice(newline + 1))}</pre>`;
-  }
+function printHTML(content, markdown) {
+  const body = markdown ? markdownHTML(content) : `<pre>${escape(content)}</pre>`;
   return (
     "<!doctype html><meta charset='utf-8'><style>@page{margin:64px 44px 48px}body{font:16px system-ui,sans-serif;line-height:1.7;margin:0 auto;max-width:760px}h1,h2,h3{line-height:1.3}h1{font-size:28px}h2{font-size:21px;margin-top:32px}h3{font-size:17px;margin-top:24px}ul{padding-left:1.4em}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;text-align:left}pre{font:inherit;white-space:pre-wrap}</style>" +
     body
@@ -271,9 +267,13 @@ function createExportHandlers(worker) {
     const title = safeTitle(meeting.title).trim() || meeting.id,
       prefix = safeTitle(
         payload.filename_prefix ||
-          { transcript: '[字幕]', notes: '[会议纪要]', mynotes: '[我的笔记]', audio: '[会议录音]' }[
-            contentType
-          ] ||
+          {
+            transcript: '[字幕]',
+            notes: '[会议纪要]',
+            analysis: '[原因分析]',
+            mynotes: '[我的笔记]',
+            audio: '[会议录音]',
+          }[contentType] ||
           '',
       );
     if (contentType === 'audio') {
@@ -297,16 +297,17 @@ function createExportHandlers(worker) {
       }
       return { path: destination, format };
     }
-    if (!['transcript', 'notes', 'mynotes'].includes(contentType))
-      throw new Error('Export content must be transcript, notes, mynotes, or audio');
+    if (!['transcript', 'notes', 'analysis', 'mynotes'].includes(contentType))
+      throw new Error('Export content must be transcript, notes, analysis, mynotes, or audio');
+    if (contentType === 'analysis' && !['md', 'txt', 'docx', 'pdf'].includes(format))
+      throw new Error('Unsupported cause analysis format');
     if (!['md', 'txt', 'json', 'srt', 'docx', 'pdf'].includes(format))
       throw new Error('Unsupported text export format');
     const stale = new Set(meeting.correction?.stale_translations || []),
       segments = latestSegments(meeting.segments).map((item) =>
         stale.has(item.id) ? { ...item, translation: null } : item,
       );
-    let content,
-      appendix = '';
+    let content;
     if (format === 'json')
       content = JSON.stringify({ ...meeting, segments, current_segments: segments }, null, 2);
     else if (format === 'srt')
@@ -318,8 +319,9 @@ function createExportHandlers(worker) {
         .join('\n\n');
     else if (['notes', 'mynotes'].includes(contentType)) {
       content = noteBody(meeting, contentType);
-      appendix = causeAppendix(meeting, content, format === 'md');
-      if (appendix && format !== 'pdf') content += '\n\n' + appendix;
+    } else if (contentType === 'analysis') {
+      content = causeAppendix(meeting, '', format === 'md');
+      if (!content) throw new Error('No cause analysis available');
     } else {
       const lines = segments.map(
         (item) =>
@@ -337,7 +339,7 @@ function createExportHandlers(worker) {
         fs.writeFileSync(
           destination,
           format === 'pdf'
-            ? printHTML(content, ['notes', 'mynotes'].includes(contentType), appendix)
+            ? printHTML(content, ['notes', 'mynotes'].includes(contentType))
             : content,
         );
     } catch (error) {

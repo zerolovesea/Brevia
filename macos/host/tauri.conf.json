@@ -12,7 +12,7 @@
       "capabilities": [
         {
           "identifier": "brevia-desktop",
-          "windows": ["main", "floating-caption", "recording-capsule"],
+          "windows": ["main", "floating-caption", "recording-capsule", "meeting-prompt"],
           "permissions": [
             "core:event:allow-listen",
             "core:event:allow-unlisten",

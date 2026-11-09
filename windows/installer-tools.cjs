@@ -11,26 +11,32 @@ async function prepareInstallerTools(tools) {
     'https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip',
     archive,
     'c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1',
+    'https://api.github.com/repos/tauri-apps/binary-releases/releases/assets/317051073',
   );
   await download(
     'https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll',
     plugin,
     '5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709',
+    'https://api.github.com/repos/tauri-apps/nsis-tauri-utils/releases/assets/345882097',
   );
   fs.mkdirSync(tools, { recursive: true });
   const nsis = path.join(tools, 'NSIS');
-  fs.rmSync(path.join(tools, 'nsis-3.11'), { recursive: true, force: true });
-  // Windows tar 的路径参数可能丢失 Unicode；归档走 stdin，目录由进程 cwd 指定。
-  run('tar', ['-xf', '-'], {
-    cwd: tools,
-    input: fs.readFileSync(archive),
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
-  fs.rmSync(nsis, { recursive: true, force: true });
-  fs.renameSync(path.join(tools, 'nsis-3.11'), nsis);
-  const plugins = path.join(nsis, 'Plugins/x86-unicode/additional');
-  fs.mkdirSync(plugins, { recursive: true });
-  fs.copyFileSync(plugin, path.join(plugins, 'nsis_tauri_utils.dll'));
+  const staging = fs.mkdtempSync(path.join(tools, 'nsis-stage-'));
+  try {
+    // Windows tar skips the root launcher when reading this ZIP through stdin.
+    fs.copyFileSync(archive, path.join(staging, 'nsis.zip'));
+    run('tar', ['-xf', 'nsis.zip'], { cwd: staging });
+    const extracted = path.join(staging, 'nsis-3.11');
+    if (!fs.statSync(path.join(extracted, 'makensis.exe')).isFile())
+      throw new Error('NSIS archive is missing makensis.exe');
+    const plugins = path.join(extracted, 'Plugins/x86-unicode/additional');
+    fs.mkdirSync(plugins, { recursive: true });
+    fs.copyFileSync(plugin, path.join(plugins, 'nsis_tauri_utils.dll'));
+    fs.rmSync(nsis, { recursive: true, force: true });
+    fs.renameSync(extracted, nsis);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 module.exports = { prepareInstallerTools };

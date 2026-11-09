@@ -126,7 +126,7 @@ public static class BreviaTestWindow {
   assert.equal(result.status, 0, result.stderr || result.error?.message || 'Quit test app');
 }
 
-async function main(version, installerHash, uninstallerHash) {
+async function main(version, assetId, installerHash, uninstallerHash) {
   assert.equal(process.platform, 'win32', 'Run this integration check on Windows');
   assert.equal(
     process.env.GITHUB_ACTIONS,
@@ -152,6 +152,7 @@ async function main(version, installerHash, uninstallerHash) {
       `https://github.com/zerolovesea/Brevia/releases/download/v${version}/Brevia-${version}-x64-setup.exe`,
       oldInstaller,
       installerHash,
+      `https://api.github.com/repos/zerolovesea/Brevia/releases/assets/${assetId}`,
     );
     install(oldInstaller, ['/S', `/D=${directory}`]);
     assert.ok(fs.existsSync(path.join(directory, 'resources/app.asar')));
@@ -277,12 +278,14 @@ async function main(version, installerHash, uninstallerHash) {
 }
 main(
   '1.4.3',
+  653795242,
   'a2a086c424b910f0fa2cbdb9220d03fb2d429dba246c01cca27e18630d77c3d3',
   'd8433f86ca41812d41ab4706f7ea3c68d9ed7c83a2d9975f1eee2f03ec8196aa',
 )
   .then(() =>
     main(
       '1.4.5',
+      665234188,
       '71016acd9f061f1401e549e14a77055c4a7985b0419958b500b171e5b0cd3559',
       '42e3887c561ca98373e932f171cf19fe125d69c1075124f641f378951e6a4835',
     ),

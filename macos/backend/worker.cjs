@@ -188,7 +188,7 @@ class Worker {
       'meeting.list': (p) => store.listMeetings(p),
       'meeting.search': (p) => store.searchMeetings(p.query || ''),
       'meeting.get': (p) => store.getMeeting(p.meeting_id, true),
-      'meeting.update': (p) => store.updateMeeting(p.meeting_id, p.updates),
+      'meeting.update': (p) => store.updateMeeting(p.meeting_id, p.updates, p.expected_notes),
       'meeting.delete': (p) => deleted(p),
       'meeting.purge': (p) => deleted(p, true),
       'meeting.restore': (p) => {

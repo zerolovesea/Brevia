@@ -161,7 +161,11 @@ module.exports = {
         if (enabled) {
           if (!['recording', 'paused', 'interrupted'].includes(meeting.status))
             throw error('error.transcript_ended', '录音已结束，后续字幕规则未启用，请更新预览');
-          if (previous && previous.replacement !== replacement && !payload.confirm_rule)
+          if (
+            (payload.expected_rule_replacement !== undefined &&
+              previous?.replacement !== payload.expected_rule_replacement) ||
+            (previous && previous.replacement !== replacement && !payload.confirm_rule)
+          )
             throw error('error.transcript_rule_conflict', '本场已有不同的替换规则，请确认更新');
           state.rules = state.rules.filter((r) => r.find !== find);
           state.rules.push({ find, replacement, enabled: true });

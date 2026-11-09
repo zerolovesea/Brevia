@@ -160,9 +160,9 @@ function causeChapterGroups(claims, markdown) {
   );
 }
 function renderDetailCauseRail(claims, markdown, meetingId) {
-  if (!String(markdown || '').trim()) return '';
-  const groups = causeChapterGroups(claims, markdown);
-  if (!groups.length) return '';
+  const groups = String(markdown || '').trim() ? causeChapterGroups(claims, markdown) : [];
+  if (!groups.length)
+    return `<aside class="detail-cause-rail" data-meeting-id="${escapeHtml(String(meetingId))}" aria-label="${escapeHtml(t('原因分析'))}"><div class="detail-cause-scroll detail-cause-empty">${interfaceIcon('notebook')}<span>${escapeHtml(t('原因分析'))}</span></div></aside>`;
   return `<aside class="detail-cause-rail" data-meeting-id="${escapeHtml(String(meetingId))}" aria-label="${escapeHtml(t('原因分析'))}"><div class="detail-cause-scroll">${renderCauseTree(groups)}</div></aside>`;
 }
 function syncEvidenceReading() {
@@ -365,6 +365,7 @@ document.addEventListener('click', (event) => {
     if (uiData.detail.transcriptEditing) return showToast(t('请先保存或取消当前编辑'));
     if (!switchDetailDocument('transcript')) return;
     uiData.detail.transcriptSearch = '';
+    uiData.detail.transcriptSpeaker = '';
     uiData.detail.transcriptVersion = uiData.detail.hasRefined ? 'refined' : 'original';
     renderMeetingDetail();
     const segment = document.querySelector(

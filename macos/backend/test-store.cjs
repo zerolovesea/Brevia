@@ -18,6 +18,20 @@ function setup(t) {
   });
   return { root, store };
 }
+test('capsule edits preserve later meeting notes and reject a stale base', (t) => {
+  const { store } = setup(t);
+  const id = 'capsule-notes';
+  store.createMeeting({
+    meeting_id: id,
+    title: 'Meeting',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  store.updateMeeting(id, { notes: 'original' });
+  store.updateMeeting(id, { notes: 'phone' }, 'original');
+  assert.throws(() => store.updateMeeting(id, { notes: 'capsule' }, 'original'), /重新核对/);
+  assert.equal(store.getMeeting(id).notes, 'phone');
+});
 function readArchive(file) {
   if (process.platform === 'win32') {
     const script = `
@@ -125,6 +139,29 @@ test('Store matches original data-layer snapshots through correction and refinem
     ],
   });
   capture('replacement');
+  const other = s.currentSegments('golden', 'two')[0];
+  assert.throws(
+    () =>
+      s.transcriptCorrection('golden', {
+        action: 'replace',
+        find: '北威亚',
+        replacement: '新版',
+        future: true,
+        confirm_rule: true,
+        expected_rule_replacement: '先前的规则',
+        matches: [
+          {
+            segment_id: 'two',
+            text: other.text,
+            version: other.version,
+            revision: other.revision,
+            occurrences: [0],
+          },
+        ],
+      }),
+    { code: 'error.transcript_rule_conflict' },
+  );
+  assert.equal(s.currentSegments('golden', 'two')[0].text, other.text);
   s.saveSegment({
     meeting_id: 'golden',
     segment_id: 'future',
@@ -266,6 +303,28 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
     }),
     /Invalid archive source/,
   );
+  const meeting = store.getMeeting('export');
+  const [markdown, claims] = evidence.parseClaims(
+    '## 议题讨论\n### 上线推迟\n- 缺少测试资源 [[cause:S1]]',
+    meeting.segments,
+  );
+  store.saveSummary('export', { markdown, claims, language: 'zh' }, markdown);
+  for (const format of ['md', 'txt', 'pdf', 'docx']) {
+    const output = async (content) => {
+      const file = (await handlers['meeting.export']({ meeting_id: 'export', format, content }))
+        .path;
+      return format === 'docx'
+        ? readArchive(file).files['word/document.xml']
+        : fs.readFileSync(file, 'utf8');
+    };
+    const minutes = await output('notes');
+    const analysis = await output('analysis');
+    assert.match(minutes, /议题讨论/);
+    assert.doesNotMatch(minutes, /原因分析|alert/);
+    assert.match(analysis, /原因分析/);
+    assert.match(analysis, /alert/);
+    assert.doesNotMatch(analysis, /议题讨论/);
+  }
   const collision = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.notEqual(collision.path, docx.path);
 });

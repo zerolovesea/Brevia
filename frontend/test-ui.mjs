@@ -2012,9 +2012,9 @@ assert.match(text(uiData), /title: 'AI 功能'[\s\S]*modal: 'ai-features'/);
 assert.doesNotMatch(text(uiData), /modal: '(?:ai-assist|summary-model)'/);
 assert.match(text(js), /summaryProviders/);
 assert.match(text(js), /persistSummaryConfig/);
-assert.match(text(components), /inline-segment-speaker-form/);
+assert.match(text(components), /aria-haspopup="menu" aria-expanded="false"/);
 assert.match(text(js), /renderMeetingDetail\(\);/);
-assert.match(text(js), /function saveInlineSegmentSpeaker/);
+assert.match(text(js), /function openSpeakerMenu/);
 assert.match(text(components), /function renderSettingsCard/);
 assert.match(text(js), /renderStaticViews\(\);/);
 assert.match(text(js), /function renderPrepareSelects/);
@@ -6901,23 +6901,24 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
     { ...cause, id: 'detached', line: '- 已完成设计', detached: true },
   ];
   const chapters = causeChapterGroups(linked, markdown);
-  assert.equal(chapters.length, 3);
+  assert.equal(chapters.length, 4);
   assert.deepEqual(
     Array.from(chapters, (group) => group.section),
-    ['1', '2', undefined],
+    ['1', '2', '3', undefined],
   );
   assert.deepEqual(
     Array.from(chapters[0].items, (item) => item.id),
-    ['first', 'subheading'],
+    ['first'],
   );
   assert.equal(
     chapters[0].label,
     cause.section,
     '原因问题保留原名，章节关联来自正文而不是问题标题',
   );
-  assert.equal(chapters[1].chapter, '同名章节', '同名章节按位置区分，不误连第一节');
+  assert.equal(chapters[1].chapter, '细节');
+  assert.equal(chapters[2].chapter, '同名章节', '同名章节按位置区分，不误连第一节');
   assert.deepEqual(
-    Array.from(chapters[2].items, (item) => item.id),
+    Array.from(chapters[3].items, (item) => item.id),
     ['duplicate', 'removed'],
   );
   assert.equal(
@@ -6931,15 +6932,15 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
     )[0].chapter,
     '新标题',
   );
-  assert.equal(renderDetailCauseRail([decision], markdown, 'm'), '');
-  assert.equal(renderDetailCauseRail([cause], '', 'm'), '');
-  assert.equal(renderDetailCauseRail([cause], '  \n\t', 'm'), '');
+  assert.match(renderDetailCauseRail([decision], markdown, 'm'), /detail-cause-empty/);
+  assert.match(renderDetailCauseRail([cause], '', 'm'), /detail-cause-empty/);
+  assert.match(renderDetailCauseRail([cause], '  \n\t', 'm'), /detail-cause-empty/);
   const rail = renderDetailCauseRail(linked, markdown, 'm');
   assert.equal((rail.match(/<brevia-cause-tree>/g) || []).length, 1);
-  assert.equal((rail.match(/data-summary-section-link=/g) || []).length, 2);
+  assert.equal((rail.match(/data-summary-section-link=/g) || []).length, 3);
   assert.doesNotMatch(rail, /data-evidence-id="detached"/);
   const rendered = summaryContext.renderSummaryDocument(markdown);
-  assert.equal((rendered.match(/data-summary-section=/g) || []).length, 3);
+  assert.equal((rendered.match(/data-summary-section=/g) || []).length, 4);
   assert.match(rendered, /保留正文/);
   assert.match(rendered, /<h3>细节<\/h3>/);
   assert.doesNotMatch(rendered, /模型前言/);
@@ -7224,10 +7225,36 @@ assert.match(
   text(desktopMain),
   /function saveNoteImage\([\s\S]{0,700}Image must be 10 MB or smaller/,
 );
-assert.match(
-  text(desktopMain),
-  /meeting\.note-image\.save[\s\S]{0,300}worker\.request\('meeting\.get'/,
-);
+{
+  const source = text(desktopMain).match(
+    /handleIpc\('meeting\.note-image\.save', (async [\s\S]*?)\n  \}\);/,
+  )[1];
+  const own = {},
+    overlay = {},
+    saved = [];
+  const save = runInNewContext('(' + source + '\n})', {
+    noteImage: { parse: (value) => value },
+    desktop: {
+      mainWindow: { webContents: own },
+      capsule: { webContents: overlay },
+      state: { meetingId: 'current', phase: 'recording' },
+    },
+    worker: {
+      request: async (method, { meeting_id }) => {
+        assert.equal(method, 'meeting.get');
+        if (meeting_id === 'missing') throw new Error('missing');
+      },
+    },
+    saveNoteImage: ({ meeting_id }) => saved.push(meeting_id),
+    mainText: (key) => key,
+  });
+  await save({ sender: own }, { meeting_id: 'other' });
+  await save({ sender: overlay }, { meeting_id: 'current' });
+  await assert.rejects(save({ sender: overlay }, { meeting_id: 'other' }));
+  await assert.rejects(save({ sender: {} }, { meeting_id: 'current' }));
+  await assert.rejects(save({ sender: own }, { meeting_id: 'missing' }));
+  assert.deepEqual(saved, ['other', 'current']);
+}
 assert.match(text(desktopMain), /protocol\.handle\('brevia-note'/);
 assert.match(text(preload), /noteImage: \{ save: invoke\('meeting\.note-image\.save'\) \}/);
 assert.match(text(html), /img-src 'self' data: brevia-note:/);
@@ -7399,7 +7426,32 @@ assert.match(text(meetingDetail), /latestTranscriptSegments\(meeting\)/);
 // 判定本身已用合成输入验证（见 app-utils 的行为断言）；这里确认展示模式跟着**模型能力**
 // 分流，而不是跟着数据里有没有时间戳字段走。
 assert.match(text(components), /d\.refinedMode === 'fulltext'/);
-assert.match(text(components), /d\.refinedMode === 'timestamps'/);
+{
+  const refinedTranscript = [
+    { speaker: { id: 'first', name: 'Chen' } },
+    { speaker: { id: 'second', name: 'Chen' } },
+  ];
+  const originalTranscript = [{ speaker: { id: 'old', name: 'Original' } }];
+  const detail = {
+    hasRefined: true,
+    refinedMode: 'timestamps',
+    refinedTranscript,
+    originalTranscript,
+    transcriptSpeaker: 'second',
+    transcriptEditable: true,
+  };
+  assert.equal(detailTabbarContext.detailTranscriptEntries(detail), refinedTranscript);
+  const filter = detailTabbarContext.renderTranscriptSpeakerFilter(detail);
+  assert.match(filter, /data-clear-speaker-filter/);
+  assert.match(filter, /Chen/);
+  assert.equal(
+    detailTabbarContext.renderTranscriptSpeakerFilter({ ...detail, transcriptSpeaker: '' }),
+    '',
+  );
+  const original = { ...detail, transcriptVersion: 'original', transcriptSpeaker: 'old' };
+  assert.equal(detailTabbarContext.detailTranscriptEntries(original), originalTranscript);
+  assert.match(detailTabbarContext.renderTranscriptSpeakerFilter(original), /Original/);
+}
 assert.match(
   text(app),
   /language: uiData\.detail\.language \|\| 'auto',\n\s+\.\.\.\(numSpeakers/,
@@ -8878,7 +8930,6 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
     translationWaiters: new Map(),
     formatMeetingTime: () => '00:00',
     formatSpeakerName: (value) => value || 'A',
-    editingSegmentSpeakerId: null,
     CSS: { escape: (value) => value },
     document: {
       querySelectorAll: (selector) =>
@@ -8922,7 +8973,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   rendered.splice(
     0,
     rendered.length,
-    ...detail.current_segments.map((item) => context.renderSegmentData(item, true, new Map())),
+    ...detail.current_segments.map((item) => context.renderSegmentData(item, new Map())),
   );
   assert.match(
     componentContext.renderTranscriptSegment(rendered[0]),
@@ -9851,6 +9902,49 @@ for (const failure of ['notes', 'request', null]) {
   assert.equal(appended, 1);
   assert.equal(completions[1].error, undefined);
   assert.equal(context.latestAiSuggestion, null);
+}
+
+// 胶囊沿用主窗的当前草稿和串行写盘路径；AI、手机和回看编辑的变更不能被陈旧草稿覆盖。
+{
+  let liveText = 'original';
+  const writes = [];
+  const ctx = {
+    meetingActive: true,
+    breviaClient: { state: { meeting: { id: 'live' } } },
+    playbackStarted: false,
+    document: { querySelector: () => ({ getAttribute: () => null }) },
+    liveNotesRoot: {},
+    liveNotesSaveTimer: {},
+    currentNotesMarkdown: () => liveText,
+    liveNotesEditor: {
+      setMarkdown: (text) => {
+        liveText = text;
+      },
+    },
+    persistNotes: async (id, text) => writes.push([id, text]),
+    clearTimeout() {},
+    t: (key) => key,
+    currentMeetingDetail: { id: 'play' },
+    uiData: { detail: { notes: 'replay' } },
+    activeView: 'live',
+  };
+  runInNewContext('async ' + summaryFn('capsuleNotes'), ctx);
+  assert.equal(await ctx.capsuleNotes('read-notes', 'live'), 'original');
+  await assert.rejects(ctx.capsuleNotes('save-notes', 'wrong', { base: 'original', text: 'new' }));
+  liveText = 'AI update';
+  await assert.rejects(ctx.capsuleNotes('save-notes', 'live', { base: 'original', text: 'new' }));
+  await ctx.capsuleNotes('save-notes', 'live', { base: 'AI update', text: 'new' });
+  ctx.playbackStarted = true;
+  ctx.meetingActive = false;
+  ctx.uiData.detail.notesEditing = true;
+  await assert.rejects(ctx.capsuleNotes('save-notes', 'play', { base: 'replay', text: 'new' }));
+  ctx.uiData.detail.notesEditing = false;
+  await ctx.capsuleNotes('save-notes', 'play', { base: 'replay', text: 'changed' });
+  assert.equal(ctx.currentMeetingDetail.notes, 'changed');
+  assert.deepEqual(writes, [
+    ['live', 'new'],
+    ['play', 'changed'],
+  ]);
 }
 
 // 同一份词条在主进程、主窗和辅助窗中保持一致，并覆盖异常语种回退。

@@ -59,6 +59,8 @@ contextBridge.exposeInMainWorld('brevia', {
     publish: invoke('desktop.publish'),
     publishLevel: invoke('desktop.level'),
     state: invoke('desktop.state'),
+    meetingPrompt: invoke('desktop.meeting-prompt'),
+    meetingApp: invoke('desktop.meeting-app'),
     action: invoke('desktop.action'),
     complete: invoke('desktop.complete'),
     expand: invoke('desktop.expand'),
@@ -156,6 +158,7 @@ contextBridge.exposeInMainWorld('brevia', {
     cancel: invoke('task.cancel'),
   },
   summary: {
+    test: invoke('summary.test'),
     generate: invoke('summary.generate'),
     save: invoke('summary.save'),
     config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') },

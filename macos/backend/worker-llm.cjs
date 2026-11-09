@@ -27,6 +27,8 @@ function clean(text) {
   const close = text.toLowerCase().lastIndexOf('</think>');
   if (close >= 0) text = text.slice(close + 8);
   text = text.replace(/<\/?think>/gi, '').trim();
+  // 小模型也会只返回段号。先统一标记，让分段归并继续按允许的来源集合过滤。
+  text = text.replace(/\[\[(S[1-9]\d*(?:\s*,\s*S[1-9]\d*)*)\]\]/g, '[[conclusion:$1]]');
   const heading = text.search(/^#{1,6}\s+/m);
   return heading >= 0 ? text.slice(heading) : text;
 }
@@ -152,10 +154,42 @@ function createLLMHandlers(worker) {
   async function response(payload, prompt, signal) {
     let request = prompt + '\n\nPut every Markdown heading and list item on its own line.';
     request = worker.prompts?.apply('summary', request) ?? request;
-    return (
+    const result =
       clean(await generate(payload, request, { signal })) ||
-      clean(await generate(payload, request, { signal }))
-    );
+      clean(await generate(payload, request, { signal }));
+    if (!result) throw failure('error.summary.empty_response', 'Summary response was empty');
+    return result;
+  }
+  async function structuredMinutes(options, prompt, language, signal) {
+    const headings = evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en;
+    const outline = headings.map((title) => '## ' + title).join('\n');
+    const request = `${prompt}\n\nUse these seven level-two headings in this order, with content under each. Where nothing was stated, say so briefly in the output language. Use level-three headings for individual discussion topics.\n${outline}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await response(
+        options,
+        request +
+          (attempt
+            ? '\nThe previous answer missed the required outline. Include every section.'
+            : ''),
+        signal,
+      );
+      const sections = [...result.matchAll(/^##[ \t]+(.+)$/gm)];
+      if (
+        sections.length === headings.length &&
+        sections.every(
+          (match, i) =>
+            match[1].trim().replace(/^\*\*(.+)\*\*$/, '$1') === headings[i] &&
+            /[\p{L}\p{N}]/u.test(
+              result
+                .slice(match.index + match[0].length, sections[i + 1]?.index)
+                .replace(/^#{1,6}\s+.*$|\[\[[^\]\n]*\]\]/gm, ''),
+            ),
+        )
+      )
+        return result;
+      signal.throwIfAborted();
+    }
+    throw new Error('The model returned incomplete structured meeting minutes');
   }
   const progress = (id, completed, stage = 'summary.generating') =>
     worker.emit('summary.progress', { meeting_id: id, completed, total: 100, stage });
@@ -198,55 +232,82 @@ function createLLMHandlers(worker) {
           await control.wait();
           progress(meeting.id, 60);
           const instructions = prompts[language] || prompts.en;
+          // 本地引擎串行；在线每批最多三条，失败后等待同批收尾，避免遗留请求。
+          const mapChunks = async (chunks, summarize) => {
+            const results = [];
+            const concurrency = local(options) ? 1 : 3;
+            for (let start = 0; start < chunks.length; start += concurrency) {
+              await control.wait();
+              const batch = await Promise.allSettled(
+                chunks.slice(start, start + concurrency).map(summarize),
+              );
+              const failed = batch.find((result) => result.status === 'rejected');
+              if (failed) throw failed.reason;
+              results.push(...batch.map((result) => result.value));
+            }
+            return results;
+          };
           if (transcript.length <= 10000) {
-            markdown = await response(
+            markdown = await structuredMinutes(
               options,
               `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
+              language,
               control.signal,
             );
           } else {
-            const all = splitTranscript(transcript, 9000);
-            const chunks = all.slice(0, 6);
-            const summaries = [];
-            for (const [index, chunk] of chunks.entries()) {
+            const chunks = splitTranscript(transcript, 9000);
+            let completed = 0;
+            const summaries = await mapChunks(chunks, async (chunk) => {
               await control.wait();
               const prompt = `${prompts.chunk[language] || prompts.chunk.en}\n\n${rules}\n\n<transcript>\n${chunk}\n</transcript>`;
               const visible = new Set(
                 [...chunk.matchAll(/^(S[1-9]\d*) \[/gm)].map((match) => match[1]),
               );
-              summaries.push(
-                evidence.restrictSources(
-                  await response({ ...options, max_tokens: 512 }, prompt, control.signal),
-                  visible,
-                ),
+              const summary = evidence.restrictSources(
+                await response({ ...options, max_tokens: 512 }, prompt, control.signal),
+                visible,
               );
-              progress(meeting.id, 60 + Math.floor((30 * (index + 1)) / chunks.length));
+              progress(meeting.id, 60 + Math.floor((30 * ++completed) / chunks.length));
+              return summary;
+            });
+            let blocks = summaries.join('\n\n---\n\n');
+            let rounds = 0;
+            while (blocks.length > 16000) {
+              if (++rounds > 8) throw new Error('Summary reduction exceeded eight rounds');
+              const reduced = await mapChunks(splitTranscript(blocks, 9000), async (chunk) => {
+                await control.wait();
+                return evidence.restrictSources(
+                  await response(
+                    { ...options, max_tokens: 512 },
+                    `${(prompts.merge[language] || prompts.merge.en).replaceAll('{title}', meeting.title)}\n${rules}\nCompress these partial summaries while retaining decisions, actions and source markers:\n${chunk}`,
+                    control.signal,
+                  ),
+                  new Set(
+                    [
+                      ...chunk.matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g),
+                    ].flatMap((match) => match[1].split(',').map((label) => label.trim())),
+                  ),
+                );
+              });
+              const next = reduced.join('\n\n---\n\n');
+              if (next.length >= blocks.length)
+                throw new Error('Summary reduction did not converge');
+              blocks = next;
             }
-            const blocks = summaries.join('\n\n---\n\n');
             const visible = new Set(
               [
-                ...blocks
-                  .slice(0, 16000)
-                  .matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g),
+                ...blocks.matchAll(/\[\[(?:conclusion|decision|action|cause):([^\]]*)\]\]/g),
               ].flatMap((match) => match[1].split(',').map((label) => label.trim())),
             );
             markdown = evidence.restrictSources(
-              await response(
+              await structuredMinutes(
                 options,
-                `${(prompts.merge[language] || prompts.merge.en).replaceAll('{title}', meeting.title)}\n\n${rules}\n\n<partial summaries>\n${blocks.slice(0, 16000)}\n</partial summaries>`,
+                `${(prompts.merge[language] || prompts.merge.en).replaceAll('{title}', meeting.title)}\n\n${rules}\n\n<partial summaries>\n${blocks}\n</partial summaries>`,
+                language,
                 control.signal,
               ),
               visible,
             );
-            if (all.length > 6 || blocks.length > 16000)
-              worker.emit('worker.warning', {
-                meeting_id: meeting.id,
-                code: 'summary_truncated',
-                message:
-                  language === 'zh'
-                    ? '会议内容过长，本次纪要仅覆盖前六段转录。'
-                    : 'Notes cover only the first six transcript chunks.',
-              });
           }
           await control.wait();
           if (!markdown)
@@ -267,7 +328,12 @@ function createLLMHandlers(worker) {
         const timed =
           meeting.transcript_revision == null ||
           (model?.stages?.includes('refined') && !model.retired);
-        const [rendered, claims] = evidence.parseClaims(markdown, segments, timed);
+        const [rendered, claims] = evidence.parseClaims(
+          markdown,
+          segments,
+          timed,
+          evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en,
+        );
         const data = {
           markdown: rendered,
           language,

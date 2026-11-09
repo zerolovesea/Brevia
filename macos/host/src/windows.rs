@@ -416,6 +416,27 @@ pub fn dispatch(method: &str, args: &Value, window: Option<&WebviewWindow>) -> N
         "dialog.save" => file_dialog(true, args, owner),
         "dialog.message" => message_dialog(args, owner),
         "shell.copyText" => copy_text(args["text"].as_str().ok_or("Missing text")?, owner),
+        "window.setBounds" => {
+            let window = window.ok_or("Window closed")?;
+            let scale = window.scale_factor()?;
+            let physical = |key: &str| -> Result<i32, Box<dyn Error>> {
+                let value = args[key].as_f64().ok_or("Missing window bounds")? * scale;
+                Ok(value.round() as i32)
+            };
+            // Move both edges in one compositor update without activating the capsule.
+            unsafe {
+                SetWindowPos(
+                    window.hwnd()?,
+                    None,
+                    physical("x")?,
+                    physical("y")?,
+                    physical("width")?,
+                    physical("height")?,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                )?;
+            }
+            Ok(json!(true))
+        }
         "window.printPDF" => print_pdf(
             window.ok_or("Window closed")?.app_handle(),
             Path::new(args["path"].as_str().ok_or("Missing print file")?),

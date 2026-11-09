@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Brevia</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./meeting-prompt.css" />
+  </head>
+  <body>
+    <main hidden>
+      <header
+        ><img src="./assets/brevia-mark.svg" alt="" /><div><small>Brevia</small><h1></h1></div
+      ></header>
+      <footer><button data-action="dismiss"></button><button data-action="record"></button></footer>
+    </main>
+    <script src="./i18n-data.js"></script>
+    <script src="./meeting-prompt.js"></script>
+  </body>
+</html>

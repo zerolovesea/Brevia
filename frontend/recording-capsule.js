@@ -67,6 +67,13 @@
   }
   async function action(actionName) {
     if (busy) return;
+    if (actionName === 'stop' && draft && (draft.busy || noteInput.value !== draft.base)) {
+      setTab('notes');
+      await expand(true);
+      showError(new Error(t('请先保存或取消电脑上的笔记编辑。')));
+      noteInput.focus();
+      return;
+    }
     busy = true;
     select('#capsule-error').hidden = true;
     renderControls();
@@ -138,15 +145,139 @@
     select('#notes-panel').hidden = tab !== 'notes';
     renderControls();
   }
+  const editNotes = select('#capsule-edit-notes');
+  const noteForm = select('#capsule-note-form');
+  const noteInput = noteForm.querySelector('textarea');
+  const noteSave = noteForm.querySelector('[type="submit"]');
+  const noteCancel = noteForm.querySelector('button[type="button"]');
+  let draft = null;
+  const unfinishedNotes = new Map();
+
+  function renderNoteControls() {
+    editNotes.hidden =
+      Boolean(draft) ||
+      !['recording', 'paused', 'playing', 'playback-paused'].includes(state.phase);
+    editNotes.textContent = t('编辑');
+    noteInput.setAttribute('aria-label', t('本场笔记'));
+    noteSave.textContent = t('保存');
+    noteCancel.textContent = t('取消');
+    noteForm.hidden = !draft || draft.base === null;
+    select('#capsule-notes').hidden = !noteForm.hidden;
+    noteInput.readOnly = noteSave.disabled = noteCancel.disabled = Boolean(draft?.busy);
+  }
+  editNotes.onclick = async () => {
+    if (draft) return;
+    const editing = (draft = { meetingId: state.meetingId, base: null, busy: false });
+    clearTimeout(closeTimer);
+    renderControls();
+    try {
+      const notes = await bridge.action({ action: 'read-notes', meetingId: editing.meetingId });
+      if (draft !== editing) return;
+      editing.base = noteInput.value = notes;
+      select('#capsule-error').hidden = true;
+      renderNoteControls();
+      noteInput.focus();
+    } catch (error) {
+      if (draft === editing) {
+        draft = null;
+        renderNoteControls();
+        showError(error);
+      }
+    }
+  };
+  function finishNoteEdit() {
+    draft = null;
+    noteInput.value = '';
+    select('#capsule-error').hidden = true;
+    renderNoteControls();
+    editNotes.focus();
+  }
+  noteCancel.onclick = finishNoteEdit;
+  noteForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const editing = draft;
+    if (!editing || editing.busy) return;
+    editing.busy = true;
+    renderNoteControls();
+    try {
+      await bridge.action({
+        action: 'save-notes',
+        meetingId: editing.meetingId,
+        note: { base: editing.base, text: noteInput.value },
+      });
+      if (draft === editing) finishNoteEdit();
+    } catch (error) {
+      if (draft === editing) showError(error);
+    } finally {
+      editing.busy = false;
+      renderNoteControls();
+    }
+  };
+  noteInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.isComposing) {
+      event.preventDefault();
+      noteForm.requestSubmit();
+    }
+  });
+  noteInput.addEventListener('paste', async (event) => {
+    const files = Array.from(event.clipboardData?.files || []).filter((file) =>
+      file.type.startsWith('image/'),
+    );
+    if (!files.length) return;
+    event.preventDefault();
+    const editing = draft;
+    if (!editing || editing.busy) return;
+    const start = noteInput.selectionStart,
+      end = noteInput.selectionEnd;
+    editing.busy = true;
+    renderNoteControls();
+    try {
+      if (
+        files.some(
+          (file) =>
+            !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type) ||
+            file.size > 10 * 1024 * 1024,
+        )
+      )
+        throw new Error(t('图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。'));
+      const images = [];
+      for (const file of files) {
+        if (draft !== editing) return;
+        const { url } = await window.brevia.meeting.noteImage.save({
+          meeting_id: editing.meetingId,
+          mime_type: file.type,
+          bytes: await file.arrayBuffer(),
+        });
+        images.push(`![](${url})`);
+      }
+      if (draft === editing) noteInput.setRangeText(images.join('\n'), start, end, 'end');
+    } catch (error) {
+      if (draft === editing) showError(error);
+    } finally {
+      editing.busy = false;
+      renderNoteControls();
+    }
+  });
+  function noteInline(text) {
+    return escape(text).replace(
+      /!\[([^\]\n]*)\]\(brevia-note:\/\/([\da-f-]{36})\/([\da-f-]{36}\.(?:png|jpg|gif|webp))\)/gi,
+      (match, alt, meeting, filename) => {
+        if (meeting !== state.meetingId) return match;
+        const scheme =
+          window.brevia.platform === 'win32' ? 'http://brevia-note.localhost/' : 'brevia-note://';
+        return `<img src="${scheme}${meeting}/${filename}" alt="${alt}">`;
+      },
+    );
+  }
   function notePreview(markdown) {
     return markdown
       .split('\n')
       .map((line) => {
         const heading = line.match(/^#{1,6}\s+(.+)/);
-        if (heading) return `<h4>${escape(heading[1])}</h4>`;
+        if (heading) return `<h4>${noteInline(heading[1])}</h4>`;
         const bullet = line.match(/^\s*[-*+]\s+(?:\[[ xX]\]\s*)?(.*)/);
-        if (bullet) return `<p class="capsule-note-bullet">${escape(bullet[1])}</p>`;
-        return line ? `<p>${escape(line)}</p>` : '';
+        if (bullet) return `<p class="capsule-note-bullet">${noteInline(bullet[1])}</p>`;
+        return line ? `<p>${noteInline(line)}</p>` : '';
       })
       .join('');
   }
@@ -166,12 +297,19 @@
     if (state.error) showError({ message: state.error });
     else if (previousError) select('#capsule-error').hidden = true;
     if (changed) {
+      // 录音可能经全局快捷键结束；同一场会议回放时仍可继续未确认的草稿。
+      if (draft && draft.base !== null && noteInput.value !== draft.base)
+        unfinishedNotes.set(draft.meetingId, { base: draft.base, text: noteInput.value });
+      const unfinished = unfinishedNotes.get(next.meetingId);
+      unfinishedNotes.delete(next.meetingId);
+      draft = unfinished ? { meetingId: next.meetingId, base: unfinished.base, busy: false } : null;
+      noteInput.value = unfinished?.text || '';
       ++expandRevision;
       closingAnimation?.cancel();
       closingAnimation = null;
       pinned = false;
       follow = true;
-      setTab('captions');
+      setTab(draft ? 'notes' : 'captions');
     }
     expanded = Boolean(state.expanded);
     panel.hidden = !expanded;
@@ -185,8 +323,11 @@
     document.body.dataset.phase = state.phase;
     document.body.dataset.above = String(Boolean(state.above));
     document.body.style.setProperty('--capsule-offset', `${state.pillOffset || 0}px`);
-    select('#capsule-title').textContent = state.title;
-    select('#capsule-title').title = state.title;
+    const title = select('#capsule-title');
+    if (title.textContent !== state.title) {
+      title.textContent = state.title;
+      title.title = state.title;
+    }
     select('#capsule-status').textContent = t(
       {
         playing: '正在播放',
@@ -276,6 +417,7 @@
       : '';
     if (select('#capsule-notes').innerHTML !== notesHtml)
       select('#capsule-notes').innerHTML = notesHtml;
+    renderNoteControls();
     renderControls();
   }
   const shell = select('.capsule-shell');
@@ -286,7 +428,7 @@
   // 靠近暂停或结束时保持位置稳定，只有读数和字幕按钮触发悬停预览。
   document.querySelectorAll('.capsule-identity, .capsule-preview').forEach((trigger) => {
     trigger.addEventListener('pointerenter', () => {
-      if (!expanded && !pointerDown) openTimer = setTimeout(() => void expand(true), 250);
+      if (!expanded && !pointerDown) openTimer = setTimeout(() => void expand(true), 60);
     });
     trigger.addEventListener('pointerleave', () => clearTimeout(openTimer));
   });
@@ -296,7 +438,7 @@
     const keyboardInside =
       document.documentElement.hasAttribute('data-keyboard-navigation') &&
       panel.contains(document.activeElement);
-    if (!pinned && !pointerDown && !keyboardInside)
+    if (!pinned && !draft && !pointerDown && !keyboardInside)
       closeTimer = setTimeout(() => void expand(false), 350);
   }
   shell.addEventListener('pointerleave', scheduleClose);

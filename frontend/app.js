@@ -2777,7 +2777,7 @@ function renderModelConfigForm(config, formClass, selectedModel) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const fields = renderModelConfigFields(config, selectedModel);
   const state = JSON.stringify(config) === JSON.stringify(summaryConfig) ? 'saved' : 'dirty';
-  return `<form class="${formClass} preferences-form">${fields.markup}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(state)}<button class="secondary" type="button" data-cancel-model-config>${escapeHtml(t('取消'))}</button><button class="modal-action" type="submit"${fields.saveDisabled ? ' disabled' : ''}>${copy.save}</button></footer></form>`;
+  return `<form class="${formClass} preferences-form">${fields.markup}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(state)}${config.provider !== 'built-in' ? `<button class="secondary" type="button" data-test-model-connection>${t('测试连接')}</button>` : ''}<button class="secondary" type="button" data-cancel-model-config>${escapeHtml(t('取消'))}</button><button class="modal-action" type="submit"${fields.saveDisabled ? ' disabled' : ''}>${copy.save}</button></footer></form>`;
 }
 function renderSummaryModelForm() {
   return renderModelConfigForm(
@@ -3047,13 +3047,21 @@ let exportSelection = {};
 let exportMarkdownTarget = {};
 const exportContentFormats = {
   notes: ['md', 'pdf', 'docx', 'txt'],
+  analysis: ['md', 'pdf', 'docx', 'txt'],
   mynotes: ['md', 'pdf', 'docx', 'txt'],
   transcript: ['srt', 'md', 'txt', 'json'],
 };
-const exportDefaultFormat = { notes: 'md', mynotes: 'md', transcript: 'srt', audio: 'wav' };
+const exportDefaultFormat = {
+  notes: 'md',
+  analysis: 'md',
+  mynotes: 'md',
+  transcript: 'srt',
+  audio: 'wav',
+};
 const exportTrack = { audio: 'mix' };
 const exportContentLabel = {
   notes: () => t('会议纪要'),
+  analysis: () => t('原因分析'),
   mynotes: () => t('我的笔记'),
   transcript: () => t('逐字稿'),
   audio: () => t('会议录音'),
@@ -3063,6 +3071,8 @@ function exportContentMeta() {
   const playback = meeting?.audio?.playback || {};
   const meta = [];
   if (meeting?.summary?.data?.markdown) meta.push({ content: 'notes' });
+  if (meeting.summary?.data?.claims?.some((claim) => claim.kind === 'cause'))
+    meta.push({ content: 'analysis' });
   if (String(meeting?.notes || '').trim()) meta.push({ content: 'mynotes' });
   if ((uiData.detail.transcript || []).length) meta.push({ content: 'transcript' });
   if (playback.mix || playback.mic || playback.system) meta.push({ content: 'audio' });
@@ -3172,6 +3182,24 @@ function exportShareText() {
     const markdown = currentMeetingDetail?.summary?.data?.markdown;
     if (markdown) return markdownToPlainText(markdown);
   }
+  if (exportSelection.analysis) {
+    return currentMeetingDetail.summary.data.claims
+      .filter((claim) => claim.kind === 'cause')
+      .map((claim) =>
+        [
+          claim.section,
+          claim.text,
+          ...claim.sources.map((src) =>
+            [src.seekable !== false && formatMeetingTime(src.start_ms), src.speaker, src.text]
+              .filter(Boolean)
+              .join(' · '),
+          ),
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      )
+      .join('\n\n');
+  }
   if (exportSelection.mynotes) {
     const notes = String(currentMeetingDetail?.notes || '').trim();
     if (notes) return notes;
@@ -3195,7 +3223,9 @@ function renderExportModal() {
     exportSelection = {};
     contents.forEach(({ content }) => {
       exportSelection[content] =
-        summaryOnly && content !== 'notes' ? null : exportDefaultFormat[content];
+        summaryOnly && !['notes', 'analysis'].includes(content)
+          ? null
+          : exportDefaultFormat[content];
     });
   }
   replaceModalBody(activeModal, exportHubHtml());
@@ -3204,7 +3234,7 @@ function renderExportModal() {
 // 统一「导出与分享」面板。
 function exportHubHtml() {
   const copy = exportHubCopy[locale] || exportHubCopy.en;
-  const order = ['mynotes', 'notes', 'transcript', 'audio'];
+  const order = ['mynotes', 'notes', 'analysis', 'transcript', 'audio'];
   const meta = exportContentMeta().sort(
     (a, b) => order.indexOf(a.content) - order.indexOf(b.content),
   );
@@ -3212,17 +3242,11 @@ function exportHubHtml() {
     if (!(content in exportSelection)) exportSelection[content] = exportDefaultFormat[content];
   });
   const txt = copy.txt;
-  const hasCauseTree = currentMeetingDetail?.summary?.data?.claims?.some(
-    (claim) => claim.kind === 'cause',
-  );
   const rows = meta
     .map(({ content }) => {
       const label = exportContentLabel[content]();
       const desc = copy.desc[content] || '';
-      const graph =
-        hasCauseTree && ['notes', 'mynotes'].includes(content)
-          ? `<small>${escapeHtml(t('文件含鱼骨图'))}</small>`
-          : '';
+      const graph = content === 'analysis' ? `<small>${escapeHtml(t('文件含鱼骨图'))}</small>` : '';
       const current = exportSelection[content] || exportDefaultFormat[content];
       const currentDisplay = exportFormatDisplay[current] || txt;
       const formatOptions = (exportContentFormats[content] || [])
@@ -3297,7 +3321,13 @@ function updateExportBuilderState() {
   const summaryEl = settingsModal.querySelector('[data-export-summary]');
   if (summaryEl)
     summaryEl.textContent =
-      count === 0 ? copy.emptySummary : count === 1 ? copy.summaryOne : copy.summaryMany;
+      count === 0
+        ? copy.emptySummary
+        : count === 1
+          ? copy.summaryOne
+          : count === 2 && exportSelection.analysis && exportSelection.notes
+            ? t('将分别保存两个文件')
+            : copy.summaryMany;
   const hasText = selected.some(({ content }) => content !== 'audio');
   settingsModal.querySelectorAll('[data-export-save]').forEach((btn) => {
     btn.disabled = count === 0;
@@ -5169,6 +5199,32 @@ settingsModal.addEventListener('click', async (event) => {
     updateLogReturn = origin;
     return;
   }
+  const connectionTest = event.target.closest('[data-test-model-connection]');
+  if (connectionTest) {
+    const form = connectionTest.closest('form');
+    const draft = structuredClone(summaryConfigDraft || summaryConfig);
+    const values = Object.fromEntries(new FormData(form));
+    if (!saveModelConfig(form, draft, 'summary', values)) return;
+    const config = requestConfig(draft);
+    if (!config) return;
+    connectionTest.disabled = true;
+    try {
+      const result = await window.brevia.summary.test({
+        provider: config.provider,
+        endpoint: config.endpoint,
+        model: config.model,
+        format: config.format,
+        key_reference: config.keyReference,
+        apiKey: values.apiKey || undefined,
+      });
+      showToast(`${t('连接成功')} · ${(result.elapsed_ms / 1000).toFixed(1)}s`);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      connectionTest.disabled = false;
+    }
+    return;
+  }
   if (event.target.closest('[data-cancel-model-config]')) {
     closeModal();
     return;
@@ -5457,7 +5513,9 @@ settingsModal.addEventListener('click', async (event) => {
         if (revision === modalRequestRevision && exportSave.isConnected) closeModal();
         const copy = exportHubCopy[locale] || exportHubCopy.en;
         showToast(
-          result.count > 1 ? copy.savedBundle : t('已导出「{title}」').replace('{title}', title),
+          result.count > 1 && result.paths?.length !== 2
+            ? copy.savedBundle
+            : t('已导出「{title}」').replace('{title}', title),
           undefined,
           'success',
         );
@@ -5821,8 +5879,8 @@ settingsModal.addEventListener('change', async (event) => {
   if (exportItem) {
     const content = exportItem.dataset.exportItem;
     if (exportItem.checked) {
-      if (!(content in exportSelection)) exportSelection[content] = exportDefaultFormat[content];
-    } else delete exportSelection[content];
+      exportSelection[content] ||= exportDefaultFormat[content];
+    } else exportSelection[content] = null;
     exportItem.closest('.export-content-row')?.classList.toggle('is-checked', exportItem.checked);
     updateExportBuilderState();
     return;
@@ -7002,7 +7060,7 @@ function adoptMobileMeeting(meeting) {
   transcript.innerHTML = segments
     .map((segment) =>
       renderTranscriptSegment({
-        ...renderSegmentData(segment, false, new Map()),
+        ...renderSegmentData(segment, new Map()),
         showSpeaker:
           Boolean(segment.speaker_name) &&
           (segment.speaker_name !== segment.speaker || assignedSpeakers.has(segment.speaker)),
@@ -7872,7 +7930,7 @@ const MAX_NOTES_CHARS = 5 * 1024 * 1024;
 let notesLimitNotified = false;
 let notesSavePending = Promise.resolve();
 /** 立即把笔记写入后端；超出上限时截断到存储上限并提示一次。@param {string|undefined} meetingId 会议 id。@param {string} notes Markdown 文本。@returns {Promise<void>} */
-function persistNotes(meetingId, notes) {
+function persistNotes(meetingId, notes, expectedNotes) {
   if (!meetingId || !window.brevia?.meeting?.update) return Promise.resolve();
   let text = String(notes || '');
   if (text.length > MAX_NOTES_CHARS) {
@@ -7888,6 +7946,7 @@ function persistNotes(meetingId, notes) {
     .then(async () => {
       const saved = await window.brevia.meeting.update({
         meeting_id: meetingId,
+        ...(expectedNotes === undefined ? {} : { expected_notes: expectedNotes }),
         updates: { notes: text, ...(sources.length ? { accepted_suggestion_ids: sources } : {}) },
       });
       if (meetingActive && breviaClient?.state.meeting?.id === meetingId && saved?.accepted_claims)
@@ -8337,7 +8396,7 @@ function openBatchExport() {
   replaceModalBody(
     'batch-export',
     `<label class="export-content-row"><b>${escapeHtml((exportHubCopy[locale] || exportHubCopy.en).what)}</b>
-    <select data-batch-export-content>${['transcript', 'mynotes', 'notes', 'audio'].map((type) => `<option value="${type}">${escapeHtml(exportContentLabel[type]())}</option>`).join('')}</select></label>
+    <select data-batch-export-content>${['transcript', 'mynotes', 'notes', 'analysis', 'audio'].map((type) => `<option value="${type}">${escapeHtml(exportContentLabel[type]())}</option>`).join('')}</select></label>
     <div class="export-options">${batchFormatButtons('transcript')}</div>`,
   );
   showSettingsModal();
@@ -9218,28 +9277,6 @@ themeToggle.addEventListener('click', () =>
   applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'),
 );
 
-async function saveInlineSegmentSpeaker(form) {
-  if (form.dataset.saving) return;
-  const name = new FormData(form).get('name').trim();
-  if (!name) {
-    editingSegmentSpeakerId = undefined;
-    renderMeetingDetail();
-    return;
-  }
-  form.dataset.saving = 'true';
-  try {
-    const meeting = await window.brevia?.segment.speaker({
-      meeting_id: currentMeetingDetail.id,
-      segment_id: form.dataset.segmentId,
-      name,
-    });
-    editingSegmentSpeakerId = undefined;
-    if (meeting) applyBackendDetail(meeting);
-  } catch (error) {
-    delete form.dataset.saving;
-    showToast(error.message, undefined, 'error');
-  }
-}
 const finalTranscript = document.querySelector('.final-transcript');
 const segmentContextMenu = document.createElement('div');
 segmentContextMenu.className = 'segment-context-menu';
@@ -9309,15 +9346,21 @@ function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   contextMeetingId = meetingId;
   contextSegmentId = segmentId;
   contextSegment = segmentInfo || null;
-  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('waveform')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>${typeof openCorrection === 'function' ? `<button type="button" data-context-correction>${interfaceIcon('search')}<span>${t('替换此词…')}</span></button>` : ''}`;
-  const source = [...document.querySelectorAll('.view.active .segment[data-segment-id]')].find(
-    (row) => row.dataset.segmentId === segmentId,
-  );
+  const source = [
+    ...document.querySelectorAll(
+      '.view.active .segment[data-segment-id], .view.active .refined-fulltext-body [data-segment-id]',
+    ),
+  ].find((row) => row.dataset.segmentId === segmentId);
+  const person = activeView === 'detail' && source?.querySelector('[data-speaker-menu]');
+  const personItem = person
+    ? `<button type="button" data-context-person="${escapeHtml(person.dataset.speakerMenu)}" aria-haspopup="menu">${interfaceIcon('person')}<span>${escapeHtml(t('说话人') + ' · ' + person.title)}</span>${interfaceIcon('chevron-right')}</button>`
+    : '';
+  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('waveform')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>${personItem}${typeof openCorrection === 'function' ? `<button type="button" data-context-correction>${interfaceIcon('search')}<span>${t('替换此词…')}</span></button>` : ''}`;
   segmentContextMenu.dataset.correctionQuery = source?.contains(window.getSelection()?.anchorNode)
     ? window.getSelection().toString()
     : '';
   segmentContextReturnFocus =
-    source?.querySelector('[data-segment-actions]') || document.activeElement;
+    source?.querySelector('[data-segment-actions]') || person || document.activeElement;
   source?.classList.add('has-segment-menu');
   segmentContextMenu
     .querySelectorAll('button')
@@ -9745,6 +9788,19 @@ segmentContextMenu.addEventListener('keydown', (event) => {
   ]?.focus();
 });
 segmentContextMenu.addEventListener('click', async (event) => {
+  const personItem = event.target.closest('[data-context-person]');
+  if (personItem) {
+    const person =
+      currentMeetingDetail?.id === contextMeetingId &&
+      document.querySelector(
+        `.view.active [data-segment-id="${CSS.escape(contextSegmentId)}"] [data-speaker-menu]`,
+      );
+    const trigger = segmentContextReturnFocus;
+    closeSegmentContextMenu();
+    if (person?.dataset?.speakerMenu === personItem.dataset.contextPerson)
+      openSpeakerMenu(person, trigger);
+    return;
+  }
   if (event.target.closest('[data-mark-segment-speaker]')) {
     const meetingId = contextMeetingId,
       segmentId = contextSegmentId,
@@ -9821,10 +9877,10 @@ function updateLiveSpeaker(meetingId, segment) {
     speaker_name: name,
   });
 }
-async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
+async function openSegmentSpeakerPicker(meetingId, segmentId, anchor, speakerId = null) {
   closeMeetingPopovers();
   followLiveTranscript = followPlaybackTranscript = false;
-  const draft = { meetingId, segmentId, anchor, saving: false };
+  const draft = { meetingId, segmentId, anchor, speakerId, saving: false };
   segmentSpeakerDraft = draft;
   try {
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
@@ -9833,20 +9889,36 @@ async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
       segmentSpeakerDraft = undefined;
       return;
     }
-    const segment = meeting.segments.find((item) => item.id === segmentId);
+    const segment =
+      (meeting.current_segments || meeting.segments).find((item) => item.id === segmentId) ||
+      meeting.segments.find((item) => item.id === segmentId);
     if (!segment) throw Error(t('无法获取字幕内容'));
     const palette = meetingId === livePaletteMeetingId ? new Map(liveSpeakerPalette) : new Map();
     for (const person of meeting.speakers) speakerColor(person.id || person.name, palette);
     const names = [
       ...new Set([...meeting.speakers, ...speakerProfiles].map((person) => person.name)),
     ].filter((name) => name && name.length <= 32 && !isDefaultSegmentSpeakerName(name));
-    segmentSpeakerPicker.setAttribute('aria-label', t('标记说话人'));
-    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(meeting.speakers.find((person) => person.name === name) || speakerProfiles.find((person) => person.name === name) || name, palette)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
+    if (
+      speakerId &&
+      (speakerId !== segment.speaker ||
+        !uiData.detail.transcriptEditable ||
+        uiData.detail.transcriptEditing ||
+        uiData.detail.refineState === 'refining')
+    )
+      throw Error(t('无法获取字幕内容'));
+    const title = t(speakerId ? '重命名本场说话人' : '标记说话人');
+    segmentSpeakerPicker.setAttribute('aria-label', title);
+    const choices = speakerId
+      ? ''
+      : `<div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}>${renderSpeakerAvatar(meeting.speakers.find((person) => person.name === name) || speakerProfiles.find((person) => person.name === name) || name, palette)}<span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p>`;
+    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(title)}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required value="${speakerId ? escapeHtml(formatSpeakerName(segment.speaker_name)) : ''}" maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label>${choices}<p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
     anchor.closest('.segment')?.classList.add('has-segment-menu');
     draft.open = true;
     segmentSpeakerPicker.showPopover();
     positionFloating(segmentSpeakerPicker, anchor, ['bottom-end', 'top-end']);
-    focusForKeyboard(segmentSpeakerPicker.querySelector('input'));
+    const input = segmentSpeakerPicker.querySelector('input');
+    focusForKeyboard(input);
+    if (speakerId) input.select();
   } catch (error) {
     if (segmentSpeakerDraft === draft) {
       segmentSpeakerDraft = undefined;
@@ -9863,9 +9935,8 @@ segmentSpeakerPicker.addEventListener('input', (event) => {
   options.forEach((option) => {
     option.hidden = !option.dataset.segmentSpeakerChoice.toLocaleLowerCase().includes(query);
   });
-  segmentSpeakerPicker.querySelector('[data-speaker-empty]').hidden = options.some(
-    (option) => !option.hidden,
-  );
+  const empty = segmentSpeakerPicker.querySelector('[data-speaker-empty]');
+  if (empty) empty.hidden = options.some((option) => !option.hidden);
   segmentSpeakerPicker.querySelector('[role="alert"]').hidden = true;
 });
 segmentSpeakerPicker.addEventListener('click', (event) => {
@@ -9874,6 +9945,23 @@ segmentSpeakerPicker.addEventListener('click', (event) => {
   segmentSpeakerPicker.querySelector('input').value = choice.dataset.segmentSpeakerChoice;
   segmentSpeakerPicker.querySelector('form').requestSubmit();
 });
+function speakerPickerAnchor(draft) {
+  if (!draft || draft.anchor.isConnected) return draft?.anchor;
+  if (draft.anchor.closest('.summary-participants')) {
+    const header = document.querySelector('.detail-head .summary-participants');
+    return (
+      (draft.anchor.dataset.speakerMenu &&
+        header?.querySelector(`[data-speaker-menu="${CSS.escape(draft.speakerId)}"]`)) ||
+      header?.querySelector('[data-summary-participants-toggle]')
+    );
+  }
+  const row = document.querySelector(
+    `.view.active [data-segment-id="${CSS.escape(draft.segmentId)}"]`,
+  );
+  return row?.querySelector(
+    draft.speakerId ? '[data-speaker-menu]' : '[data-live-speaker], [data-segment-tool="speaker"]',
+  );
+}
 segmentSpeakerPicker.addEventListener('submit', async (event) => {
   event.preventDefault();
   const draft = segmentSpeakerDraft;
@@ -9890,11 +9978,19 @@ segmentSpeakerPicker.addEventListener('submit', async (event) => {
     control.disabled = true;
   });
   try {
-    const meeting = await window.brevia.segment.speaker({
-      meeting_id: draft.meetingId,
-      segment_id: draft.segmentId,
-      name,
-    });
+    const meeting = draft.speakerId
+      ? await window.brevia.speaker.rename({
+          meeting_id: draft.meetingId,
+          speaker_id: draft.speakerId,
+          name,
+          locked: true,
+          meeting_only: true,
+        })
+      : await window.brevia.segment.speaker({
+          meeting_id: draft.meetingId,
+          segment_id: draft.segmentId,
+          name,
+        });
     if (currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
     if (breviaClient?.state.meeting?.id === meeting.id) {
       breviaClient.state.meeting.speakers = meeting.speakers;
@@ -9907,13 +10003,7 @@ segmentSpeakerPicker.addEventListener('submit', async (event) => {
     }
     if (segmentSpeakerDraft === draft) {
       closeMeetingPopovers();
-      const row = [...document.querySelectorAll('.view.active .segment[data-segment-id]')].find(
-        (row) => row.dataset.segmentId === draft.segmentId,
-      );
-      const trigger = draft.anchor.isConnected
-        ? draft.anchor
-        : row?.querySelector('[data-live-speaker], [data-segment-tool="speaker"]');
-      trigger?.focus({ preventScroll: true });
+      speakerPickerAnchor(draft)?.focus({ preventScroll: true });
       showToast(t('已保存'), undefined, 'success');
     }
   } catch (error) {
@@ -9956,7 +10046,14 @@ document.addEventListener(
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-close-meeting-popover]')) {
     const popover = event.target.closest('[popover]');
+    const anchor =
+      popover === segmentSpeakerPicker
+        ? speakerPickerAnchor(segmentSpeakerDraft)
+        : popover
+            .closest('.summary-participants')
+            ?.querySelector('[data-summary-participants-toggle]');
     popover.hidePopover();
+    anchor?.focus({ preventScroll: true });
     return;
   }
   const toggle = event.target.closest('[data-summary-participants-toggle]');
@@ -9970,6 +10067,90 @@ document.addEventListener('click', (event) => {
   popover.showPopover();
   toggle.setAttribute('aria-expanded', 'true');
   positionFloating(popover, toggle, ['bottom-end', 'top-end']);
+  if (event.detail === 0)
+    popover.querySelector('.summary-participant-list button')?.focus({ preventScroll: true });
+});
+const speakerMenu = document.createElement('div');
+speakerMenu.className = 'meeting-popover speaker-action-menu';
+speakerMenu.setAttribute('popover', 'auto');
+speakerMenu.setAttribute('role', 'menu');
+let speakerMenuAnchor, speakerMenuReturnFocus;
+function openSpeakerMenu(anchor, trigger = anchor) {
+  if (!anchor.isConnected || !currentMeetingDetail) return;
+  if (speakerMenu.matches(':popover-open')) speakerMenu.hidePopover();
+  const id = anchor.dataset.speakerMenu;
+  const d = uiData.detail;
+  const visible = detailTranscriptEntries(d).some((entry) => entry.speaker?.id === id);
+  const current = d.transcript?.find((entry) => entry.speaker?.id === id);
+  const original = d.originalTranscript?.some((entry) => entry.speaker?.id === id);
+  const canFilter = visible || (!d.transcriptEditing && (current || original));
+  const canRename =
+    current &&
+    d.transcriptEditable &&
+    !d.transcriptEditing &&
+    d.refineState !== 'refining' &&
+    !(d.hasRefined && d.transcriptVersion === 'original');
+  speakerMenuAnchor = anchor;
+  speakerMenuReturnFocus = trigger;
+  anchor.setAttribute('aria-expanded', 'true');
+  speakerMenu.setAttribute('aria-label', anchor.title);
+  speakerMenu.innerHTML = `<button type="button" role="menuitem" data-filter-person${canFilter ? '' : ' disabled'}>${interfaceIcon('list')}${escapeHtml(t('只看此人发言'))}</button><button type="button" role="menuitem" data-rename-person${canRename ? '' : ' disabled'}>${interfaceIcon('edit')}${escapeHtml(t('重命名本场说话人'))}</button>`;
+  (anchor.closest('.summary-participants-popover') || document.body).append(speakerMenu);
+  speakerMenu.showPopover();
+  positionFloating(speakerMenu, trigger, ['bottom-start', 'top-start']);
+  speakerMenu.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
+}
+for (const type of ['click', 'contextmenu']) {
+  document.addEventListener(type, (event) => {
+    const anchor = event.target.closest('#detail-view [data-speaker-menu]');
+    if (anchor) {
+      event.preventDefault();
+      openSpeakerMenu(anchor);
+    }
+  });
+}
+speakerMenu.addEventListener('beforetoggle', (event) => {
+  if (event.newState === 'closed') speakerMenuAnchor?.setAttribute('aria-expanded', 'false');
+});
+speakerMenu.addEventListener('keydown', (event) => {
+  const buttons = [...speakerMenu.querySelectorAll('button:not(:disabled)')];
+  if (!buttons.length || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const i = buttons.indexOf(document.activeElement);
+  buttons[
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? buttons.length - 1
+        : (i + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length
+  ].focus();
+});
+speakerMenu.addEventListener('click', (event) => {
+  const anchor = speakerMenuAnchor;
+  if (!anchor?.isConnected || !event.target.closest('button:not(:disabled)')) return;
+  const id = anchor.dataset.speakerMenu;
+  const d = uiData.detail;
+  if (event.target.closest('[data-rename-person]')) {
+    const source = anchor.closest('[data-segment-id]')?.dataset.segmentId;
+    const entry = d.transcript.find(
+      (item) => item.speaker?.id === id && (!source || item.segmentId === source),
+    );
+    const reference = anchor.closest('.summary-participants-popover')
+      ? anchor.closest('.summary-participants').querySelector('[data-summary-participants-toggle]')
+      : anchor;
+    if (entry)
+      void openSegmentSpeakerPicker(currentMeetingDetail.id, entry.segmentId, reference, id);
+    return;
+  }
+  closeMeetingPopovers();
+  if (!switchDetailDocument('transcript')) return;
+  if (!detailTranscriptEntries(d).some((entry) => entry.speaker?.id === id))
+    d.transcriptVersion = d.transcript.some((entry) => entry.speaker?.id === id)
+      ? 'refined'
+      : 'original';
+  d.transcriptSpeaker = id;
+  renderMeetingDetail();
+  finalTranscript.querySelector('[data-clear-speaker-filter]')?.focus({ preventScroll: true });
 });
 window.addEventListener('resize', closeMeetingPopovers);
 document.addEventListener('pointerdown', (event) => {
@@ -10296,8 +10477,13 @@ document.addEventListener(
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (speakerMenu.matches(':popover-open')) {
+        speakerMenu.hidePopover();
+        speakerMenuReturnFocus?.focus({ preventScroll: true });
+        return;
+      }
       const anchor =
-        segmentSpeakerDraft?.anchor ||
+        speakerPickerAnchor(segmentSpeakerDraft) ||
         (segmentTranslationMenu.matches(':popover-open') ? segmentTranslationAnchor : null) ||
         document.querySelector('[data-summary-participants-toggle][aria-expanded="true"]');
       closeMeetingPopovers();
@@ -10355,6 +10541,7 @@ document.addEventListener('click', (event) => {
   }
 });
 finalTranscript.addEventListener('contextmenu', (event) => {
+  if (event.target.closest('[data-speaker-menu]')) return;
   const segment = event.target.closest('[data-segment-id]');
   if (!segment || !currentMeetingDetail) return;
   event.preventDefault();
@@ -10707,7 +10894,7 @@ finalTranscript.addEventListener('input', (event) => {
 finalTranscript.addEventListener('click', async (event) => {
   // 点击字幕段的时间戳/说话人区域 → 定位播放该段。
   const segmentMeta = event.target.closest('.segment-meta');
-  if (segmentMeta && !event.target.closest('[data-segment-speaker-input], .segment-tools')) {
+  if (segmentMeta && !event.target.closest('[data-speaker-menu], .segment-tools')) {
     const start = Number(segmentMeta.closest('.segment')?.dataset.start);
     if (Number.isFinite(start)) {
       followPlaybackTranscript = true;
@@ -11037,6 +11224,15 @@ finalTranscript.addEventListener('keydown', (event) => {
   tabs[index].click();
 });
 finalTranscript.addEventListener('click', (event) => {
+  if (event.target.closest('[data-clear-speaker-filter]')) {
+    const id = uiData.detail.transcriptSpeaker;
+    uiData.detail.transcriptSpeaker = '';
+    renderMeetingDetail();
+    finalTranscript
+      .querySelector(`[data-speaker-menu="${CSS.escape(id)}"]`)
+      ?.focus({ preventScroll: true });
+    return;
+  }
   const version = event.target.closest('[data-transcript-version]');
   if (!version || uiData.detail.transcriptEditing) return;
   uiData.detail.transcriptVersion = version.dataset.transcriptVersion;
@@ -11065,25 +11261,6 @@ function updateDetailNotesDraft() {
   uiData.detail.notesSaveState = 'dirty';
   document.querySelector('[data-notes-save-status]').innerHTML = renderSaveState('dirty');
 }
-finalTranscript.addEventListener('dblclick', (event) => {
-  const speaker = event.target.closest('[data-segment-speaker]');
-  if (speaker) {
-    event.preventDefault();
-    editingSegmentSpeakerId = speaker.dataset.segmentSpeaker;
-    renderMeetingDetail();
-    return;
-  }
-});
-finalTranscript.addEventListener('submit', (event) => {
-  if (!event.target.matches('.inline-segment-speaker-form')) return;
-  event.preventDefault();
-  void saveInlineSegmentSpeaker(event.target);
-});
-finalTranscript.addEventListener('focusout', (event) => {
-  const form = event.target.closest('.inline-segment-speaker-form');
-  if (form) void saveInlineSegmentSpeaker(form);
-});
-
 function applyInitializationResult(result) {
   modelCatalog = result.models;
   uiData.meetings = result.meetings.map(backendMeeting);
@@ -11965,6 +12142,7 @@ function desktopRecordingSnapshot() {
   const captionNodes = [...document.querySelectorAll('#transcript-scroll .segment')].slice(-80);
   return {
     ready: Boolean(breviaClient?.state.initialized && desktopPreferences),
+    systemAudioConfirmed: screenProbe === true || permissionStatus?.screen === 'granted',
     meetingId: meeting?.id || desktopSavedMeeting?.id || null,
     title: meeting?.title || desktopSavedMeeting?.title || '',
     phase,
@@ -12066,18 +12244,23 @@ async function saveDesktopPreference(key, value) {
     button.disabled = true;
   });
   try {
-    desktopPreferences = await window.brevia.desktop.savePreferences({
-      [key]: value,
-    });
+    desktopPreferences =
+      key === 'meetingApps'
+        ? await window.brevia.desktop.meetingApp(value ? { remove: value } : {})
+        : await window.brevia.desktop.savePreferences({ [key]: value });
     renderDesktopPreferences();
   } catch (error) {
-    if (status) status.textContent = `${t('保存失败')} · ${error.detail || error.message}`;
-    showToast(error.detail || error.message, undefined, 'error');
+    const reason =
+      error.code === 'error.meeting_app.invalid' ? t(error.code) : error.detail || error.message;
+    if (status) status.textContent = `${t('保存失败')} · ${reason}`;
+    showToast(reason, undefined, 'error');
   } finally {
     desktopSettingsBusy = false;
     controls.forEach((button) => {
       button.disabled = false;
     });
+    if (key === 'meetingApps' && document.activeElement === document.body)
+      document.querySelector('[data-add-meeting-app]')?.focus({ preventScroll: true });
     if (focusedToggle && document.activeElement === document.body) {
       const toggle = document.querySelector(`[data-desktop-toggle="${CSS.escape(key)}"]`);
       if (toggle?.checkVisibility()) toggle.focus({ preventScroll: true });
@@ -12085,6 +12268,11 @@ async function saveDesktopPreference(key, value) {
   }
 }
 document.addEventListener('click', (event) => {
+  const app = event.target.closest('[data-add-meeting-app],[data-remove-meeting-app]');
+  if (app) {
+    void saveDesktopPreference('meetingApps', app.dataset.removeMeetingApp);
+    return;
+  }
   const choice = event.target.closest('[data-flow-select-choice]');
   if (choice?.dataset.flowSelectChoice.startsWith('desktop-'))
     void saveDesktopPreference(choice.dataset.flowSelectChoice.slice(8), choice.dataset.value);
@@ -12127,6 +12315,67 @@ async function controlAgentRecording(recording) {
   }
   return { meeting_id: activeId, state: paused ? 'paused' : 'recording', confirmed: true };
 }
+async function capsuleNotes(action, meetingId, note) {
+  const live = meetingActive && meetingId === breviaClient?.state.meeting?.id;
+  const playback = !meetingActive && playbackStarted && meetingId === currentMeetingDetail?.id;
+  if (
+    !meetingId ||
+    (!live && !playback) ||
+    (live && document.querySelector('#end-meeting').getAttribute('aria-busy') === 'true')
+  )
+    throw new Error(t('操作未完成，请在主窗口查看'));
+  if ((live && liveNotesRoot.inert) || (playback && uiData.detail.notesEditing))
+    throw new Error(t('请先保存或取消电脑上的笔记编辑。'));
+  const current = live ? currentNotesMarkdown() : uiData.detail.notes || '';
+  if (action === 'read-notes') {
+    if (live) return current;
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    if (
+      currentMeetingDetail?.id !== meetingId ||
+      !playbackStarted ||
+      uiData.detail.notesEditing ||
+      (uiData.detail.notes || '') !== current
+    )
+      throw new Error(t('电脑笔记已更新，请重新核对。'));
+    return (currentMeetingDetail.notes = uiData.detail.notes = meeting.notes || '');
+  }
+  if (!note || (current !== note.base && current !== note.text))
+    throw new Error(t('电脑笔记已更新，请重新核对。'));
+  if (live) {
+    clearTimeout(liveNotesSaveTimer.current);
+    liveNotesEditor.setMarkdown(note.text);
+    // 富文本无法往返的 Markdown 保留源码，避免停止录音时用转换后的正文覆盖它。
+    if (currentNotesMarkdown() !== note.text) {
+      liveNotesEditor.setMode('markdown');
+      liveNotesEditor.setMarkdown(note.text);
+    }
+    await persistNotes(meetingId, note.text);
+  } else {
+    currentMeetingDetail.notes = uiData.detail.notes = note.text;
+    try {
+      await persistNotes(meetingId, note.text, note.base);
+    } catch (error) {
+      if (
+        currentMeetingDetail?.id === meetingId &&
+        !uiData.detail.notesEditing &&
+        uiData.detail.notes === note.text
+      )
+        currentMeetingDetail.notes = uiData.detail.notes = current;
+      if (error.detail === '电脑笔记已更新，请重新核对。')
+        throw new Error(t('电脑笔记已更新，请重新核对。'));
+      throw error;
+    } finally {
+      if (
+        currentMeetingDetail?.id === meetingId &&
+        !uiData.detail.notesEditing &&
+        activeView === 'detail' &&
+        detailActiveTab === 'notes'
+      )
+        renderMeetingDetail();
+    }
+  }
+  return true;
+}
 if (window.brevia?.desktop) {
   void window.brevia.desktop
     .preferences()
@@ -12138,7 +12387,7 @@ if (window.brevia?.desktop) {
     .catch((error) => showToast(error.message, undefined, 'error'));
   window.brevia.on(
     'desktop.action',
-    async ({ action, requestId, suggestionId, tab, meetingId, background, recording }) => {
+    async ({ action, requestId, suggestionId, tab, meetingId, background, recording, note }) => {
       let error, result;
       try {
         if (['playback-pause', 'playback-stop'].includes(action)) {
@@ -12151,6 +12400,8 @@ if (window.brevia?.desktop) {
             else playerAudio.pause();
           }
         }
+        if (action === 'read-notes' || action === 'save-notes')
+          result = await capsuleNotes(action, meetingId, note);
         if (action === 'agent-recording') result = await controlAgentRecording(recording);
         if (action === 'agent-devices') result = await breviaClient.listMicrophones();
         if (

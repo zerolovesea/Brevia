@@ -1721,6 +1721,8 @@ try {
           bar.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
           await new Promise(requestAnimationFrame);
           const barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
+          const avatar=speaker.querySelector('.speaker-avatar').getBoundingClientRect();
+          if(avatar.right>label.left+1||Math.abs((avatar.top+avatar.bottom-label.top-label.bottom)/2)>1)errors.push(code+': avatar drifted out of speaker column');
           if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
           if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle '+JSON.stringify({appearance,connected:row.isConnected,focused:document.activeElement?.outerHTML,hasFocus:document.hasFocus(),opacity:getComputedStyle(bar).opacity,bar:barRect,row:rowRect,copy:after}));
           if(bar.querySelectorAll('button').length!==7||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
@@ -1759,6 +1761,64 @@ try {
       const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id}),segment=meeting.segments[0];
       const profilesBefore=await window.brevia.speakerProfile.list();
       applyBackendDetail(meeting);uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');openReviewDocument('transcript');
+      const entries=meeting.current_segments || meeting.segments;
+      const person=entries.find(s=>s.speaker && entries.filter(other=>other.speaker===s.speaker).length>1);
+      if(!person)return ['fixture missing repeated speaker'];
+      const speakerButton=(scope,id)=>scope.querySelector('[data-speaker-menu="'+CSS.escape(id)+'"]');
+      const header=document.querySelector('.summary-participants');
+      const preview=speakerButton(header,person.speaker);
+      preview.focus();preview.click();
+      if(!speakerMenu.matches(':popover-open') || speakerMenu.querySelector('[data-filter-person]')!==document.activeElement)return ['header speaker menu did not focus filter'];
+      speakerMenu.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      if(document.activeElement!==preview)return ['speaker menu did not restore focus'];
+      header.querySelector('[data-summary-participants-toggle]').click();
+      const rosterPerson=speakerButton(header.querySelector('.summary-participant-list'),person.speaker);
+      rosterPerson.click();
+      speakerMenu.querySelector('[data-filter-person]').click();
+      const expected=entries.filter(s=>s.speaker===person.speaker);
+      const shown=Array.from(finalTranscript.querySelectorAll('.transcript-body .segment'),row=>row.dataset.segmentId);
+      if(JSON.stringify(shown)!==JSON.stringify(expected.map(s=>s.id)))errors.push('speaker filter changes order or includes another speaker');
+      if(finalTranscript.querySelector('[data-transcript-speaker]') || !finalTranscript.querySelector('[data-clear-speaker-filter]'))errors.push('obsolete selector or missing filter status');
+      const rowPerson=speakerButton(finalTranscript.querySelector('[data-segment-id="'+CSS.escape(expected.at(-1).id)+'"]'),person.speaker);
+      for(const entrypoint of ['more','contextmenu']) {
+        const row=rowPerson.closest('.segment');
+        if(entrypoint==='more')row.querySelector('[data-segment-actions]').click();
+        else row.querySelector('.segment-copy').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));
+        const personItem=segmentContextMenu.querySelector('[data-context-person]');
+        if(!personItem)return ['speaker actions missing from '+entrypoint];
+        personItem.click();
+        if(!speakerMenu.matches(':popover-open') || !speakerMenu.querySelector('[data-rename-person]'))return ['speaker submenu did not open from '+entrypoint];
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      }
+      const clickedRow=rowPerson.closest('.segment');
+      clickedRow.querySelector('[data-segment-actions]').click();
+      const oldPerson=rowPerson.dataset.speakerMenu;rowPerson.dataset.speakerMenu='changed-after-open';
+      segmentContextMenu.querySelector('[data-context-person]').click();
+      if(speakerMenu.matches(':popover-open'))errors.push('stale menu opened another identity');
+      rowPerson.dataset.speakerMenu=oldPerson;
+      clickedRow.querySelector('[data-segment-actions]').click();
+      const shownMeeting=currentMeetingDetail;currentMeetingDetail={...shownMeeting,id:'other-meeting'};
+      segmentContextMenu.querySelector('[data-context-person]').click();
+      if(speakerMenu.matches(':popover-open'))errors.push('stale menu opened in another meeting');
+      currentMeetingDetail=shownMeeting;
+      rowPerson.querySelector('.speaker-avatar').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));
+      speakerMenu.querySelector('[data-rename-person]').click();
+      for(let i=0;i<80&&!segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
+      if(segmentSpeakerDraft?.speakerId!==person.speaker)return ['bulk rename scope not selected'];
+      const taken=entries.find(s=>s.speaker && s.speaker!==person.speaker);
+      segmentSpeakerPicker.querySelector('[name=name]').value=taken.speaker_name;
+      segmentSpeakerPicker.querySelector('form').requestSubmit();
+      for(let i=0;i<80&&segmentSpeakerDraft?.saving;i++)await new Promise(r=>setTimeout(r,25));
+      if(!segmentSpeakerDraft || segmentSpeakerPicker.querySelector('[role=alert]').textContent!==t('error.speaker_name_taken'))return ['duplicate speaker rename did not fail with a recoverable error'];
+      segmentSpeakerPicker.querySelector('[name=name]').value='Batch Rename';
+      segmentSpeakerPicker.querySelector('form').requestSubmit();
+      for(let i=0;i<80&&segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
+      const renamed=await window.brevia.meeting.get({meeting_id:meeting.id});
+      if(document.activeElement?.closest('[data-segment-id]')?.dataset.segmentId!==expected.at(-1).id)errors.push('speaker rename lost focus on transcript');
+      if((renamed.current_segments||renamed.segments).some(s=>s.speaker_name!==(s.speaker===person.speaker?'Batch Rename':entries.find(e=>e.id===s.id)?.speaker_name)))errors.push('bulk rename crossed identity or omitted a turn');
+      if(JSON.stringify(await window.brevia.speakerProfile.list())!==JSON.stringify(profilesBefore))errors.push('bulk rename changed global profiles');
+      const reverted=await window.brevia.speaker.rename({meeting_id:meeting.id,speaker_id:person.speaker,name:person.speaker_name,locked:!!meeting.speakers.find(s=>s.id===person.speaker)?.locked,meeting_only:true});
+      applyBackendDetail(reverted);uiData.detail.refinedMode='timestamps';finalTranscript.querySelector('[data-clear-speaker-filter]').click();
       const source=finalTranscript.querySelector('.segment'),time=playerAudio.currentTime;
       const pending=openSegmentSpeakerPicker(meeting.id,segment.id,source.querySelector('[data-segment-tool="speaker"]'));
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pending;
@@ -1897,6 +1957,22 @@ try {
   await captureCorrection('01-live-edit');
   await correctionEvaluate(`(async()=>{
     document.querySelector('[data-live-correction-cancel]').click();
+    const transcript=document.querySelector('#transcript-scroll'),before=transcript.getBoundingClientRect();
+    await openCorrection('');
+    const state=correctionPanelState, base=state.meeting;
+    await refreshCorrectionMeeting(state);
+    const after=transcript.getBoundingClientRect();
+    if(Math.abs(before.width-after.width)>1 || Math.abs(before.left-after.left)>1)throw Error('floating correction panel moved live transcript');
+    if(correctionPanel.querySelector('[data-refresh-correction]') || correctionPanel.textContent.includes('仅对之后确认的新字幕生效') || state.matches.length)throw Error('empty query has stale controls');
+    const find=correctionPanel.querySelector('[data-correction-find]');find.value='北威亚';find.dispatchEvent(new Event('input',{bubbles:true}));
+    const initial=state.matches, segments=base.current_segments || base.segments;
+    initial[1].selected=false;
+    const fresh={...segments[0],id:'new-preview-segment'};
+    const edited={...segments[0],revision:segments[0].revision+1,text:segments[0].text+'已改'};
+    const locate=correctionPanel.querySelector('[data-correction-locate="1"]');locate.focus({preventScroll:true});
+    updateCorrectionPreview(state,{...base,current_segments:[fresh,edited,...segments.slice(1)]});
+    if(state.matches.length!==4 || state.matches[0].selected || state.matches[1].selected || state.matches[2].selected || !state.matches[3].selected || document.activeElement.dataset.correctionLocate!=='2')throw Error('automatic correction preview lost selection, focus or accepted an unreviewed change');
+    closeCorrectionPanel();document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
     await openCorrection('北威亚');
     if(correctionPanel.contains(document.activeElement))throw Error('replacement panel autofocus');const replacement=correctionPanel.querySelector('[data-correction-replacement]');replacement.value='Brevia';replacement.dispatchEvent(new Event('input',{bubbles:true}));
     if(correctionPanelState.matches.length!==3||correctionPanel.querySelector('[data-correction-future]').checked)throw Error('wrong preview count or future default');
@@ -1936,8 +2012,22 @@ try {
     const replacement=correctionPanel.querySelector('[data-correction-replacement]');replacement.value='Brevia';replacement.dispatchEvent(new Event('input',{bubbles:true}));
     const segment=correctionPanelState.matches[0].segment;
     await window.brevia.segment.saveText({meeting_id:meeting.id,segments:[{segment_id:segment.id,text:segment.text+' 后改'}]});
+    await refreshCorrectionMeeting(correctionPanelState);
+    if(correctionPanelState.matches[0].selected || correctionPanelState.matches.filter(m=>m.selected).length!==2)errors.push('changed match included after refresh');
     await submitCorrection();
-    if(correctionPanel.hidden||!correctionPanel.querySelector('.correction-error').textContent.includes('更新预览')||replacement.value!=='Brevia')errors.push('conflicting replace lost input '+JSON.stringify({hidden:correctionPanel.hidden,error:correctionPanel.querySelector('.correction-error')?.textContent,value:replacement.value,saving:correctionPanelState?.saving,busy:correctionSaving,disabled:correctionPanel.querySelector('[data-submit-correction]')?.disabled}));
+    const refreshed=await window.brevia.meeting.get({meeting_id:meeting.id});
+    if(!refreshed.segments.some(s=>s.id===segment.id&&s.text===segment.text+' 后改') || refreshed.segments.filter(s=>s.text.includes('Brevia')).length!==2)errors.push('refreshed submit touched an unreviewed match');
+    await submitCorrection('undo');
+    await openCorrection('北威亚');
+    const retry=correctionPanel.querySelector('[data-correction-replacement]');retry.value='Brevia';retry.dispatchEvent(new Event('input',{bubbles:true}));
+    // 在 UI 固定提交快照之后、事务开始前，另一写入真实修改同段。
+    const correct=window.brevia.segment.correction;
+    window.brevia.segment.correction=async payload=>{
+      await window.brevia.segment.saveText({meeting_id:meeting.id,segments:[{segment_id:segment.id,text:segment.text+' 并发新稿'}]});
+      return correct(payload);
+    };
+    try {await submitCorrection();} finally {window.brevia.segment.correction=correct;}
+    if(correctionPanel.hidden||!correctionPanel.querySelector('.correction-error').textContent.includes('核对后重试')||retry.value!=='Brevia')errors.push('conflicting replace lost input '+JSON.stringify({hidden:correctionPanel.hidden,error:correctionPanel.querySelector('.correction-error')?.textContent,value:retry.value,saving:correctionPanelState?.saving,busy:correctionSaving,disabled:correctionPanel.querySelector('[data-submit-correction]')?.disabled}));
     closeCorrectionPanel();
     meeting=await window.brevia.segment.saveText({meeting_id:meeting.id,segments:correctionTestBackup.segments.map(s=>({segment_id:s.id,text:s.text}))});
     applyCorrectionMeeting(meeting);
@@ -2004,7 +2094,15 @@ try {
     if(evidence.querySelector('[data-live-locate]')||!evidence.textContent.includes('生成时的原话快照'))throw Error('stale source linked to a changed live segment');
     resetAiNoteSuggestions();
     if(!document.querySelector('[data-live-accepted]').hidden||document.querySelector('[data-live-note-dialog][open]'))throw Error('stale meeting citation survived reset');
+    const serverNotes=await window.brevia.meeting.update({meeting_id:meeting.id,updates:{notes:'手机新增的原文'}});
     liveNotesEditor.setMarkdown('北威亚上线，北威亚验收。');
+    await openCorrection('北威亚',false,'notes');
+    const blocked=correctionPanel.querySelector('[data-correction-replacement]');blocked.value='Brevia';blocked.dispatchEvent(new Event('input',{bubbles:true}));
+    await submitCorrection();
+    if(correctionPanel.hidden || (await window.brevia.meeting.get({meeting_id:meeting.id})).notes!==serverNotes.notes || !currentNotesMarkdown().includes('北威亚'))throw Error('live correction overwrote an unseen server note');
+    closeCorrectionPanel();
+    // 模拟正常编辑器完成保存后，再从双方一致的笔记开始替换。
+    await persistNotes(meeting.id,currentNotesMarkdown());
     await openCorrection('北威亚',false,'notes');
     if(CSS.highlights.get('correction-search')?.size!==2)throw Error('live notes original highlight missing');
     const field=correctionPanel.querySelector('[data-correction-replacement]');field.value='Brevia';field.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2096,6 +2194,7 @@ try {
       const panel=reading.querySelector('[data-detail-panel="'+scope+'"]');
       const a=panel.getBoundingClientRect(),b=rail.getBoundingClientRect();
       if(getComputedStyle(reading).display!=='grid'||!rail.checkVisibility()||b.left<a.right-1||Math.abs(a.top-b.top)>1)throw Error(scope+' cause rail not beside document: '+JSON.stringify({panel:a,rail:b}));
+      if(scope==='summary' && Math.abs(a.width-b.width)>2)throw Error('minutes and analysis must have equal widths');
       if(rail.querySelectorAll('brevia-cause-tree').length!==1||rail.querySelectorAll('.cause-tree-spine').length!==1)throw Error('disconnected cause trees');
     }
     const body=document.querySelector('.summary-body');
@@ -2198,8 +2297,8 @@ try {
       openReviewDocument(tab);
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
       const reading=document.querySelector('.final-transcript'),panel=reading.querySelector('[data-detail-panel="'+tab+'"]');
-      if(reading.classList.contains('has-cause-rail')||reading.querySelector('.detail-cause-rail'))throw Error(tab+'：无纪要仍显示旧版原因图');
-      if(tab!=='notes'&&panel.getBoundingClientRect().width<reading.clientWidth-4)throw Error(tab+'：无原因图时正文仍预留空栏');
+      if(!reading.querySelector('.detail-cause-empty'))throw Error(tab+'：缺少原因图空态');
+      if(reading.querySelector('[data-evidence-id]'))throw Error(tab+'：空态仍显示旧版原因');
     }
   })()`);
   await captureCorrection('transcript-without-cause-rail');
@@ -2710,6 +2809,42 @@ try {
     Array.isArray(onboardingFit.result?.value) && onboardingFit.result.value.length === 0,
     `引导页默认满屏及应用入口回归：${JSON.stringify(onboardingFit)}`,
   );
+  if (['darwin', 'win32'].includes(process.platform)) {
+    const app = path.join(
+      dataDir,
+      'Test Conference.' + (process.platform === 'darwin' ? 'app' : 'exe'),
+    );
+    if (process.platform === 'darwin') {
+      mkdirSync(path.join(app, 'Contents'), { recursive: true });
+      writeFileSync(
+        path.join(app, 'Contents', 'Info.plist'),
+        JSON.stringify({
+          CFBundlePackageType: 'APPL',
+          CFBundleIdentifier: 'test.brevia-conference',
+        }),
+      );
+    } else writeFileSync(app, 'MZ');
+    const meetingApps = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{
+        await showView('settings');
+        document.querySelector('[data-add-meeting-app]').click();
+        const settle=async()=>{const until=Date.now()+15000;while(desktopSettingsBusy && Date.now()<until) await new Promise(r=>setTimeout(r,20));};
+        await settle();
+        const remove=document.querySelector('[data-remove-meeting-app]');
+        if(!remove || remove.closest('.desktop-meeting-app').innerText.trim()!=='Test Conference')return false;
+        const before=await window.brevia.desktop.preferences();
+        if(before.meetingApps.length!==1 || before.meetingApps[0].id!==remove.dataset.removeMeetingApp)return false;
+        remove.click(); await settle();
+        return !document.querySelector('[data-remove-meeting-app]') && !(await window.brevia.desktop.preferences()).meetingApps.length;
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    check(
+      meetingApps.result?.value === true,
+      '自定义会议应用可通过本机选择器添加、显示、移除并保存：' + JSON.stringify(meetingApps),
+    );
+  }
   const shortcutSettings = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -3112,7 +3247,7 @@ try {
       const disabledConfigOpens=activeView==='detail' && activeModal==='summary-model' && !settingsModal.hidden;
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       detail.querySelector('.summary-feedback-close').click();summaryConfig=originalSummaryConfig;
-      openModal('export');const summaryExportDefault=Object.entries(exportSelection).filter(([,format])=>format).every(([content])=>content==='notes') && Boolean(exportSelection.notes);closeModal();await new Promise(resolve=>setTimeout(resolve,250));
+      openModal('export');const summaryExportDefault=Object.entries(exportSelection).filter(([,format])=>format).every(([content])=>['notes','analysis'].includes(content)) && Boolean(exportSelection.notes) && Boolean(exportSelection.analysis)===exportContentMeta().some(item=>item.content==='analysis');closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       const summaryBack=detail.querySelector('.back');
       const summaryBackVisible=summaryBack.getBoundingClientRect().width>0 && Math.abs(summaryBack.querySelector('svg.interface-icon')?.getBoundingClientRect().width-20)<.5 && getComputedStyle(summaryBack,'::before').content==='none';
       uiData.detail.summary.markdown ||= '# 纪要草稿';

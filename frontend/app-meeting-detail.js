@@ -1,5 +1,5 @@
-/** 把 segment 转为可渲染数据（保留时间戳，供播放定位与逐句显示）。@param {object} segment 后端段落。@param {boolean} editable 是否允许改名。@param {Map} speakerNames 说话人名称表。@returns {object} 渲染数据。 */
-function renderSegmentData(segment, editable, speakerNames) {
+/** 把 segment 转为可渲染数据（保留时间戳，供播放定位与逐句显示）。@param {object} segment 后端段落。@param {Map} speakerNames 说话人名称表。@returns {object} 渲染数据。 */
+function renderSegmentData(segment, speakerNames) {
   const overlapSpeakers = [
     ...new Set((segment.word_timestamps || []).flatMap((word) => word.overlap_speakers || [])),
   ];
@@ -11,8 +11,6 @@ function renderSegmentData(segment, editable, speakerNames) {
     speaker: {
       id: segment.speaker,
       name: formatSpeakerName(segment.speaker_name),
-      segmentId: editable ? segment.id : undefined,
-      editing: editable && segment.id === editingSegmentSpeakerId,
       overlapNames:
         overlapSpeakers.length > 1
           ? overlapSpeakers.map((speaker) =>
@@ -102,6 +100,7 @@ function applyBackendDetail(meeting) {
     detailActiveTab = 'summary';
     uiData.detail.transcriptVersion = 'refined';
     uiData.detail.transcriptSearch = '';
+    uiData.detail.transcriptSpeaker = '';
     uiData.detail.translationTarget = meeting.target_language || '';
   }
   const { revision, segments: ordered } = latestTranscriptSegments(meeting);
@@ -114,15 +113,11 @@ function applyBackendDetail(meeting) {
   if (!uiData.detail.hasOriginalTranscript) uiData.detail.transcriptVersion = 'refined';
   // 没有精修版本时只有当前稿；其中可能同时含有实时段落和人工修订段落。
   uiData.detail.originalTranscript = (revision === null ? ordered : original).map((segment) =>
-    renderSegmentData(segment, revision === null, speakerNames),
+    renderSegmentData(segment, speakerNames),
   );
-  uiData.detail.transcript = ordered.map((segment) =>
-    renderSegmentData(segment, true, speakerNames),
-  );
+  uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, speakerNames));
   uiData.detail.refinedTranscript =
-    revision === null
-      ? []
-      : ordered.map((segment) => renderSegmentData(segment, false, speakerNames));
+    revision === null ? [] : ordered.map((segment) => renderSegmentData(segment, speakerNames));
   uiData.detail.refinedFulltext =
     revision === null
       ? ''

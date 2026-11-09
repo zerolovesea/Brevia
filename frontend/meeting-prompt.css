@@ -1,0 +1,81 @@
+html,
+body {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: transparent !important;
+}
+main {
+  margin: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-overlay);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  box-shadow: 0 2px 7px #0003;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+header img {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+small {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+button:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+button:hover {
+  background: var(--color-selected);
+}
+[data-action="record"] {
+  color: var(--color-overlay);
+  background: var(--color-text);
+  border-color: var(--color-text);
+  font-weight: 550;
+}
+[data-action="record"]:hover {
+  background: var(--color-text);
+  opacity: 0.87;
+}

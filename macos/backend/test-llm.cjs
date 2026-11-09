@@ -10,6 +10,20 @@ const { createLLMHandlers, splitTranscript } = require('./worker-llm.cjs');
 const { createAiNoteHandlers, parseSuggestions, similarity } = require('./worker-ai-note.cjs');
 const { TaskRegistry } = require('./tasks.cjs');
 
+function completeMinutes(detail) {
+  return [
+    'Meeting Summary',
+    'Key Conclusions',
+    'Topic Discussion',
+    'Confirmed Decisions',
+    'Action Items',
+    'Open Questions',
+    'Key Figures',
+  ]
+    .map((heading, index) => '## ' + heading + '\n' + (index ? 'Not discussed.' : detail))
+    .join('\n\n');
+}
+
 async function server(t, handler) {
   const app = http.createServer(async (request, response) => {
     const chunks = [];
@@ -318,7 +332,16 @@ test('纪要生成保留并发文稿保护，拒绝分享时不启动推理', as
     calls++;
     res.end(
       JSON.stringify({
-        choices: [{ message: { content: '# Meeting\n- Confirmed action [[action:S1]]' } }],
+        choices: [
+          {
+            message: {
+              content:
+                calls === 1
+                  ? completeMinutes('### Unanswered\n[[cause:S1]]')
+                  : completeMinutes('- Confirmed action [[S1]]'),
+            },
+          },
+        ],
       }),
     );
   });
@@ -375,6 +398,7 @@ test('纪要生成保留并发文稿保护，拒绝分享时不启动推理', as
   assert.deepEqual(await handlers['summary.generate']({ ...payload, consent: true }), {
     cancelled: true,
   });
+  assert.equal(calls, 2);
   assert.equal(saved, true);
   assert.equal(
     events.some(([type]) => type === 'summary.ready'),
@@ -405,4 +429,211 @@ test('complete file translation reserves output and reports token exhaustion ins
   await assert.rejects(worker.translateText('你好', 'en', undefined, { complete: true }), {
     code: 'translation_truncated',
   });
+});
+
+test('带前缀 Base URL 保留路径和查询参数', async (t) => {
+  const urls = [];
+  const endpoint = await server(t, (req, res) => {
+    urls.push(req.url);
+    res.end('{"choices":[{"message":{"content":"OK"}}]}');
+  });
+  for (const suffix of ['/gateway/v1', '/gateway/v1/chat', '/gateway/v1/chat/completions'])
+    await complete({ endpoint: endpoint + suffix + '?test=1', model: 'test' }, 'OK');
+  assert.deepEqual(urls, Array(3).fill('/gateway/v1/chat/completions?test=1'));
+});
+
+test('长纪要覆盖第六段之后并拒绝空分段', async (t) => {
+  let empty = false;
+  let verbose = false;
+  const seen = [];
+  const endpoint = await server(t, (_req, res, body) => {
+    const prompt = body.messages[0].content;
+    seen.push(prompt);
+    const labels = [...prompt.matchAll(/^S(\d+) \[/gm)].map((m) => 'S' + m[1]);
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: empty
+                ? '<think>only</think>'
+                : prompt.includes('Use these seven level-two headings')
+                  ? completeMinutes('- Tail [[conclusion:S8]]')
+                  : '# Summary\n- Tail [[conclusion:' +
+                    (labels.join(',') || 'S8') +
+                    ']]' +
+                    (verbose && labels.length ? '\n' + 'Detail '.repeat(500) : ''),
+            },
+          },
+        ],
+      }),
+    );
+  });
+  let saves = 0;
+  const meeting = {
+    id: 'long',
+    title: 'Long',
+    segments: Array.from({ length: 8 }, (_, i) => ({
+      id: String(i),
+      text: 'x'.repeat(8500),
+      start_ms: i * 1000,
+      end_ms: (i + 1) * 1000,
+      speaker_name: 'A',
+    })),
+  };
+  const worker = {
+    tasks: new TaskRegistry(),
+    settings: { llm: { timeout_seconds: 2 } },
+    models: { catalog: new Map() },
+    emit() {},
+    store: {
+      getMeeting: () => meeting,
+      meetingExists: () => true,
+      saveSummary() {
+        saves++;
+        return false;
+      },
+    },
+  };
+  const handler = createLLMHandlers(worker)['summary.generate'];
+  const payload = {
+    meeting_id: 'long',
+    endpoint,
+    provider: 'openai',
+    model: 'test',
+    consent: true,
+  };
+  await handler(payload);
+  assert.equal(seen.filter((p) => p.includes('<transcript>')).length, 8);
+  assert.match(seen.at(-1), /S8/);
+  assert.equal(saves, 1);
+  verbose = true;
+  seen.length = 0;
+  await handler(payload);
+  assert.ok(seen.some((p) => p.includes('Compress these partial summaries')));
+  assert.match(seen.at(-1), /S8/);
+  assert.equal(saves, 2);
+  empty = true;
+  await assert.rejects(handler(payload), (e) => e.code === 'error.summary.empty_response');
+  assert.equal(saves, 2);
+});
+
+test('纪要在线最多三路并行，本地串行，乱序完成仍按原文合并', { timeout: 5000 }, async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-summary-concurrency-'));
+  fs.writeFileSync(path.join(directory, 'test.gguf'), '');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  for (const provider of ['openai', 'built-in']) {
+    let active = 0,
+      peak = 0;
+    const completed = [],
+      progress = [];
+    async function answer(prompt) {
+      const label = /^S(\d+) \[/m.exec(prompt)?.[1];
+      if (!label) {
+        const labels = [...prompt.matchAll(/part-(\d+)/g)].map((m) => Number(m[1]));
+        assert.deepEqual(labels, [1, 2, 3, 4, 5, 6]);
+        return completeMinutes('Complete');
+      }
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setTimeout(resolve, Number(label) % 3 === 1 ? 45 : 10));
+      active--;
+      completed.push(Number(label));
+      return '# part-' + label;
+    }
+    const endpoint = await server(t, async (_req, res, body) => {
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content: await answer(body.messages[0].content) } }],
+        }),
+      );
+    });
+    const meeting = {
+      id: 'parallel',
+      title: 'Test',
+      segments: Array.from({ length: 6 }, (_, i) => ({
+        id: String(i),
+        text: 'x'.repeat(8500),
+        speaker_name: 'A',
+        start_ms: i * 1000,
+        end_ms: (i + 1) * 1000,
+      })),
+    };
+    const worker = {
+      tasks: new TaskRegistry(),
+      settings: { llm: { timeout_seconds: 2 } },
+      models: { catalog: new Map(), isReady: () => true, path: () => directory },
+      engineFactory: () => ({
+        request: async (command, payload) =>
+          command === 'llama.load' ? {} : { text: await answer(payload.prompt) },
+      }),
+      emit: (type, payload) => {
+        if (type === 'summary.progress') progress.push(payload.completed);
+      },
+      store: { getMeeting: () => meeting, meetingExists: () => true, saveSummary: () => false },
+    };
+    await createLLMHandlers(worker)['summary.generate']({
+      meeting_id: meeting.id,
+      provider,
+      model: 'test',
+      endpoint,
+      consent: true,
+    });
+    assert.equal(peak, provider === 'openai' ? 3 : 1);
+    assert.equal(active, 0);
+    if (provider === 'openai') assert.notDeepEqual(completed, [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(
+      progress,
+      [...progress].sort((a, b) => a - b),
+    );
+  }
+});
+
+test('并行纪要失败或取消后不启动下一批、不保存部分结果', { timeout: 5000 }, async (t) => {
+  for (const cancel of [false, true]) {
+    let calls = 0,
+      saved = false;
+    const tasks = new TaskRegistry();
+    const endpoint = await server(t, async (_req, res) => {
+      const index = ++calls;
+      if (cancel && calls === 3) tasks.cancel('summary.generate', 'failure');
+      await new Promise((resolve) => setTimeout(resolve, index === 1 ? 5 : 30));
+      res.statusCode = !cancel && index === 1 ? 500 : 200;
+      res.end(JSON.stringify({ choices: [{ message: { content: '# Partial' } }] }));
+    });
+    const meeting = {
+      id: 'failure',
+      title: 'Test',
+      segments: Array.from({ length: 7 }, (_, i) => ({
+        id: String(i),
+        text: 'x'.repeat(8500),
+        start_ms: 0,
+        end_ms: 1000,
+        speaker_name: 'A',
+      })),
+    };
+    const worker = {
+      tasks,
+      settings: { llm: { timeout_seconds: 2 } },
+      models: { catalog: new Map() },
+      emit() {},
+      store: {
+        getMeeting: () => meeting,
+        meetingExists: () => true,
+        saveSummary: () => {
+          saved = true;
+        },
+      },
+    };
+    const pending = createLLMHandlers(worker)['summary.generate']({
+      meeting_id: 'failure',
+      provider: 'openai',
+      model: 'test',
+      endpoint,
+      consent: true,
+    });
+    if (cancel) assert.deepEqual(await pending, { cancelled: true });
+    else await assert.rejects(pending, /500/);
+    assert.equal(calls, 3);
+    assert.equal(saved, false);
+  }
 });

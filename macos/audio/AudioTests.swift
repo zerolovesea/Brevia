@@ -6,6 +6,43 @@
   struct AudioTests {
     static func main() throws {
       // 短帧检查重采样、恢复前裁剪和非整包收尾；用生成的恒幅音频，不访问用户设备。
+      precondition(meetingApp("com.cloudMeeting.iflyMeeting") == "讯飞会议")
+      precondition(meetingApp("com.electron.iflyrecclient") == nil)
+      precondition(meetingApp("com.dancesuite.dance.ka.kaahyz17.mac.helper.renderer") == "i讯飞")
+      precondition(meetingApp("com.dancesuite.dance.ka.kaahyz17.macos") == nil)
+      precondition(meetingApp("com.electron.lark") == "飞书")
+      precondition(meetingApp("com.electron.lark.helper.renderer") == "飞书")
+      precondition(meetingApp("com.larksuite.larkApp.helper") == "Lark")
+      precondition(meetingApp("com.electron.lark-notifier") == nil)
+      precondition(meetingApp("com.larksuite.larkApp.fake.helper") == nil)
+      precondition(meetingApp("5ZSL2CJU2T.com.dingtalk.meeting") == "钉钉")
+      precondition(meetingApp("com.alibaba.DingTalkMac.ScreenShotTool") == nil)
+      precondition(meetingApp("com.tencent.WeWorkMac") == "企业微信")
+      precondition(meetingApp("com.tencent.wwmapp") == "企业微信")
+      precondition(meetingApp("com.tencent.WeWorkMac.MiniProgram") == nil)
+      precondition(meetingApp("com.tinyspeck.slackmacgap.helper") == "Slack")
+      precondition(meetingApp("com.tencent.tencentmeeting.services.wmexternal") == "VooV Meeting")
+      precondition(meetingApp("com.tencent.tencentmeeting.Transcode") == nil)
+      precondition(meetingApp("com.huawei.cloudlink") == "华为云会议")
+      precondition(meetingApp("com.huawei.cloudlink.WelinkMeetingHelper") == "华为云会议")
+      precondition(meetingApp("us.zoom.xos") == "Zoom")
+      precondition(meetingApp("com.google.Chrome.helper") == "Google Chrome")
+      precondition(meetingApp("com.hnc.Discord.helper") == "Discord")
+      precondition(meetingApp("us.zoom.xosomething") == nil)
+      let apps = ["com.acme.calls": "企业会议"]
+      precondition(selectedMeetingName("com.Acme.Calls.Helper.Renderer", apps: apps) == "企业会议")
+      precondition(selectedMeetingName("com.acme.callsign", apps: apps) == nil)
+      precondition(selectedMeetingName("com.acme.calls.other", apps: apps) == nil)
+      precondition(isMeetTitle("Meet - abc-defg-hij"))
+      precondition(isMeetTitle("Meet – abc-defg-hij - Google Chrome"))
+      precondition(isMeetTitle("https://meet.google.com/abc-defg-hij"))
+      for title in [
+        "YouTube Music", "Google Meet tips - YouTube - Google Chrome",
+        "Meet - abc-defg-hij - YouTube", "Google Meet 教程_哔哩哔哩_bilibili",
+        "meet.google.com/abc-defg-hij - Bilibili", "Google Meet", "Meet - video",
+      ] {
+        precondition(!isMeetTitle(title))
+      }
       let input = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
       let buffer = AVAudioPCMBuffer(pcmFormat: input, frameCapacity: 2400)!
       buffer.frameLength = 2400

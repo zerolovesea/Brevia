@@ -22,7 +22,6 @@ let currentMeetingDetail = null;
 let inlineSummaryEditor = null;
 let detailNotesEditor = null;
 let modelCatalog = [];
-let editingSegmentSpeakerId;
 let summaryGeneratingMeetingId;
 let seconds = 0;
 let timer;

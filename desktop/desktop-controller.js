@@ -22,12 +22,17 @@ const desktopPreferencesSchema = z.object({
   lastCaptureMode: z.enum(['mic', 'system', 'both', 'phone']).default('both'),
   closeBehavior: z.enum(['quit', 'hide']).default('quit'),
   trayVisibility: z.enum(['always', 'background']).default('always'),
+  meetingPrompts: z.boolean().default(true),
+  meetingApps: z
+    .array(z.object({ id: z.string().min(1).max(32767), name: z.string().min(1).max(255) }))
+    .default([]),
   autoCapsule: z.boolean().default(true),
   // 兼容旧偏好文件；胶囊现在固定悬浮，不再提供置顶开关。
   capsuleOnTop: z.boolean().default(true),
 });
 const desktopStateSchema = z
   .object({
+    systemAudioConfirmed: z.boolean().default(false),
     ready: z.boolean().default(false),
     meetingId: z.string().nullable(),
     title: z.string().max(500),
@@ -86,6 +91,7 @@ class DesktopController {
     this.ready = false;
     this.bounds = null;
     this.shortcuts = new Map();
+    this.promptedApps = new Map();
     this.savePending = Promise.resolve();
   }
 
@@ -104,9 +110,19 @@ class DesktopController {
   }
 
   save(payload) {
-    const pending = this.savePending.then(() => this.saveNext(payload));
+    const pending = this.savePending.then(() =>
+      this.saveNext(typeof payload === 'function' ? payload(this.preferences) : payload),
+    );
     this.savePending = pending.catch(() => {});
     return pending;
+  }
+
+  changeMeetingApp(selected, remove) {
+    return this.save((previous) => {
+      const meetingApps = previous.meetingApps.filter(({ id }) => id !== (selected?.id || remove));
+      if (selected) meetingApps.push(selected);
+      return { meetingApps };
+    });
   }
 
   async saveNext(payload) {
@@ -134,6 +150,14 @@ class DesktopController {
     } finally {
       if (this.updatingShortcuts) this.globalShortcut.setSuspended(Boolean(this.shortcutEditing));
       this.updatingShortcuts = false;
+    }
+    if (Object.hasOwn(payload, 'meetingApps')) {
+      for (const { id } of previous.meetingApps) {
+        if (next.meetingApps.some((app) => app.id === id)) continue;
+        const source = 'app:' + id;
+        this.promptedApps.delete(source);
+        if (this.promptSource === source) this.prompt?.destroy();
+      }
     }
     this.preferences = next;
     this.sync();
@@ -218,7 +242,20 @@ class DesktopController {
 
   attach(window) {
     this.mainWindow = window;
-    window.on('blur', () => this.editShortcuts(false));
+    this.mainBlurred = false;
+    window.on('focus', () => {
+      this.mainBlurred = false;
+      this.prompt?.destroy();
+    });
+    window.on('blur', () => {
+      this.mainBlurred = true;
+      this.editShortcuts(false);
+    });
+    if (this.nativeAudio) {
+      clearInterval(this.meetingTimer);
+      this.meetingTimer = setInterval(() => void this.checkMeetingSound(), 8000);
+      this.meetingTimer.unref();
+    }
     window.on('minimize', () => this.sync());
     window.on('restore', () => this.sync());
     window.on('show', () => this.sync());
@@ -238,6 +275,71 @@ class DesktopController {
       this.sync();
     });
     this.sync();
+  }
+
+  canPrompt() {
+    return (
+      this.mainWindow &&
+      (this.mainBlurred || this.background()) &&
+      this.preferences.meetingPrompts &&
+      this.state?.ready &&
+      ['idle', 'saved'].includes(this.state.phase) &&
+      !this.pending.size &&
+      !this.nativeAudio?.session &&
+      (process.platform !== 'darwin' || this.state.systemAudioConfirmed)
+    );
+  }
+
+  async checkMeetingSound() {
+    if (!this.canPrompt() || this.checkingSound) return;
+    this.checkingSound = true;
+    const main = this.mainWindow;
+    try {
+      const preferences = this.preferences;
+      const { active, audible } = await this.nativeAudio.query('meeting-audio', {
+        apps: Object.fromEntries(preferences.meetingApps.map(({ id }) => [id, 'app:' + id])),
+        excluded: [...this.promptedApps.keys()],
+      });
+      if (preferences !== this.preferences || main !== this.mainWindow || !this.canPrompt()) return;
+      const now = Date.now();
+      for (const [name, lastActive] of this.promptedApps) {
+        if (active.includes(name)) this.promptedApps.set(name, now);
+        else if (now - lastActive > 60000) this.promptedApps.delete(name);
+      }
+      if (!audible || this.prompt || this.promptedApps.has(audible)) return;
+      this.promptedApps.set(audible, now);
+      this.promptSource = audible;
+      this.promptName =
+        preferences.meetingApps.find(({ id }) => 'app:' + id === audible)?.name || audible;
+      const area = this.screen.getDisplayMatching(main.getBounds()).workArea;
+      const width = Math.min(396, area.width - 16),
+        height = width < 352 ? 216 : 178;
+      const prompt = (this.prompt = new this.NativeWindow({
+        x: area.x + area.width - width - 8,
+        y: area.y + 8,
+        width,
+        height,
+        transparent: true,
+        resizable: false,
+        alwaysOnTop: true,
+      }));
+      prompt.webContents.once('did-finish-load', () => {
+        if (this.prompt === prompt && this.canPrompt()) prompt.showInactive();
+        else prompt.destroy();
+      });
+      prompt.once('closed', () => {
+        if (this.prompt === prompt) this.prompt = null;
+        clearTimeout(timer);
+      });
+      const timer = setTimeout(() => prompt.destroy(), 30000);
+      await prompt.loadFile(path.join(this.root, 'frontend', 'meeting-prompt.html'));
+    } catch (error) {
+      this.prompt?.destroy();
+      // A missing device or revoked permission must never interrupt the foreground app.
+      console.warn('Meeting detection:', error.message);
+    } finally {
+      this.checkingSound = false;
+    }
   }
 
   background() {
@@ -321,7 +423,17 @@ class DesktopController {
     this.tray.on('double-click', () => this.showMain());
   }
 
+  shouldShowCapsule() {
+    return (
+      this.mainWindow?.isMinimized() &&
+      this.mainWindow.isVisible() &&
+      (this.active() || this.playback() || this.showSaved) &&
+      (this.override ?? this.preferences.autoCapsule)
+    );
+  }
+
   sync(rebuildMenu = true) {
+    if (this.prompt && !this.canPrompt()) this.prompt.destroy();
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     try {
       if (this.preferences.trayVisibility === 'always' || this.background()) {
@@ -335,13 +447,7 @@ class DesktopController {
       this.reportError(error);
     }
     const wasVisible = Boolean(this.capsule?.isVisible());
-    const visible =
-      (this.active() || this.playback() || this.showSaved) &&
-      (this.override === true ||
-        (this.override !== false &&
-          this.preferences.autoCapsule &&
-          (this.playback() || this.background())));
-    if (visible) this.showCapsule();
+    if (this.shouldShowCapsule()) this.showCapsule();
     else this.capsule?.hide();
     this.capsule?.setAlwaysOnTop(true, 'floating');
     if (wasVisible !== Boolean(this.capsule?.isVisible())) this.updateMenuIfPresent();
@@ -417,7 +523,7 @@ class DesktopController {
         label: t('显示录音胶囊'),
         type: 'checkbox',
         checked: Boolean(this.capsule?.isVisible()),
-        enabled: Boolean(active),
+        enabled: Boolean(active && this.mainWindow?.isMinimized() && this.mainWindow.isVisible()),
         click: (item) => {
           this.override = item.checked;
           this.sync();
@@ -549,14 +655,7 @@ class DesktopController {
       if (this.capsule !== window) return;
       this.ready = true;
       this.sendState();
-      if (
-        (this.active() || this.playback()) &&
-        (this.override === true ||
-          (this.override !== false &&
-            (this.playback() || this.background()) &&
-            this.preferences.autoCapsule))
-      )
-        window.showInactive();
+      if (this.shouldShowCapsule()) window.showInactive();
       this.updateMenuIfPresent();
     });
     window.on('closed', () => {
@@ -586,7 +685,8 @@ class DesktopController {
     const display = this.screen.getDisplayMatching(this.bounds || this.mainWindow.getBounds());
     const area = display.workArea;
     const pillWidth = Math.min(344, area.width);
-    const width = Math.min(expanded ? 464 : 344, area.width);
+    const panelWidth = Math.min(464, area.width);
+    const width = expanded ? panelWidth : pillWidth;
     const pillX = Math.max(
       area.x,
       Math.min(
@@ -595,7 +695,8 @@ class DesktopController {
       ),
     );
     const x = Math.max(area.x, Math.min(pillX, area.x + area.width - width));
-    this.pillOffset = pillX - x;
+    // Publish the expanded inset even while collapsed so WebKit can anchor the first resize frame.
+    this.pillOffset = Math.max(0, pillX + panelWidth - area.x - area.width);
     const pillY = Math.max(
       area.y,
       Math.min(this.bounds?.y ?? area.y + area.height - 80 - 32, area.y + area.height - 80),
@@ -621,6 +722,8 @@ class DesktopController {
     this.sendState(false);
   }
   destroy() {
+    clearInterval(this.meetingTimer);
+    this.prompt?.destroy();
     this.editShortcuts(false);
     for (const binding of this.shortcuts.values()) this.globalShortcut.unregister(binding.value);
     this.shortcuts.clear();

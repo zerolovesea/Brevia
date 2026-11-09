@@ -1,6 +1,7 @@
 /* 本场文字纠错：预览快照与编辑草稿留在原位置，写入只通过后端事务。 */
 let correctionDraft = null;
 let correctionPanelState = null;
+let correctionOpenVersion = 0;
 let correctionReturnFocus = null;
 let correctionSaving = false;
 const correctionPanel = document.createElement('aside');
@@ -104,7 +105,13 @@ function refreshCorrectionHighlights() {
     .flatMap((root) => correctionTextRanges(root, state.query));
   CSS.highlights.set('correction-search', new Highlight(...ranges));
 }
-const correctionContentObserver = new MutationObserver(() => {
+const correctionContentObserver = new MutationObserver((records) => {
+  if (
+    records.some(({ target }) =>
+      (target.parentElement || target).closest?.('[data-live-notes-root]'),
+    )
+  )
+    syncLiveCorrectionNotes();
   cancelAnimationFrame(correctionContentObserver.frame);
   correctionContentObserver.frame = requestAnimationFrame(refreshCorrectionHighlights);
 });
@@ -176,8 +183,8 @@ function applyCorrectionMeeting(meeting) {
   }
   syncCorrectionControls();
   if (correctionPanelState?.meetingId === meeting.id) {
-    correctionPanelState.latest = meeting;
-    updateCorrectionPending();
+    correctionPanelState.readVersion++;
+    updateCorrectionPreview(correctionPanelState, meeting);
   }
 }
 function correctionSnapshot(segment) {
@@ -473,9 +480,19 @@ async function openWorkspaceTerms(workspaceId, anchor) {
 
 async function openCorrection(query = '', rules = false, scope = 'transcript') {
   const meetingId = correctionMeetingId();
-  if (!meetingId || !(await settleCorrectionDraft())) return;
+  const view = activeView;
+  const requested = ++correctionOpenVersion;
+  if (
+    !meetingId ||
+    !(await settleCorrectionDraft()) ||
+    requested !== correctionOpenVersion ||
+    activeView !== view ||
+    correctionMeetingId() !== meetingId
+  )
+    return;
   if (scope === 'summary' && summaryGeneratingMeetingId === meetingId) return;
   if (correctionPanelState) closeCorrectionPanel();
+  const version = ++correctionOpenVersion;
   if (
     scope === 'transcript' &&
     activeView === 'detail' &&
@@ -485,28 +502,37 @@ async function openCorrection(query = '', rules = false, scope = 'transcript') {
     showToast(t('请切回当前稿后替换'));
     return;
   }
-  if (scope === 'notes' && activeView === 'live') {
-    clearTimeout(liveNotesSaveTimer.current);
-    await persistNotes(meetingId, currentNotesMarkdown());
-  }
   const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+  if (
+    version !== correctionOpenVersion ||
+    activeView !== view ||
+    correctionMeetingId() !== meetingId
+  )
+    return;
   if (meeting.status === 'refining' && scope === 'transcript')
     throw Error(t('部分内容已变化，请更新预览'));
+  const liveNotes = scope === 'notes' && view === 'live';
+  const preview = liveNotes ? { ...meeting, notes: currentNotesMarkdown() } : meeting;
   correctionReturnFocus = document.activeElement;
   correctionPanelState = {
     meetingId,
     scope,
-    meeting,
+    meeting: preview,
     latest: meeting,
+    notesBase: liveNotes
+      ? preview.notes === (meeting.notes || '')
+        ? preview.notes
+        : null
+      : undefined,
+    readVersion: 0,
     query,
     replacement: '',
     termSuggestions: scope === 'transcript' ? suggestedTermPairs(meeting) : [],
-    matches: correctionMatches(correctionSegments(meeting, scope), query),
+    matches: correctionMatches(correctionSegments(preview, scope), query),
     rules,
     saving: false,
   };
   correctionPanel.hidden = false;
-  document.querySelector('#live-view').classList.add('has-correction-panel');
   if (scope === 'notes' && activeView === 'live' && liveNotesEditor.getMode() === 'markdown') {
     const input = liveNotesRoot.querySelector('.notes-input');
     const preview = document.createElement('pre');
@@ -531,17 +557,29 @@ async function openCorrection(query = '', rules = false, scope = 'transcript') {
 }
 function closeCorrectionPanel() {
   if (correctionPanelState?.saving) return;
-  const source = correctionPanelState?.sourcePreview;
+  const state = correctionPanelState;
+  const source = state?.sourcePreview;
   if (source) {
     source.preview.remove();
     source.input.hidden = false;
   }
   correctionPanel.hidden = true;
-  document.querySelector('#live-view').classList.remove('has-correction-panel');
+  ++correctionOpenVersion;
   correctionPanelState = null;
   correctionContentObserver.disconnect();
   refreshCorrectionHighlights();
-  if (correctionReturnFocus?.isConnected) correctionReturnFocus.focus({ preventScroll: true });
+  let anchor = correctionReturnFocus;
+  if (
+    !anchor?.isConnected &&
+    state?.meetingId === correctionMeetingId() &&
+    anchor?.matches('[data-open-correction], [data-correction-rules]')
+  ) {
+    const selector = anchor.matches('[data-correction-rules]')
+      ? '[data-correction-rules]'
+      : `[data-open-correction="${state.scope}"]`;
+    anchor = document.querySelector('.view.active ' + selector);
+  }
+  if (anchor?.isConnected) anchor.focus({ preventScroll: true });
 }
 function renderCorrectionPanel() {
   const state = correctionPanelState;
@@ -559,13 +597,12 @@ function renderCorrectionPanel() {
     ? `<details class="term-suggestions"><summary>${t('纪要中的纠错')} · ${choices.length}</summary>${choices.map((pair, i) => `<button type="button" data-term-suggestion="${i}">${e(pair.wrong)} → ${e(pair.correct)}</button>`).join('')}</details>`
     : '';
   const remember = `<div class="correction-term"><label><input type="checkbox" data-term-remember ${state.remember ? 'checked' : ''} />${t('记为工作区搜索别名')}</label><div class="term-options" ${state.remember ? '' : 'hidden'}>${termFlagsMarkup(state.postReplace, state.hotword, supportsHotword)}</div></div>`;
-  correctionPanel.innerHTML = `<header><h2 id="correction-title">${t(state.rules ? '本场规则' : '查找与替换')}</h2><button class="icon-button" data-close-correction type="button" aria-label="${t('关闭')}">${interfaceIcon('close')}</button></header>${state.rules ? `<div class="correction-results">${state.latest.correction?.rules?.length ? state.latest.correction.rules.map((rule, index) => `<div class="correction-rule"><strong>${e(rule.find)} → ${e(rule.replacement)}</strong><span>${t(rule.enabled && live ? '已启用' : '已停用')}</span><button class="text-button" type="button" data-reuse-correction="${index}">${t('重新应用')}</button>${rule.enabled ? `<button class="text-button" type="button" data-disable-correction="${index}">${t('停用')}</button>` : ''}</div>`).join('') : `<p>${t('暂无本场规则')}</p>`}</div><footer><button class="secondary" data-close-correction type="button">${t('关闭')}</button></footer>` : `<div class="correction-fields"><label>${t('查找')}<input data-correction-find maxlength="4000" value="${e(state.query)}" autocomplete="off" /></label><label>${t('替换为')}<input data-correction-replacement maxlength="4000" value="${e(state.replacement)}" autocomplete="off" /></label></div>${suggestions}<div class="correction-match-heading"><strong data-correction-count></strong><button class="text-button" data-correction-select-all type="button">${t('全选')}</button></div><div class="correction-pending" role="status" hidden></div><div class="correction-results" data-correction-results></div>${live ? `<label class="correction-future"><input type="checkbox" data-correction-future${state.future ? ' checked' : ''}/><span>${t('本场后续字幕也应用此规则')}<small>${t('仅对之后确认的新字幕生效')}</small></span></label>` : ''}${remember}<p class="correction-error" role="alert"></p><footer><button class="secondary" data-close-correction type="button">${t('取消')}</button><button class="modal-action" data-submit-correction type="button"></button></footer>`}`;
+  correctionPanel.innerHTML = `<header><h2 id="correction-title">${t(state.rules ? '本场规则' : '查找与替换')}</h2><button class="icon-button" data-close-correction type="button" aria-label="${t('关闭')}">${interfaceIcon('close')}</button></header>${state.rules ? `<div class="correction-results">${state.latest.correction?.rules?.length ? state.latest.correction.rules.map((rule, index) => `<div class="correction-rule"><strong>${e(rule.find)} → ${e(rule.replacement)}</strong><span>${t(rule.enabled && live ? '已启用' : '已停用')}</span><button class="text-button" type="button" data-reuse-correction="${index}">${t('重新应用')}</button>${rule.enabled ? `<button class="text-button" type="button" data-disable-correction="${index}">${t('停用')}</button>` : ''}</div>`).join('') : `<p>${t('暂无本场规则')}</p>`}</div><footer><button class="secondary" data-close-correction type="button">${t('关闭')}</button></footer>` : `<div class="correction-fields"><label>${t('查找')}<input data-correction-find maxlength="4000" value="${e(state.query)}" autocomplete="off" /></label><label>${t('替换为')}<input data-correction-replacement maxlength="4000" value="${e(state.replacement)}" autocomplete="off" /></label></div>${suggestions}<div class="correction-match-heading"><strong data-correction-count></strong><button class="text-button" data-correction-select-all type="button">${t('全选')}</button></div><div class="correction-results" data-correction-results></div>${live ? `<label class="correction-future" title="${e(t('仅对之后确认的新字幕生效'))}"><input type="checkbox" data-correction-future${state.future ? ' checked' : ''}/><span>${t('本场后续字幕也应用此规则')}</span></label>` : ''}${remember}<p class="correction-error" role="alert"></p><footer><button class="secondary" data-close-correction type="button">${t('取消')}</button><button class="modal-action" data-submit-correction type="button"></button></footer>`}`;
   if (!state.rules) renderCorrectionResults();
 }
-function renderCorrectionResults() {
+function renderCorrectionResults(focusedMatch = document.activeElement?.dataset?.correctionMatch) {
   const state = correctionPanelState;
   if (!state || state.rules) return;
-  const focusedMatch = document.activeElement?.dataset?.correctionMatch;
   const selected = state.matches.filter((match) => match.selected);
   const groups = selectedCorrectionGroups(state);
   const lengths = groups.map(
@@ -628,28 +665,115 @@ function renderCorrectionResults() {
     error.textContent = '';
     delete error.dataset.limit;
   }
-  updateCorrectionPending();
   refreshCorrectionHighlights();
-  if (focusedMatch !== undefined)
+  if (focusedMatch != null)
     correctionPanel
       .querySelector(`[data-correction-match="${focusedMatch}"]`)
       ?.focus({ preventScroll: true });
 }
-function updateCorrectionPending() {
+function syncLiveCorrectionNotes() {
   const state = correctionPanelState;
-  const notice = correctionPanel.querySelector('.correction-pending');
-  if (!state || !notice) return;
-  const current = correctionSegments(state.latest, state.scope);
-  const preview = correctionSegments(state.meeting, state.scope);
-  const changed =
-    JSON.stringify(
-      current.map((segment) => [segment.id, segment.text, segment.version, segment.revision]),
-    ) !==
-    JSON.stringify(
-      preview.map((segment) => [segment.id, segment.text, segment.version, segment.revision]),
-    );
-  notice.hidden = !changed;
-  notice.innerHTML = `${t('内容已更新，请更新预览')} <button class="text-button" type="button" data-refresh-correction>${t('更新预览')}</button>`;
+  if (
+    !state ||
+    state.notesBase === undefined ||
+    activeView !== 'live' ||
+    correctionMeetingId() !== state.meetingId
+  )
+    return;
+  const notes = currentNotesMarkdown();
+  if (state.sourcePreview && state.sourcePreview.preview.textContent !== notes)
+    state.sourcePreview.preview.textContent = notes;
+  if (state.meeting.notes !== notes)
+    updateCorrectionPreview(state, { ...state.latest, notes }, true);
+}
+function updateCorrectionPreview(state, meeting, localNotes = false) {
+  const previousRules = state.meeting.correction?.rules || [];
+  if (!localNotes) {
+    state.latest = meeting;
+    if (
+      state.notesBase !== undefined &&
+      activeView === 'live' &&
+      correctionMeetingId() === state.meetingId
+    ) {
+      const notes = currentNotesMarkdown();
+      if ((meeting.notes || '') === notes) state.notesBase = notes;
+      meeting = { ...meeting, notes };
+    }
+  }
+  if (state.saving) return;
+  state.meeting = meeting;
+  if (state.rules) {
+    const rules = meeting.correction?.rules || [];
+    if (JSON.stringify(rules) === JSON.stringify(previousRules)) return;
+    const focus = document.activeElement;
+    const action = focus?.matches('[data-reuse-correction]')
+      ? 'reuse-correction'
+      : 'disable-correction';
+    const rule = previousRules[focus?.getAttribute('data-' + action)];
+    const hadFocus = correctionPanel.contains(focus);
+    renderCorrectionPanel();
+    if (hadFocus) {
+      const index = rule && rules.findIndex((item) => item.find === rule.find);
+      const target =
+        correctionPanel.querySelector(`[data-${action}="${index}"]`) ||
+        correctionPanel.querySelector('[data-close-correction]');
+      target.focus({ preventScroll: true });
+    }
+    return;
+  }
+  if (!state.query) return;
+  const previous = state.matches;
+  const matches = correctionMatches(correctionSegments(meeting, state.scope), state.query);
+  const key = (match) => match.segment.id + ':' + match.occurrence;
+  const known = new Map(previous.map((match) => [key(match), match]));
+  const focusedControl = document.activeElement?.matches('[data-correction-locate]')
+    ? 'correction-locate'
+    : 'correction-match';
+  const focused = previous[document.activeElement?.getAttribute('data-' + focusedControl)];
+  let focusIndex = null;
+  let changed = previous.length !== matches.length || previous.limited !== matches.limited;
+  matches.forEach((match, index) => {
+    const old = known.get(key(match));
+    const same =
+      old &&
+      old.segment.text === match.segment.text &&
+      old.segment.version === match.segment.version;
+    match.selected = same ? old.selected : !previous.length;
+    if (!same || previous[index] !== old) changed = true;
+    if (focused && old === focused) focusIndex = index;
+  });
+  state.matches = matches;
+  if (!changed) return;
+  renderCorrectionResults(null);
+  if (focused) {
+    const selector =
+      focusIndex === null ? '[data-correction-find]' : `[data-${focusedControl}="${focusIndex}"]`;
+    correctionPanel.querySelector(selector)?.focus({ preventScroll: true });
+  }
+}
+
+async function refreshCorrectionMeeting(state) {
+  const version = ++state.readVersion;
+  const read = () => window.brevia.meeting.get({ meeting_id: state.meetingId });
+  let meeting;
+  try {
+    meeting = await read();
+  } catch (error) {
+    if (correctionPanelState !== state || version !== state.readVersion) return;
+    try {
+      meeting = await read();
+    } catch (retryError) {
+      if (correctionPanelState === state && version === state.readVersion) throw retryError;
+      return;
+    }
+  }
+  if (correctionPanelState !== state || version !== state.readVersion) return;
+  const message = correctionPanel.querySelector('.correction-error[data-refresh-error]');
+  if (message) {
+    message.textContent = '';
+    delete message.dataset.refreshError;
+  }
+  updateCorrectionPreview(state, meeting);
 }
 async function submitCorrection(action = 'replace', find, scope = 'transcript') {
   const state = correctionPanelState;
@@ -688,18 +812,27 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
     const old = state.latest.correction?.rules?.find(
       (rule) => rule.find === state.query && rule.replacement !== state.replacement,
     );
-    if (state.future && old && !state.confirmRule) {
+    if (state.future && old && state.confirmRule !== old.replacement) {
       openConfirmation(
         t('更新本场规则'),
         `${old.find} → ${old.replacement} → ${state.replacement}`,
         () => {
-          state.confirmRule = true;
+          if (
+            correctionPanelState !== state ||
+            state.query !== payload.find ||
+            state.replacement !== payload.replacement
+          )
+            return;
+          state.confirmRule = old.replacement;
           return submitCorrection();
         },
       );
       return;
     }
-    payload.confirm_rule = Boolean(state.confirmRule);
+    if (state.future && typeof state.confirmRule === 'string') {
+      payload.confirm_rule = true;
+      payload.expected_rule_replacement = state.confirmRule;
+    }
   }
   correctionSaving = true;
   document.querySelectorAll('[data-correction-undo]').forEach((button) => {
@@ -713,17 +846,28 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
   const submit = correctionPanel.querySelector('[data-submit-correction]');
   if (submit) submit.textContent = t('替换中…');
   const notesWasInert = liveNotesRoot.inert;
-  if (payload.scope === 'notes' && activeView === 'live') liveNotesRoot.inert = true;
+  const editingLiveNotes = payload.scope === 'notes' && activeView === 'live';
+  const notes = editingLiveNotes ? currentNotesMarkdown() : null;
+  if (editingLiveNotes) liveNotesRoot.inert = true;
   try {
-    if (payload.scope === 'notes' && activeView === 'live') {
-      if (state && currentNotesMarkdown() !== (state.meeting.notes || ''))
-        throw Error(t('部分内容已变化，请更新预览'));
-      clearTimeout(liveNotesSaveTimer.current);
-      await persistNotes(meetingId, currentNotesMarkdown());
+    if (editingLiveNotes) {
+      if (state && notes !== (state.meeting.notes || '')) throw Error('error.transcript_conflict');
+      await notesSavePending.catch(() => {});
+      const stored = await window.brevia.meeting.get({ meeting_id: meetingId });
+      if (correctionMeetingId() !== meetingId || currentNotesMarkdown() !== notes)
+        throw Error('error.transcript_conflict');
+      if ((stored.notes || '') !== notes) {
+        if (!state || (stored.notes || '') !== state.notesBase)
+          throw Error('error.transcript_conflict');
+        clearTimeout(liveNotesSaveTimer.current);
+        await persistNotes(meetingId, notes, stored.notes || '');
+      }
     }
     const meeting = await window.brevia.segment.correction(payload);
-    if (payload.scope === 'notes' && activeView === 'live')
-      liveNotesEditor.setMarkdown(meeting.notes || '');
+    if (editingLiveNotes && breviaClient?.state.meeting?.id === meetingId) {
+      if (currentNotesMarkdown() === notes) liveNotesEditor.setMarkdown(meeting.notes || '');
+      else showToast(t('电脑笔记已更新，请重新核对。'));
+    }
     if (state) state.saving = false;
     applyCorrectionMeeting(meeting);
     if (action === 'disable' && state) {
@@ -737,9 +881,17 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
         control.disabled = false;
       });
       const message = correctionPanel.querySelector('.correction-error');
-      if (message)
-        message.textContent = `${t('替换失败，修改仍保留')} · ${userFacingError(error.message)}`;
-      if (!state.rules) renderCorrectionResults();
+      if (message) {
+        const reason =
+          error.message === 'error.transcript_conflict'
+            ? t('匹配内容已变化，请核对后重试')
+            : userFacingError(error.message);
+        message.textContent = `${t('替换失败，修改仍保留')} · ${reason}`;
+      }
+      if (!state.rules) {
+        renderCorrectionResults();
+        await refreshCorrectionMeeting(state).catch(() => {});
+      }
     } else showToast(userFacingError(error.message), undefined, 'error');
   } finally {
     liveNotesRoot.inert = notesWasInert;
@@ -755,7 +907,9 @@ correctionPanel.addEventListener('input', (event) => {
   if (event.target.matches('[data-correction-find]')) {
     state.confirmRule = false;
     state.query = event.target.value;
-    state.meeting = state.latest;
+    const message = correctionPanel.querySelector('.correction-error');
+    message.textContent = '';
+    delete message.dataset.refreshError;
     state.matches = correctionMatches(correctionSegments(state.meeting, state.scope), state.query);
   } else if (event.target.matches('[data-correction-replacement]')) {
     state.confirmRule = false;
@@ -781,7 +935,6 @@ correctionPanel.addEventListener('click', (event) => {
     state.replacement = pair.correct;
     state.remember = false;
     state.confirmRule = false;
-    state.meeting = state.latest;
     state.matches = correctionMatches(correctionSegments(state.meeting, state.scope), state.query);
     renderCorrectionPanel();
     correctionPanel.querySelector('[data-correction-find]').focus();
@@ -793,24 +946,18 @@ correctionPanel.addEventListener('click', (event) => {
     });
     renderCorrectionResults();
   }
-  if (event.target.closest('[data-refresh-correction]'))
-    void (async () => {
-      if (state.scope === 'notes' && activeView === 'live') {
-        clearTimeout(liveNotesSaveTimer.current);
-        await persistNotes(state.meetingId, currentNotesMarkdown());
-        if (state.sourcePreview) state.sourcePreview.preview.textContent = currentNotesMarkdown();
-      }
-      return window.brevia.meeting.get({ meeting_id: state.meetingId });
-    })()
-      .then((meeting) => {
-        state.meeting = state.latest = meeting;
-        state.matches = correctionMatches(correctionSegments(meeting, state.scope), state.query);
-        renderCorrectionResults();
-      })
-      .catch((error) => showToast(error.message, undefined, 'error'));
   const locate = event.target.closest('[data-correction-locate]');
   if (locate) {
     const segment = state.matches[Number(locate.dataset.correctionLocate)].segment;
+    if (
+      state.scope === 'transcript' &&
+      activeView === 'detail' &&
+      uiData.detail.transcriptSpeaker &&
+      uiData.detail.transcriptSpeaker !== segment.speaker
+    ) {
+      uiData.detail.transcriptSpeaker = '';
+      renderMeetingDetail();
+    }
     const row = [...document.querySelectorAll('.view.active .segment')].find(
       (item) => item.dataset.segmentId === segment.id,
     );
@@ -849,7 +996,6 @@ correctionPanel.addEventListener('click', (event) => {
     state.rules = false;
     state.query = rule.find;
     state.replacement = rule.replacement;
-    state.meeting = state.latest;
     state.matches = correctionMatches(correctionSegments(state.meeting, state.scope), rule.find);
     renderCorrectionPanel();
   }
@@ -937,6 +1083,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 document.addEventListener('input', (event) => {
+  if (event.target.closest('[data-live-notes-root]')) syncLiveCorrectionNotes();
   if (correctionDraft?.field === event.target) {
     resizeTranscriptField(event.target);
     const modified = event.target.value !== correctionDraft.segment.text;
@@ -957,15 +1104,18 @@ window.addEventListener('beforeunload', (event) => {
   }
 });
 window.brevia?.on('transcript.corrected', ({ meeting }) => applyCorrectionMeeting(meeting));
-window.brevia?.on('transcript.final', ({ meeting_id }) => {
-  if (correctionPanelState?.meetingId === meeting_id)
-    void window.brevia.meeting
-      .get({ meeting_id })
-      .then((meeting) => {
-        if (correctionPanelState?.meetingId === meeting_id) {
-          correctionPanelState.latest = meeting;
-          updateCorrectionPending();
+function refreshLiveTranscriptCorrection({ meeting_id }) {
+  const state = correctionPanelState;
+  if (state?.meetingId === meeting_id && state.scope === 'transcript')
+    void refreshCorrectionMeeting(state).catch((error) => {
+      if (correctionPanelState === state && state.query && !state.saving) {
+        const message = correctionPanel.querySelector('.correction-error');
+        if (message) {
+          message.dataset.refreshError = 'true';
+          message.textContent = userFacingError(error.message);
         }
-      })
-      .catch(() => {});
-});
+      }
+    });
+}
+window.brevia?.on('transcript.final', refreshLiveTranscriptCorrection);
+window.brevia?.on('transcript.refined', refreshLiveTranscriptCorrection);

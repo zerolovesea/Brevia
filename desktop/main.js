@@ -28,7 +28,7 @@ const {
   statfs,
   writeFile,
 } = require('node:fs/promises');
-const { existsSync } = require('node:fs');
+const { constants, existsSync } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
@@ -44,6 +44,7 @@ const { MobileServer } = require('./mobile-server');
 const { AgentService } = require('./agent-service.cjs');
 const { createRecordingController } = require('./agent-recording.cjs');
 const { DesktopController } = require('./desktop-controller');
+const { selectedMeetingApp } = require('./meeting-app.cjs');
 const {
   createLineBuffer,
   audioFileURL,
@@ -80,10 +81,17 @@ function handleIpc(channel, callback) {
         frame !== event.sender.mainFrame ||
         !(
           page === mainPage ||
+          (page ===
+            pathToFileURL(path.join(packagedRoot, 'frontend', 'meeting-prompt.html')).href &&
+            channel === 'desktop.meeting-prompt') ||
           (page === capsulePage &&
-            ['desktop.state', 'desktop.action', 'desktop.expand', 'desktop.move'].includes(
-              channel,
-            )) ||
+            [
+              'desktop.state',
+              'desktop.action',
+              'desktop.expand',
+              'desktop.move',
+              'meeting.note-image.save',
+            ].includes(channel)) ||
           (page === captionPage &&
             [
               'floating-caption.close',
@@ -117,7 +125,7 @@ const { defaultRefinedModelId } = require(
 );
 const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
-  platform: { app, NativeWindow, Menu, Tray, nativeImage, screen, globalShortcut },
+  platform: { app, NativeWindow, Menu, Tray, nativeImage, screen, globalShortcut, nativeAudio },
   root: packagedRoot,
   dataDir: () => dataDir(),
   text: (key, locale) => translate(key, locale || app.getLocale().split('-')[0]),
@@ -1290,7 +1298,31 @@ function registerIpc() {
     return agentSettings();
   });
   handleIpc('desktop.preferences.get', () => desktop.preferences);
-  handleIpc('desktop.preferences.save', (_, payload) => desktop.save(payload));
+  handleIpc('desktop.preferences.save', (_, payload) => {
+    if (Object.hasOwn(payload, 'meetingApps'))
+      throw new Error('Select a meeting application first');
+    return desktop.save(payload);
+  });
+  handleIpc('desktop.meeting-app', async (event, payload) => {
+    const { remove } = z
+      .object({ remove: z.string().min(1).max(32767).optional() })
+      .strict()
+      .parse(payload);
+    if (remove) return desktop.changeMeetingApp(null, remove);
+    const mac = process.platform === 'darwin';
+    const locale = desktop.state?.locale || app.getLocale().split('-')[0];
+    const title = translate('添加会议应用', locale);
+    const selection = await dialog.showOpenDialog(NativeWindow.fromWebContents(event.sender), {
+      title,
+      properties: ['openFile'],
+      defaultPath: mac ? '/Applications' : undefined,
+      applicationLocale: locale,
+      filters: [{ name: title, extensions: [mac ? 'app' : 'exe'] }],
+    });
+    if (selection.canceled || !selection.filePaths.length) return desktop.preferences;
+    const selected = await selectedMeetingApp(selection.filePaths[0], selection.localizedAppName);
+    return desktop.changeMeetingApp(selected);
+  });
   handleIpc('desktop.shortcuts.edit', (_, payload) => {
     desktop.editShortcuts(z.object({ editing: z.boolean() }).strict().parse(payload).editing);
     return true;
@@ -1316,10 +1348,29 @@ function registerIpc() {
     );
     return true;
   });
+  handleIpc('desktop.meeting-prompt', (event, payload) => {
+    if (desktop.prompt?.webContents !== event.sender) throw new Error('Meeting prompt has closed');
+    if (payload.action === 'state')
+      return {
+        name: desktop.promptName,
+        theme: desktop.state.theme,
+        locale: desktop.state.locale,
+      };
+    if (!['dismiss', 'record'].includes(payload.action)) throw new Error('Invalid prompt action');
+    const record = payload.action === 'record' && desktop.canPrompt();
+    desktop.prompt.destroy();
+    if (record)
+      return desktop.action('quick', { background: true }).catch((error) => {
+        desktop.showMain();
+        reportMainError(error);
+      });
+    return true;
+  });
   handleIpc('desktop.state', () => ({
     ...desktop.state,
     expanded: desktop.expanded,
     above: desktop.above,
+    pillOffset: desktop.pillOffset,
   }));
   handleIpc('desktop.action', (_, payload) => {
     const value = z
@@ -1335,7 +1386,15 @@ function registerIpc() {
           'ignore',
           'ai-settings',
           'models',
+          'read-notes',
+          'save-notes',
         ]),
+        note: z
+          .object({
+            base: z.string().max(5 * 1024 * 1024),
+            text: z.string().max(5 * 1024 * 1024),
+          })
+          .optional(),
         suggestionId: z.string().optional(),
         meetingId: z.string().nullable().optional(),
         tab: z.enum(['captions', 'notes']).optional(),
@@ -1352,6 +1411,7 @@ function registerIpc() {
           result: z
             .union([
               z.boolean(),
+              z.string().max(5 * 1024 * 1024),
               z
                 .object({
                   meeting_id: z.string().uuid(),
@@ -1643,13 +1703,30 @@ function registerIpc() {
   );
   handle('meeting.search', z.object({ query: z.string().max(120) }), 'meeting.search');
   handle('meeting.get', id, 'meeting.get');
-  handle('meeting.update', id.extend({ updates: meetingUpdates }), 'meeting.update');
+  handle(
+    'meeting.update',
+    id.extend({
+      updates: meetingUpdates,
+      expected_notes: z
+        .string()
+        .max(5 * 1024 * 1024)
+        .optional(),
+    }),
+    'meeting.update',
+  );
   handle('meeting.delete', id, 'meeting.delete');
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
   handleIpc('meeting.refine', (_, payload) => handleRefinement(payload));
-  handleIpc('meeting.note-image.save', async (_, payload) => {
+  handleIpc('meeting.note-image.save', async (event, payload) => {
     const value = noteImage.parse(payload);
+    if (
+      event.sender !== desktop.mainWindow?.webContents &&
+      (event.sender !== desktop.capsule?.webContents ||
+        value.meeting_id !== desktop.state?.meetingId ||
+        !['recording', 'paused', 'playing', 'playback-paused'].includes(desktop.state.phase))
+    )
+      throw new Error(mainText('error.desktop.session_changed'));
     await worker.request('meeting.get', { meeting_id: value.meeting_id });
     return saveNoteImage(value);
   });
@@ -1698,6 +1775,7 @@ function registerIpc() {
       speaker_id: z.string(),
       name: z.string().trim().min(1).max(32),
       locked: z.boolean().optional(),
+      meeting_only: z.boolean().optional(),
     }),
     'speaker.rename',
   );
@@ -1830,6 +1908,7 @@ function registerIpc() {
       replacement: z.string().max(4000).optional(),
       future: z.boolean().optional(),
       confirm_rule: z.boolean().optional(),
+      expected_rule_replacement: z.string().max(4000).optional(),
       remember: termScope.merge(termFlags).optional(),
       matches: z
         .array(
@@ -1911,6 +1990,19 @@ function registerIpc() {
   handleIpc('ai-assist.config.save', (_, payload) =>
     saveProviderConfig(payload, aiAssistConfig, writeAiAssistConfig),
   );
+  handleIpc('summary.test', async (_, payload) => {
+    const value = llmRequest.safeExtend({ apiKey: z.string().max(512).optional() }).parse(payload);
+    if (isBuiltInProvider(value.provider)) throw new Error('Online provider required');
+    const api_key = value.apiKey || (await getSecret(value.key_reference));
+    if (!api_key) throw new Error('API Key is required');
+    const started = Date.now();
+    await require('../macos/backend/llm-client.cjs').complete(
+      { ...value, api_key },
+      'Reply only OK.',
+      { timeout: 30 },
+    );
+    return { elapsed_ms: Date.now() - started };
+  });
   handleIpc('summary.generate', async (_, payload) => {
     const value = id
       .extend({
@@ -2018,7 +2110,7 @@ function registerIpc() {
   handleIpc('meeting.export', async (_, payload) => {
     const value = id
       .extend({
-        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+        content: z.enum(['transcript', 'notes', 'analysis', 'mynotes', 'audio']).optional(),
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
         track: z.enum(['mix', 'mic', 'system']).optional(),
         filename_prefix: z.string().max(60).optional(),
@@ -2035,7 +2127,7 @@ function registerIpc() {
       .object({
         meeting_ids: z.array(z.string().uuid()).min(1).max(200),
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).default('md'),
-        content: z.enum(['notes', 'mynotes', 'transcript', 'audio']).optional(),
+        content: z.enum(['notes', 'analysis', 'mynotes', 'transcript', 'audio']).optional(),
         filename_prefix: z.string().max(60).optional(),
       })
       .refine(({ content, format }) => {
@@ -2090,7 +2182,7 @@ function registerIpc() {
         items: z
           .array(
             z.object({
-              content: z.enum(['transcript', 'notes', 'mynotes', 'audio']),
+              content: z.enum(['transcript', 'notes', 'analysis', 'mynotes', 'audio']),
               format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
               track: z.enum(['mix', 'mic', 'system']).optional(),
               label: z.string().min(1).max(60).optional(),
@@ -2123,6 +2215,39 @@ function registerIpc() {
         format: exported.format,
         label: item.label || item.content,
       });
+    }
+    if (
+      value.mode === 'save' &&
+      value.items.length === 2 &&
+      ['notes', 'analysis'].every((type) => value.items.some((item) => item.content === type))
+    ) {
+      const destination = await dialog.showOpenDialog({
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (destination.canceled) return null;
+      const paths = [];
+      try {
+        for (const file of prepared) {
+          const parsed = path.parse(file.path);
+          for (let n = 1; ; n++) {
+            const target = path.join(
+              destination.filePaths[0],
+              n === 1 ? parsed.base : `${parsed.name}-${n}${parsed.ext}`,
+            );
+            try {
+              await copyFile(file.path, target, constants.COPYFILE_EXCL);
+              paths.push(target);
+              break;
+            } catch (error) {
+              if (error.code !== 'EEXIST') throw error;
+            }
+          }
+        }
+      } catch (error) {
+        await Promise.all(paths.map((target) => rm(target, { force: true })));
+        throw error;
+      }
+      return { paths, count: paths.length };
     }
     // 2. 多项时打包为一个 zip；单项直接交付。
     let deliver = prepared;
@@ -2171,7 +2296,7 @@ function registerIpc() {
       .object({
         meeting_id: z.string().uuid(),
         kind: z.enum(['export', 'bundle']).default('export'),
-        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+        content: z.enum(['transcript', 'notes', 'analysis', 'mynotes', 'audio']).optional(),
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
         track: z.enum(['mix', 'mic', 'system']).optional(),
       })
@@ -2207,7 +2332,7 @@ function registerIpc() {
           .object({
             meeting_id: z.string().uuid(),
             kind: z.enum(['export', 'bundle']).default('export'),
-            content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+            content: z.enum(['transcript', 'notes', 'analysis', 'mynotes', 'audio']).optional(),
             format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
             track: z.enum(['mix', 'mic', 'system']).optional(),
           })

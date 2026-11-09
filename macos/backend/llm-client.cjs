@@ -33,8 +33,10 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
   const url = new URL(payload.endpoint);
   const pathname = url.pathname.replace(/\/+$/, '');
   if (anthropic && !pathname.endsWith('/v1/messages')) url.pathname = pathname + '/v1/messages';
-  if (!anthropic && ['', '/v1', '/v1/chat'].includes(pathname))
-    url.pathname = '/v1/chat/completions';
+  if (!anthropic && (!pathname || /\/v1(?:\/chat)?$/.test(pathname)))
+    url.pathname = pathname.endsWith('/chat')
+      ? pathname + '/completions'
+      : (pathname || '/v1') + '/chat/completions';
   const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Brevia/1.0' };
   if (payload.api_key) {
     if (anthropic)

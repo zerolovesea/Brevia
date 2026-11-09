@@ -208,7 +208,7 @@ module.exports = {
       return result;
     });
   },
-  updateMeeting(mid, updates) {
+  updateMeeting(mid, updates, expectedNotes) {
     const allowed = [
       'title',
       'tags',
@@ -230,6 +230,15 @@ module.exports = {
     if ('meeting_date' in fields) fields.meeting_date = confirmedDate(fields.meeting_date);
     if ('tags' in fields) fields.tags = JSON.stringify(fields.tags);
     this.transaction(() => {
+      if (
+        expectedNotes !== undefined &&
+        !this.one(
+          "SELECT 1 FROM meetings WHERE id=? AND deleted_at IS NULL AND COALESCE(notes,'')=?",
+          mid,
+          expectedNotes,
+        )
+      )
+        throw new Error('电脑笔记已更新，请重新核对。');
       for (const id of new Set(updates.accepted_suggestion_ids || []))
         if (
           !('notes' in fields) ||

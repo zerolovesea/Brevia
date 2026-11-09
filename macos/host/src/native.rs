@@ -115,6 +115,7 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         "main" => "index.html",
         "floating-caption" => "floating-caption.html",
         "recording-capsule" => "recording-capsule.html",
+        "meeting-prompt" => "meeting-prompt.html",
         _ => return Err("Unknown window".into()),
     };
     let supplied = args["page"].as_str().unwrap_or(page);
@@ -336,7 +337,6 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
         "window.getBounds" => return window_bounds(win()?),
         "window.setBounds" => {
             let b = a.get("bounds").unwrap_or(a);
-            #[cfg(target_os = "macos")]
             if label == "recording-capsule" {
                 return system_operation(method, b, window.as_ref());
             }

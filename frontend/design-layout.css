@@ -9667,14 +9667,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   overflow-wrap: anywhere;
   font: inherit;
 }
-@media (min-width: 1200px) {
-  #live-view.has-correction-panel .live-layout {
-    margin-right: 460px;
-  }
-  #live-view.has-correction-panel .live-section-head {
-    flex-wrap: wrap;
-  }
-}
+
 [data-theme="dark"] ::highlight(correction-search),
 [data-theme="dark"] .correction-match mark {
   background: #765720;
@@ -9698,12 +9691,6 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   border-top: 1px solid var(--color-line);
   cursor: pointer;
 }
-.correction-future small {
-  display: block;
-  margin-top: 4px;
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
 .correction-panel > footer {
   display: flex;
   justify-content: flex-end;
@@ -9720,11 +9707,6 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   margin: 4px 24px;
   font-size: 14px;
   overflow-wrap: anywhere;
-}
-.correction-pending {
-  margin: 0 24px;
-  font-size: 14px;
-  color: var(--color-text-muted);
 }
 .correction-empty {
   padding: 24px 0;

@@ -1,12 +1,76 @@
 const { randomUUID } = require('node:crypto');
 const TEMPLATES = {
-  general: 'Organize by discussion topic, decisions and next steps.',
-  weekly:
-    'Use headings Progress, Blockers, Decisions and Next week. Translate these headings to the output language.',
+  general: 'Group discussion by topic.',
+  weekly: 'In Topic Discussion, cover progress, blockers and next week’s plans.',
   interview:
-    'Use each interview question as a heading. Group the respondent’s observations, supporting examples and follow-ups under it.',
-  review:
-    'Use headings Proposal, Review findings, Causes, Decisions and Required revisions. Translate headings to the output language.',
+    'Under Topic Discussion, group observations, examples and follow-ups by interview question.',
+  review: 'Under Topic Discussion, cover proposals, findings, causes and required revisions.',
+};
+const SUMMARY_HEADINGS = {
+  zh: ['会议摘要', '核心结论', '议题讨论', '已确认决定', '行动项', '待确认事项', '关键数据'],
+  en: [
+    'Meeting Summary',
+    'Key Conclusions',
+    'Topic Discussion',
+    'Confirmed Decisions',
+    'Action Items',
+    'Open Questions',
+    'Key Figures',
+  ],
+  ja: [
+    '会議概要',
+    '主な結論',
+    '議題別の討議',
+    '決定事項',
+    'アクション項目',
+    '要確認事項',
+    '主要データ',
+  ],
+  ko: [
+    '회의 요약',
+    '핵심 결론',
+    '안건 논의',
+    '확정된 결정',
+    '실행 항목',
+    '확인할 사항',
+    '주요 데이터',
+  ],
+  es: [
+    'Resumen de la reunión',
+    'Conclusiones clave',
+    'Temas tratados',
+    'Decisiones confirmadas',
+    'Tareas',
+    'Cuestiones pendientes',
+    'Datos clave',
+  ],
+  fr: [
+    'Résumé de la réunion',
+    'Conclusions principales',
+    'Sujets discutés',
+    'Décisions confirmées',
+    'Actions à mener',
+    'Questions en suspens',
+    'Chiffres clés',
+  ],
+  de: [
+    'Besprechungsübersicht',
+    'Zentrale Schlussfolgerungen',
+    'Besprochene Themen',
+    'Bestätigte Entscheidungen',
+    'Aufgaben',
+    'Offene Fragen',
+    'Kennzahlen',
+  ],
+  ru: [
+    'Краткое содержание',
+    'Основные выводы',
+    'Обсуждение тем',
+    'Принятые решения',
+    'Задачи',
+    'Открытые вопросы',
+    'Ключевые данные',
+  ],
 };
 function splitLines(text) {
   const lines = text.split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/);
@@ -74,31 +138,11 @@ function annotateDates(text, meetingDate) {
     return `${term}（${year}${date.getUTCMonth() + 1} 月 ${date.getUTCDate()} 日）`;
   });
 }
-const EVIDENCE_INSTRUCTIONS = {
-  'zh': {
-    'general':
-      '按议题、决定、行动项组织。只保留有内容的章节。每条实质信息写成一个项目，不重复、不使用表格或空白占位。每条末尾务必附上支持它的输入段号，格式：- 要点。[[conclusion:S2,S4]]。结论用 conclusion，明确决定用 decision，待办用 action，明确提到的原因用 cause；发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。引用的原话必须明确说明该问题及原因。猜测保留发言人的不确定语气；没有明确因果关系则省略，不把先后顺序当作原因。不得创造段号，合并时原样传递段号。原样保留相对日期及紧随其后的程序标注；原话没有明确日期且没有程序标注时，只保留原话，不得推算日期或为模糊表达设截止日。仅当发言明确纠正术语时保留“错写 → 正确术语”。',
-    'weekly':
-      '分为本周进展、阻碍、已作决定、下周行动。只保留有内容的章节。每条实质信息写成一个项目，不重复、不使用表格或空白占位。每条末尾务必附上支持它的输入段号，格式：- 要点。[[conclusion:S2,S4]]。结论用 conclusion，明确决定用 decision，待办用 action，明确提到的原因用 cause；发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。引用的原话必须明确说明该问题及原因。猜测保留发言人的不确定语气；没有明确因果关系则省略，不把先后顺序当作原因。不得创造段号，合并时原样传递段号。原样保留相对日期及紧随其后的程序标注；原话没有明确日期且没有程序标注时，只保留原话，不得推算日期或为模糊表达设截止日。仅当发言明确纠正术语时保留“错写 → 正确术语”。',
-    'interview':
-      '以实际访谈问题为小标题，归纳受访者的观点、例证和待追问项。只保留有内容的章节。每条实质信息写成一个项目，不重复、不使用表格或空白占位。每条末尾务必附上支持它的输入段号，格式：- 要点。[[conclusion:S2,S4]]。结论用 conclusion，明确决定用 decision，待办用 action，明确提到的原因用 cause；发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。引用的原话必须明确说明该问题及原因。猜测保留发言人的不确定语气；没有明确因果关系则省略，不把先后顺序当作原因。不得创造段号，合并时原样传递段号。原样保留相对日期及紧随其后的程序标注；原话没有明确日期且没有程序标注时，只保留原话，不得推算日期或为模糊表达设截止日。仅当发言明确纠正术语时保留“错写 → 正确术语”。',
-    'review':
-      '分为评审发现、原因分析、评审决定、待修改项。只保留有内容的章节。每条实质信息写成一个项目，不重复、不使用表格或空白占位。每条末尾务必附上支持它的输入段号，格式：- 要点。[[conclusion:S2,S4]]。结论用 conclusion，明确决定用 decision，待办用 action，明确提到的原因用 cause；发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。引用的原话必须明确说明该问题及原因。猜测保留发言人的不确定语气；没有明确因果关系则省略，不把先后顺序当作原因。不得创造段号，合并时原样传递段号。原样保留相对日期及紧随其后的程序标注；原话没有明确日期且没有程序标注时，只保留原话，不得推算日期或为模糊表达设截止日。仅当发言明确纠正术语时保留“错写 → 正确术语”。',
-  },
-  'en': {
-    'general':
-      "For the final note, organize the material as follows: Organize by discussion topic, decisions and next steps.\nFor each substantive conclusion, decision, action or explicitly discussed cause, write one Markdown bullet with a source suffix, e.g. '- <claim> [[decision:S1,S3]]'. Use kinds conclusion, decision, action, cause. Use bullets instead of action tables. Copy only source IDs actually supporting that claim; never guess IDs. Preserve these suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. The source must explicitly connect that cause to that problem. Preserve uncertainty and omit inferred causes; chronology alone is insufficient. Keep the original relative date wording with supplied calendar annotations. Never calculate dates yourself or turn uncertain phrases into deadlines. Keep explicitly stated terminology corrections as wrong spelling → correct term. Use the requested output language.",
-    'weekly':
-      "For the final note, organize the material as follows: Use headings Progress, Blockers, Decisions and Next week. Translate these headings to the output language.\nFor each substantive conclusion, decision, action or explicitly discussed cause, write one Markdown bullet with a source suffix, e.g. '- <claim> [[decision:S1,S3]]'. Use kinds conclusion, decision, action, cause. Use bullets instead of action tables. Copy only source IDs actually supporting that claim; never guess IDs. Preserve these suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. The source must explicitly connect that cause to that problem. Preserve uncertainty and omit inferred causes; chronology alone is insufficient. Keep the original relative date wording with supplied calendar annotations. Never calculate dates yourself or turn uncertain phrases into deadlines. Keep explicitly stated terminology corrections as wrong spelling → correct term. Use the requested output language.",
-    'interview':
-      "For the final note, organize the material as follows: Use each interview question as a heading. Group the respondent's observations, supporting examples and follow-ups under it.\nFor each substantive conclusion, decision, action or explicitly discussed cause, write one Markdown bullet with a source suffix, e.g. '- <claim> [[decision:S1,S3]]'. Use kinds conclusion, decision, action, cause. Use bullets instead of action tables. Copy only source IDs actually supporting that claim; never guess IDs. Preserve these suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. The source must explicitly connect that cause to that problem. Preserve uncertainty and omit inferred causes; chronology alone is insufficient. Keep the original relative date wording with supplied calendar annotations. Never calculate dates yourself or turn uncertain phrases into deadlines. Keep explicitly stated terminology corrections as wrong spelling → correct term. Use the requested output language.",
-    'review':
-      "For the final note, organize the material as follows: Use headings Proposal, Review findings, Causes, Decisions and Required revisions. Translate headings to the output language.\nFor each substantive conclusion, decision, action or explicitly discussed cause, write one Markdown bullet with a source suffix, e.g. '- <claim> [[decision:S1,S3]]'. Use kinds conclusion, decision, action, cause. Use bullets instead of action tables. Copy only source IDs actually supporting that claim; never guess IDs. Preserve these suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. The source must explicitly connect that cause to that problem. Preserve uncertainty and omit inferred causes; chronology alone is insufficient. Keep the original relative date wording with supplied calendar annotations. Never calculate dates yourself or turn uncertain phrases into deadlines. Keep explicitly stated terminology corrections as wrong spelling → correct term. Use the requested output language.",
-  },
-};
 function evidenceInstructions(template, language) {
   if (!Object.hasOwn(TEMPLATES, template)) throw new Error('Unknown meeting template');
-  return EVIDENCE_INSTRUCTIONS[language === 'zh' ? 'zh' : 'en'][template];
+  if (language === 'zh')
+    return `按所选模板组织议题讨论（${TEMPLATES[template]}）。每个议题用三级标题，发生了什么、有哪些观点写在正文中。如果发言明确解释了原因，把问题作为三级标题，在该标题下单列“- 原因说明 [[cause:S2,S4]]”。原话必须明确连接该问题和原因。关键数字、开放问题和时间先后不能用 cause 标记，不能从资料缺失推断待办或待确认事项。结论、决定、行动项分别使用 [[conclusion:S1]]、[[decision:S2]]、[[action:S3]]；段号必须来自对应原话。合并时保留事实、数据、来源标记、明确的术语修订、原相对日期及所附日历注释，不自行换算日期。`;
+  return `Write in ${language}. ${TEMPLATES[template]} Preserve facts, decisions, actions, open questions, figures and explicitly stated causes during compression. End each substantive bullet with its supporting transcript IDs, e.g. [[decision:S1,S3]]. Use conclusion, decision, action or cause. Never guess IDs. Under Topic Discussion use a level-three problem heading and a distinct [[cause:...]] bullet only when the source explicitly connects that problem and cause. Preserve uncertainty, relative date wording and supplied calendar annotations. Never infer deadlines or causes from chronology. Preserve explicit terminology corrections.`;
 }
 function snapshot(row, seekable = true) {
   return {
@@ -136,11 +180,12 @@ function restrictSources(markdown, allowed) {
         .join(',')}]]`,
   );
 }
-function parseClaims(markdown, segments, seekable = true) {
+function parseClaims(markdown, segments, seekable = true, headings) {
   const output = [],
     claims = [],
     byLabel = new Map(segments.map((s, i) => ['S' + (i + 1), s]));
   let section = '',
+    mainSection = '',
     fence = '';
   const lines = splitLines(markdown);
   for (const [index, original] of lines.entries()) {
@@ -158,6 +203,7 @@ function parseClaims(markdown, segments, seekable = true) {
     }
     if (/^#{1,6}\s/.test(stripped)) {
       section = stripped.replace(/^[# ]+/, '').replace(/^[* ]+|[* ]+$/g, '');
+      if (/^#{1,2}\s/.test(stripped)) mainSection = section;
       output.push(original);
       continue;
     }
@@ -204,6 +250,16 @@ function parseClaims(markdown, segments, seekable = true) {
           .split('：')
           .at(-1)
           .replace(/^[ ：:，,。.]+|[ ：:，,。.]+$/g, '') || section;
+    }
+    if (headings && kind === 'cause') problem = section;
+    // 七章纪要只从议题讨论提取原因；模型有时会给关键数据和待确认事项也打 cause 标记。
+    if (headings && kind === 'cause' && mainSection !== headings[2]) {
+      kind =
+        mainSection === headings[3]
+          ? 'decision'
+          : mainSection === headings[4]
+            ? 'action'
+            : 'conclusion';
     }
     if (kind === 'cause' && /^cause\s*[:：]\s*\S/i.test(text)) {
       text = text.replace(/^cause\s*[:：]\s*/i, '');
@@ -305,6 +361,7 @@ function normalizeSummaryMarkdown(markdown) {
 }
 module.exports = {
   TEMPLATES,
+  SUMMARY_HEADINGS,
   clock,
   confirmedDate,
   annotateDates,

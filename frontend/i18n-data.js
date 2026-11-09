@@ -332,9 +332,15 @@
         '始终显示': '始终显示',
         '仅窗口隐藏时': '仅窗口隐藏时',
         '桌面录音胶囊': '桌面录音胶囊',
+        '自定义会议应用': '自定义会议应用',
+        '添加会议应用': '添加会议应用',
+        '移除应用': '移除应用',
+        'error.meeting_app.invalid': '请选择本机会议客户端。浏览器和 Brevia 无法添加。',
+        '会议录音提醒': '会议录音提醒',
+        '后台检测到会议应用发声时提示开始录音': '后台检测到会议应用发声时提示开始录音',
+        '检测到 {app} 的音频': '检测到 {app} 的音频',
         '自动显示会议胶囊': '自动显示会议胶囊',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          '录音时随主窗口最小化显示，播放录音时自动显示',
+        '录音或回放时，最小化主窗口即可显示': '录音或回放时，最小化主窗口即可显示',
         '展开讨论记录': '展开讨论记录',
         '返回当前会议': '返回当前会议',
         '展开字幕与笔记': '展开字幕与笔记',
@@ -627,6 +633,9 @@
         '参与者': '参与者',
         '标记说话人': '标记说话人',
         '说话人名称': '说话人名称',
+        只看此人发言: '只看此人发言',
+        重命名本场说话人: '重命名本场说话人',
+        清除说话人筛选: '清除说话人筛选',
         '仅修改此段的说话人。': '仅修改此段的说话人。',
         '请填写真实的说话人名称。': '请填写真实的说话人名称。',
         '我': '我',
@@ -1254,9 +1263,18 @@
         '始终显示': 'Always show',
         '仅窗口隐藏时': 'Only when window is hidden',
         '桌面录音胶囊': 'Desktop recording capsule',
+        '自定义会议应用': 'Custom meeting apps',
+        '添加会议应用': 'Add meeting app',
+        '移除应用': 'Remove app',
+        'error.meeting_app.invalid':
+          'Choose an installed meeting client. Browsers and Brevia cannot be added.',
+        '会议录音提醒': 'Meeting recording reminders',
+        '后台检测到会议应用发声时提示开始录音':
+          'Offer to record when a meeting app plays audio while Brevia is in the background',
+        '检测到 {app} 的音频': 'Audio detected in {app}',
         '自动显示会议胶囊': 'Show meeting capsule automatically',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          'Appears when recording is minimized and when playing a recording',
+        '录音或回放时，最小化主窗口即可显示':
+          'Appears when you minimize the main window during recording or playback',
         '展开讨论记录': 'Expand discussion',
         '返回当前会议': 'Return to current meeting',
         '展开字幕与笔记': 'Expand captions and notes',
@@ -1581,6 +1599,9 @@
         '译文: 关': 'Translation: Off',
         '回到最新': 'Back to latest',
         '参与者': 'Participants',
+        只看此人发言: 'Show only this speaker',
+        重命名本场说话人: 'Rename speaker in this meeting',
+        清除说话人筛选: 'Clear speaker filter',
         '仅修改此段的说话人。': 'Only changes the speaker for this segment.',
         '请填写真实的说话人名称。': 'Enter a real speaker name.',
         '本场状态': 'Session status',
@@ -2378,9 +2399,18 @@
         '始终显示': 'Mostrar siempre',
         '仅窗口隐藏时': 'Solo con la ventana oculta',
         '桌面录音胶囊': 'Cápsula de grabación',
+        '自定义会议应用': 'Aplicaciones de reunión personalizadas',
+        '添加会议应用': 'Añadir aplicación de reunión',
+        '移除应用': 'Quitar aplicación',
+        'error.meeting_app.invalid':
+          'Selecciona un cliente de reuniones instalado. No se pueden añadir navegadores ni Brevia.',
+        '会议录音提醒': 'Avisos de grabación',
+        '后台检测到会议应用发声时提示开始录音':
+          'Sugerir grabar cuando una aplicación de reuniones emite sonido con Brevia en segundo plano',
+        '检测到 {app} 的音频': 'Audio detectado en {app}',
         '自动显示会议胶囊': 'Mostrar cápsula de reunión automáticamente',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          'Aparece al minimizar durante la grabación y al reproducir una grabación',
+        '录音或回放时，最小化主窗口即可显示':
+          'Se muestra al minimizar la ventana principal durante la grabación o la reproducción',
         '展开讨论记录': 'Ampliar discusión',
         '返回当前会议': 'Volver a la reunión actual',
         '展开字幕与笔记': 'Abrir subtítulos y notas',
@@ -2706,6 +2736,9 @@
         '译文: 关': 'Traducción: No',
         '回到最新': 'Volver a lo último',
         '参与者': 'Participantes',
+        只看此人发言: 'Mostrar solo a esta persona',
+        重命名本场说话人: 'Renombrar en esta reunión',
+        清除说话人筛选: 'Quitar filtro de hablante',
         '仅修改此段的说话人。': 'Solo cambia el hablante de este segmento.',
         '请填写真实的说话人名称。': 'Introduce un nombre real.',
         '本场状态': 'Estado de la sesión',
@@ -3507,9 +3540,18 @@
         '始终显示': '常に表示',
         '仅窗口隐藏时': 'ウィンドウ非表示時のみ',
         '桌面录音胶囊': 'デスクトップ録音カプセル',
+        '自定义会议应用': 'カスタム会議アプリ',
+        '添加会议应用': '会議アプリを追加',
+        '移除应用': 'アプリを削除',
+        'error.meeting_app.invalid':
+          'インストール済みの会議アプリを選択してください。ブラウザと Brevia は追加できません。',
+        '会议录音提醒': '会議録音の通知',
+        '后台检测到会议应用发声时提示开始录音':
+          'Brevia がバックグラウンドのとき、会議アプリの音声を検出したら録音を提案',
+        '检测到 {app} 的音频': '{app} の音声を検出しました',
         '自动显示会议胶囊': '会議カプセルを自動表示',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          '録音中は最小化時に、録音の再生時は自動的に表示します',
+        '录音或回放时，最小化主窗口即可显示':
+          '録音中または再生中にメインウィンドウを最小化すると表示します',
         '展开讨论记录': '議論の記録を展開',
         '返回当前会议': '現在の会議に戻る',
         '展开字幕与笔记': '字幕とノートを展開',
@@ -3833,6 +3875,9 @@
         '译文: 关': '翻訳：オフ',
         '回到最新': '最新へ戻る',
         '参与者': '参加者',
+        只看此人发言: 'この話者の発言のみ表示',
+        重命名本场说话人: 'この会議の話者名を変更',
+        清除说话人筛选: '話者フィルターを解除',
         '仅修改此段的说话人。': 'この区間の話者のみ変更します。',
         '请填写真实的说话人名称。': '実際の話者名を入力してください。',
         '本场状态': 'セッションの状態',
@@ -4631,9 +4676,17 @@
         '始终显示': '항상 표시',
         '仅窗口隐藏时': '창이 숨겨진 경우에만',
         '桌面录音胶囊': '데스크톱 녹음 캡슐',
+        '自定义会议应用': '사용자 지정 회의 앱',
+        '添加会议应用': '회의 앱 추가',
+        '移除应用': '앱 제거',
+        'error.meeting_app.invalid':
+          '설치된 회의 앱을 선택하세요. 브라우저와 Brevia는 추가할 수 없습니다.',
+        '会议录音提醒': '회의 녹음 알림',
+        '后台检测到会议应用发声时提示开始录音':
+          'Brevia가 백그라운드에 있을 때 회의 앱에서 소리가 나면 녹음 제안',
+        '检测到 {app} 的音频': '{app}에서 오디오 감지',
         '自动显示会议胶囊': '회의 캡슐 자동 표시',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          '녹음 중 창을 최소화하거나 녹음을 재생할 때 표시합니다',
+        '录音或回放时，最小化主窗口即可显示': '녹음 또는 재생 중에 메인 창을 최소화하면 표시됩니다',
         '展开讨论记录': '논의 기록 펼치기',
         '返回当前会议': '현재 회의로 돌아가기',
         '展开字幕与笔记': '자막 및 노트 펼치기',
@@ -4950,6 +5003,9 @@
         '译文: 关': '번역: 꺼짐',
         '回到最新': '최신으로 돌아가기',
         '参与者': '참가자',
+        只看此人发言: '이 화자의 발언만 보기',
+        重命名本场说话人: '이 회의의 화자 이름 변경',
+        清除说话人筛选: '화자 필터 지우기',
         '仅修改此段的说话人。': '이 구간의 화자만 변경합니다.',
         '请填写真实的说话人名称。': '실제 화자 이름을 입력하세요.',
         '本场状态': '세션 상태',
@@ -5743,9 +5799,18 @@
         '始终显示': 'Toujours afficher',
         '仅窗口隐藏时': 'Seulement si la fenêtre est masquée',
         '桌面录音胶囊': 'Capsule d’enregistrement',
+        '自定义会议应用': 'Applications de réunion personnalisées',
+        '添加会议应用': 'Ajouter une application de réunion',
+        '移除应用': 'Retirer l’application',
+        'error.meeting_app.invalid':
+          'Choisissez une application de réunion installée. Les navigateurs et Brevia ne peuvent pas être ajoutés.',
+        '会议录音提醒': 'Rappels d’enregistrement',
+        '后台检测到会议应用发声时提示开始录音':
+          'Proposer un enregistrement si une application de réunion émet du son quand Brevia est en arrière-plan',
+        '检测到 {app} 的音频': 'Audio détecté dans {app}',
         '自动显示会议胶囊': 'Afficher automatiquement la capsule de réunion',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          'Apparaît à la réduction pendant l’enregistrement et à la lecture d’un enregistrement',
+        '录音或回放时，最小化主窗口即可显示':
+          'S’affiche lorsque vous réduisez la fenêtre principale pendant l’enregistrement ou la lecture',
         '展开讨论记录': 'Développer la discussion',
         '返回当前会议': 'Revenir à la réunion',
         '展开字幕与笔记': 'Ouvrir les sous-titres et notes',
@@ -6078,6 +6143,9 @@
         '译文: 关': 'Traduction : désactivée',
         '回到最新': 'Revenir aux dernières',
         '参与者': 'Participants',
+        只看此人发言: 'Afficher uniquement ses interventions',
+        重命名本场说话人: 'Renommer dans cette réunion',
+        清除说话人筛选: 'Effacer le filtre par intervenant',
         '仅修改此段的说话人。': 'Modifie uniquement le locuteur de ce passage.',
         '请填写真实的说话人名称。': 'Saisissez le nom réel du locuteur.',
         '本场状态': 'État de la session',
@@ -6889,9 +6957,18 @@
         '始终显示': 'Immer anzeigen',
         '仅窗口隐藏时': 'Nur bei ausgeblendetem Fenster',
         '桌面录音胶囊': 'Aufnahmekapsel',
+        '自定义会议应用': 'Eigene Meeting-Apps',
+        '添加会议应用': 'Meeting-App hinzufügen',
+        '移除应用': 'App entfernen',
+        'error.meeting_app.invalid':
+          'Wähle eine installierte Meeting-App. Browser und Brevia können nicht hinzugefügt werden.',
+        '会议录音提醒': 'Aufnahmeerinnerungen',
+        '后台检测到会议应用发声时提示开始录音':
+          'Bei Audio aus einer Meeting-App eine Aufnahme anbieten, wenn Brevia im Hintergrund ist',
+        '检测到 {app} 的音频': 'Audio in {app} erkannt',
         '自动显示会议胶囊': 'Besprechungskapsel automatisch anzeigen',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          'Erscheint beim Minimieren während der Aufnahme und beim Abspielen einer Aufnahme',
+        '录音或回放时，最小化主窗口即可显示':
+          'Erscheint beim Minimieren des Hauptfensters während der Aufnahme oder Wiedergabe',
         '展开讨论记录': 'Diskussion aufklappen',
         '返回当前会议': 'Zur aktuellen Besprechung',
         '展开字幕与笔记': 'Untertitel und Notizen öffnen',
@@ -7227,6 +7304,9 @@
         '译文: 关': 'Übersetzung: Aus',
         '回到最新': 'Zurück zum Neuesten',
         '参与者': 'Teilnehmende',
+        只看此人发言: 'Nur diese Person anzeigen',
+        重命名本场说话人: 'Person in diesem Meeting umbenennen',
+        清除说话人筛选: 'Sprecherfilter aufheben',
         '仅修改此段的说话人。': 'Ändert nur den Sprecher dieses Abschnitts.',
         '请填写真实的说话人名称。': 'Bitte einen echten Sprechernamen eingeben.',
         '本场状态': 'Sitzungsstatus',
@@ -8042,9 +8122,18 @@
         '始终显示': 'Всегда показывать',
         '仅窗口隐藏时': 'Только при скрытом окне',
         '桌面录音胶囊': 'Капсула записи',
+        '自定义会议应用': 'Пользовательские приложения для встреч',
+        '添加会议应用': 'Добавить приложение для встреч',
+        '移除应用': 'Удалить приложение',
+        'error.meeting_app.invalid':
+          'Выберите установленное приложение для встреч. Браузеры и Brevia добавить нельзя.',
+        '会议录音提醒': 'Напоминания о записи',
+        '后台检测到会议应用发声时提示开始录音':
+          'Предлагать запись, если в приложении для встреч есть звук, а Brevia работает в фоне',
+        '检测到 {app} 的音频': 'Обнаружен звук в {app}',
         '自动显示会议胶囊': 'Автоматически показывать капсулу встречи',
-        '录音时随主窗口最小化显示，播放录音时自动显示':
-          'Появляется при сворачивании во время записи и при воспроизведении записи',
+        '录音或回放时，最小化主窗口即可显示':
+          'Появляется при сворачивании главного окна во время записи или воспроизведения',
         '展开讨论记录': 'Развернуть обсуждение',
         '返回当前会议': 'Вернуться к текущей встрече',
         '展开字幕与笔记': 'Открыть субтитры и заметки',
@@ -8366,6 +8455,9 @@
         '译文: 关': 'Перевод: выкл.',
         '回到最新': 'К последним',
         '参与者': 'Участники',
+        只看此人发言: 'Показать реплики этого участника',
+        重命名本场说话人: 'Переименовать участника этой встречи',
+        清除说话人筛选: 'Сбросить фильтр по участнику',
         '仅修改此段的说话人。': 'Меняет говорящего только в этом фрагменте.',
         '请填写真实的说话人名称。': 'Введите настоящее имя говорящего.',
         '本场状态': 'Статус сеанса',
@@ -9065,6 +9157,26 @@
         'fr': 'Une substitution a dépassé 4 000 caractères. Les règles de cette réunion ont été désactivées et le texte original conservé.',
         'de': 'Eine Ersetzung überschritt 4.000 Zeichen. Die Regeln wurden deaktiviert und der Originaltext beibehalten.',
         'ru': 'После замены превышен лимит 4000 символов. Правила встречи отключены, исходный текст сохранён.',
+      },
+      'error.speaker_name_taken': {
+        'zh': '本场已有另一位同名说话人，请使用不同的名称。',
+        'en': 'Another speaker in this meeting has that name. Choose a different name.',
+        'es': 'Otro hablante de esta reunión tiene ese nombre. Elige otro.',
+        'ja': 'この会議には同名の別の話者がいます。別の名前を入力してください。',
+        'ko': '회의에 같은 이름의 다른 화자가 있습니다. 다른 이름을 입력하세요.',
+        'fr': 'Un autre intervenant porte déjà ce nom dans la réunion. Choisissez un autre nom.',
+        'de': 'Eine andere Person im Meeting hat bereits diesen Namen. Bitte einen anderen Namen wählen.',
+        'ru': 'В этой встрече уже есть другой участник с таким именем. Выберите другое имя.',
+      },
+      '匹配内容已变化，请核对后重试': {
+        'zh': '匹配内容已变化，请核对后重试',
+        'en': 'The matches changed. Review them and try again.',
+        'es': 'Las coincidencias han cambiado. Revísalas y vuelve a intentarlo.',
+        'ja': '一致箇所が変更されました。確認してから再試行してください。',
+        'ko': '일치 항목이 변경되었습니다. 확인한 뒤 다시 시도하세요.',
+        'fr': 'Les correspondances ont changé. Vérifiez-les avant de réessayer.',
+        'de': 'Die Treffer haben sich geändert. Bitte prüfen und erneut versuchen.',
+        'ru': 'Совпадения изменились. Проверьте их и повторите попытку.',
       },
       'error.transcript_conflict': {
         'zh': '部分内容已变化，请更新预览',
@@ -14706,6 +14818,27 @@
 
   // 桌面工作台导航与草稿保护文案。
   const workbenchCopy = {
+    '测试连接': [
+      '测试连接',
+      'Test connection',
+      'Probar conexión',
+      '接続をテスト',
+      '연결 테스트',
+      'Tester la connexion',
+      'Verbindung testen',
+      'Проверить соединение',
+    ],
+    '连接成功': [
+      '连接成功',
+      'Connection successful',
+      'Conexión correcta',
+      '接続成功',
+      '연결 성공',
+      'Connexion réussie',
+      'Verbindung erfolgreich',
+      'Соединение установлено',
+    ],
+
     '会议日期（可留空）': [
       '会议日期（可留空）',
       'Meeting date (optional)',
@@ -14776,6 +14909,16 @@
       'Conclusions',
       'Ergebnisse',
       'Выводы',
+    ],
+    '将分别保存两个文件': [
+      '将分别保存两个文件',
+      'Save as two separate files',
+      'Guardar como dos archivos independientes',
+      '2つのファイルに分けて保存',
+      '두 개의 파일로 따로 저장',
+      'Enregistrer deux fichiers distincts',
+      'Als zwei separate Dateien speichern',
+      'Сохранить двумя отдельными файлами',
     ],
     '文件含鱼骨图': [
       '文件含鱼骨图',
@@ -15199,6 +15342,7 @@
       'Сначала сохраните или отмените текущие изменения',
     ],
   };
+
   for (const [key, values] of Object.entries(workbenchCopy)) {
     ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'].forEach((code, index) => {
       catalog[code].labels[key] = values[index];

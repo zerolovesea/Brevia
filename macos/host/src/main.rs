@@ -34,9 +34,15 @@ fn permitted(label: &str, channel: &str) -> bool {
     }
     match label {
         "main" => true,
+        "meeting-prompt" => channel == "desktop.meeting-prompt",
         "recording-capsule" => matches!(
             channel,
-            "desktop.state" | "desktop.expand" | "desktop.move" | "desktop.action" | "desktop.show"
+            "desktop.state"
+                | "desktop.expand"
+                | "desktop.move"
+                | "desktop.action"
+                | "desktop.show"
+                | "meeting.note-image.save"
         ),
         "floating-caption" => matches!(
             channel,
@@ -233,6 +239,9 @@ mod tests {
         assert!(!permitted("recording-capsule", "meeting.delete"));
         assert!(permitted("recording-capsule", "desktop.action"));
         assert!(!permitted("floating-caption", "summary.config.get"));
+        assert!(permitted("meeting-prompt", "desktop.meeting-prompt"));
+        assert!(!permitted("meeting-prompt", "desktop.action"));
+        assert!(!permitted("meeting-prompt", "meeting.start"));
         assert!(permitted("main", "meeting.list"));
     }
 }

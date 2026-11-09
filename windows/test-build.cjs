@@ -37,6 +37,9 @@ test('installer tools rebuild from verified archives and preserve tools on downl
           else fs.writeFileSync(file, 'verified plugin');
         },
         run(command, args, options) {
+          assert.equal(command, 'tar');
+          assert.deepEqual(Array.from(args), ['-xf', 'nsis.zip']);
+          assert.ok(fs.statSync(path.join(options.cwd, 'nsis.zip')).isFile());
           execFileSync(command, Array.from(args), options);
         },
       };
@@ -75,6 +78,10 @@ test('native downloads recover bounded network failures without accepting corrup
       if (route === '/disconnect') setTimeout(() => response.destroy(), 10);
       return;
     }
+    if (route === '/gateway' || (route === '/recover' && count === 1)) response.statusCode = 504;
+    if (route === '/limited-api') response.statusCode = 403;
+    if (route === '/asset' && request.headers.accept !== 'application/octet-stream')
+      response.statusCode = 406;
     if (route === '/missing') response.statusCode = 404;
     if (route === '/busy' && count === 1) response.statusCode = 503;
     if (route === '/bad-gateway' && count === 1) response.statusCode = 502;
@@ -112,6 +119,30 @@ test('native downloads recover bounded network failures without accepting corrup
       assert.equal(requests.get('/disconnect'), 3, 'Verified cache must not request the network');
     },
   );
+
+  await t.test(
+    'a release gateway timeout retries the same pinned asset through the API',
+    async () => {
+      const file = path.join(scratch, 'release.bin');
+      await download('https://dependency.test/gateway', file, sha, 'https://dependency.test/asset');
+      assert.deepEqual(fs.readFileSync(file), payload);
+      assert.equal(requests.get('/gateway'), 1);
+      assert.equal(requests.get('/asset'), 1);
+    },
+  );
+
+  await t.test('an API rate limit gives the recovered direct URL the final attempt', async () => {
+    const file = path.join(scratch, 'recovered-release.bin');
+    await download(
+      'https://dependency.test/recover',
+      file,
+      sha,
+      'https://dependency.test/limited-api',
+    );
+    assert.deepEqual(fs.readFileSync(file), payload);
+    assert.equal(requests.get('/recover'), 2);
+    assert.equal(requests.get('/limited-api'), 1);
+  });
 
   await t.test('body timeout stops after three attempts and removes partial output', async (t) => {
     const nativeTimeout = AbortSignal.timeout;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; img-src 'self' brevia-note: http://brevia-note.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Brevia</title>
@@ -92,8 +92,15 @@
             role="img"
             hidden
           ></span
-          ><div id="capsule-suggestion"></div><div id="capsule-notes"></div
-        ></div>
+          ><div id="capsule-suggestion"></div><div id="capsule-notes"></div>
+          <button id="capsule-edit-notes" class="capsule-note-button" type="button"></button>
+          <form id="capsule-note-form" hidden>
+            <textarea rows="5" maxlength="5242880"></textarea>
+            <div class="capsule-suggestion-actions">
+              <button type="submit"></button><button type="button"></button>
+            </div>
+          </form>
+        </div>
         <p id="capsule-error" role="alert" hidden></p>
       </section>
     </main>

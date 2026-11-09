@@ -118,9 +118,11 @@ async function smoke() {
 async function evaluateWebView(expression) {
   const port = Number(process.env.BREVIA_SMOKE_DEBUG_PORT);
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  const target = targets.find(
-    (item) => item.type === 'page' && /^http:\/\/tauri\.localhost(?:\/|$)/.test(item.url),
-  );
+  const target = targets.find(({ type, url }) => {
+    if (type !== 'page' || !URL.canParse(url)) return false;
+    const page = new URL(url);
+    return page.origin === 'http://tauri.localhost' && ['/', '/index.html'].includes(page.pathname);
+  });
   assert.ok(target?.webSocketDebuggerUrl, 'WebView2 main document debugger');
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -235,6 +237,8 @@ async function proxy() {
       aiBusy: false,
       error: '',
     });
+    // 与宿主最小化通知共用入口，烟测不移动用户正在使用的主窗口。
+    write(worker.stdin, { host: 'window.minimize', label: 'main' });
     for (let iteration = 0; iteration < 3; iteration++) {
       await command('desktop.expand', { expanded: false });
       const closed = await hostCommand('window.getBounds', { label: 'recording-capsule' });
@@ -268,6 +272,7 @@ async function proxy() {
       error: '',
     });
 
+    write(worker.stdin, { host: 'window.restore', label: 'main' });
     const locations = await command('storage.locations');
     const folder = path.join(locations.recordings, meeting.id, 'audio');
     const source = fs.readdirSync(folder).find((file) => file.endsWith('.wav'));

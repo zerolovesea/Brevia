@@ -62,8 +62,12 @@ window.createCaptureDemo = (stage, shell, template, locale, renderLive) => {
   while (walker.nextNode()) {
     const label = walker.currentNode.textContent.trim();
     if (label)
-      walker.currentNode.textContent = walker.currentNode.textContent.replace(label, t(label));
+      walker.currentNode.textContent = walker.currentNode.textContent.replace(
+        label,
+        t(label.replace(/\s+/g, ' ')),
+      );
   }
+  modal.querySelector('.mobile-pair-code h3').textContent = pick('配对码', 'Pairing code');
   modal
     .querySelectorAll('[data-interface-icon]')
     .forEach((element) => (element.innerHTML = interfaceIcon(element.dataset.interfaceIcon)));

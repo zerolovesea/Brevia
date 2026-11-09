@@ -382,7 +382,7 @@ body .settings-page {
 .desktop-shortcut-empty {
   color: var(--color-text-muted);
 }
-.desktop-shortcut .shortcut-action {
+:is(.desktop-shortcut, .desktop-meeting-app) .shortcut-action {
   display: grid;
   place-items: center;
   width: 26px;
@@ -393,15 +393,15 @@ body .settings-page {
   color: var(--color-text-muted);
   background: transparent;
 }
-.desktop-shortcut .shortcut-action:enabled:hover {
+:is(.desktop-shortcut, .desktop-meeting-app) .shortcut-action:enabled:hover {
   color: var(--color-text);
   background: var(--color-selected);
 }
-.desktop-shortcut .shortcut-action:disabled {
+:is(.desktop-shortcut, .desktop-meeting-app) .shortcut-action:disabled {
   opacity: 0.35;
   cursor: default;
 }
-.desktop-shortcut .shortcut-action .interface-icon {
+:is(.desktop-shortcut, .desktop-meeting-app) .shortcut-action .interface-icon {
   width: 14px;
   height: 14px;
 }
@@ -2443,4 +2443,25 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 [data-copy-state="done"] [data-copy-icon] {
   color: var(--color-success);
   opacity: 1;
+}
+
+.desktop-meeting-apps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.desktop-meeting-app {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.desktop-meeting-app > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

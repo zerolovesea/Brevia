@@ -29,7 +29,8 @@ button svg {
   gap: 8px;
   padding: 0;
   margin: 12px;
-  margin-left: calc(12px + var(--capsule-offset, 0px));
+  --pill-inset: clamp(0px, var(--capsule-offset, 0px), 100vw - 344px);
+  margin-left: calc(12px + var(--pill-inset));
   width: min(320px, calc(100vw - 24px));
   height: calc(100vh - 24px);
 }
@@ -47,6 +48,7 @@ button svg {
   box-shadow:
     0 3px 9px #0003,
     inset 0 1px #ffffff09;
+  -webkit-user-select: none;
   user-select: none;
   touch-action: none;
   cursor: grab;
@@ -127,6 +129,9 @@ button svg {
   text-overflow: ellipsis;
 }
 .capsule-identity strong {
+  width: fit-content;
+  max-width: 100%;
+  overflow: clip;
   margin-top: 2px;
   color: var(--color-text-muted);
   font-size: 11px;
@@ -195,7 +200,7 @@ body[data-phase="paused"] .capsule-readout small::before {
 }
 .capsule-panel {
   position: relative;
-  left: calc(-1 * var(--capsule-offset, 0px));
+  left: calc(-1 * var(--pill-inset));
   width: calc(100vw - 24px);
   flex: 1;
   min-height: 0;
@@ -398,7 +403,7 @@ body[data-above="true"] .capsule-panel {
   }
 }
 .capsule-panel:not([hidden]) {
-  animation: brevia-surface-in var(--motion-surface) var(--motion-ease-out) both;
+  animation: brevia-surface-in var(--motion-feedback) var(--motion-ease-out) both;
 }
 .capsule-note-copy {
   white-space: normal;
@@ -434,4 +439,31 @@ body[data-above="true"] .capsule-panel {
 .capsule-line[data-current="true"] time {
   color: var(--color-text);
   font-weight: 600;
+}
+
+.capsule-note-button {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 6px;
+  padding: 4px 12px;
+  margin-top: 8px;
+}
+#capsule-note-form textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.6;
+}
+.capsule-note-copy img {
+  display: inline-block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
 }
