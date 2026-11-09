@@ -2,9 +2,113 @@
 (() => {
   const releases = [
     {
+      'version': '2.0.2',
+      'date': '2026-11-09',
+      'current': true,
+      'previousVersion': '2.0.1',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '长会议纪要可复用已完成的分段，会议回看支持按说话人筛选发言，并分别导出纪要和原因分析。',
+        'what': [
+          {
+            'text':
+              '生成七章会议纪要，在右侧原因图核对发言原文。会议纪要与原因分析可以单独导出，同时保存时只需选择一次文件夹。',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              '在参与者列表、逐字稿头像或发言菜单筛选某人的发言，或一次修改该说话人在本场会议中的名字。',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              'Brevia 在后台检测到支持的会议应用发声时，可提醒你开始录制；设置中也可以添加本机会议客户端。',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              '会中查找替换浮在逐字稿上方，匹配结果随字幕更新。在线 AI 设置支持带路径前缀的服务地址，并可在保存前测试连接。',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text': '最小化主窗口后，可在胶囊控制录音或回放，展开查看字幕、编辑笔记和粘贴图片。',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              '长会议按可用模型容量分段。再次生成或失败后重试时，会复用有字幕依据的成功片段。',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              '修复部分长会议因分段摘要没有缩短而无法生成纪要的问题。参与者列表现在也显示当前逐字稿中尚未命名的说话人。',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+          {
+            'text': '修复切换会议时胶囊残留透明点击区域，以及批量导出时同名文件可能被覆盖的问题。',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Reuse completed sections of long meetings, filter the transcript by speaker, and export the minutes and cause analysis separately.',
+        'what': [
+          {
+            'text':
+              'Generate minutes in seven sections and check the quoted transcript in the cause diagram. Save the minutes and analysis as separate files in one folder.',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              'Filter the transcript by speaker or rename them throughout the meeting from the participant list, transcript avatar or segment menu.',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              'Get a recording reminder when a supported meeting app produces audio while Brevia is in the background. Add other local meeting apps in Settings.',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'Find and replace floats above the live transcript and updates as captions arrive. Online AI settings support service URLs with path prefixes and a connection test before saving.',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              'Minimize the main window to control recording or playback from the capsule, read captions, edit notes and paste images.',
+            'commit': 'db7d508f020ff63bf764f5f0e6bbc5d7bba072a9',
+          },
+          {
+            'text':
+              'Long transcripts are split to fit the model. Regenerating minutes or retrying after a failure reuses completed sections with transcript references.',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Fixed minutes failing when a long meeting’s partial summaries did not shrink. The participant list now includes unnamed speakers in the selected transcript.',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+          {
+            'text':
+              'Fixed an invisible capsule area intercepting clicks after switching meetings, and protected existing files with the same name during batch export.',
+            'commit': '88759a8635f115daad92844cd1f0ac5a154436f2',
+          },
+        ],
+      },
+    },
+    {
       'version': '2.0.1',
       'date': '2026-11-07',
-      'current': true,
       'previousVersion': '2.0.0',
       'contributors': [],
       'zh': {
