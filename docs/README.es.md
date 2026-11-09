@@ -29,6 +29,8 @@
 
 El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos de idioma se descargan por separado.
 
+> La versión actual utiliza MLX como backend de inferencia en macOS y sherpa-onnx en Windows. La versión para macOS ofrece actualmente un mejor rendimiento y un menor consumo energético, mientras que la versión para Windows sigue optimizándose. La hoja de ruta contempla un motor de inferencia de propósito general con aceleración CUDA.
+
 ## Qué puedes hacer
 
 - Graba el micrófono y el audio del sistema, con transcripción, traducción, subtítulos flotantes y controles de grabación.

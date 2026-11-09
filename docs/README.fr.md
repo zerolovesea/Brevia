@@ -29,6 +29,8 @@
 
 Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo sur Windows. Les modèles de langue se téléchargent séparément.
 
+> La version actuelle utilise MLX comme moteur d’inférence sur macOS et sherpa-onnx sous Windows. La version macOS offre actuellement de meilleures performances et une consommation énergétique plus faible, tandis que la version Windows continue d’être optimisée. La feuille de route prévoit la conception d’un moteur d’inférence généraliste avec accélération CUDA.
+
 ## Fonctionnalités
 
 - Enregistrez le microphone et le son du système, avec transcription, traduction, sous-titres flottants et commandes d’enregistrement.

@@ -29,6 +29,8 @@
 
 The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **38 MB**. Download the language models you need on first use.
 
+> The current version uses MLX as the inference backend on macOS and sherpa-onnx on Windows. The macOS version currently offers better performance and lower power consumption, while the Windows version continues to be optimized. The roadmap includes a general-purpose inference engine with CUDA acceleration.
+
 ## From conversation to minutes
 
 - **Transcription and translation.** Record your microphone and computer audio with live bilingual captions, or import an interview and export SRT subtitles.
