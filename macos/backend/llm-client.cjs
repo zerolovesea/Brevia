@@ -19,7 +19,16 @@ async function post(endpoint, body, headers, signal) {
       url = next;
       continue;
     }
-    const text = await response.text();
+    const limit = response.ok ? 8 * 1024 * 1024 : 16 * 1024;
+    const parts = [];
+    let size = 0;
+    for await (const part of response.body || []) {
+      size += part.length;
+      if (size > limit)
+        throw new Error('LLM response exceeds the size limit (HTTP ' + response.status + ')');
+      parts.push(part);
+    }
+    const text = Buffer.concat(parts, size).toString('utf8');
     if (!response.ok) throw new Error(`LLM request failed (${response.status}): ${text}`);
     return JSON.parse(text);
   }

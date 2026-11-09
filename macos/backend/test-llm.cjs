@@ -888,3 +888,15 @@ test('补写只保留逐字成立的整句，不把否定改成决定，替换�
   assert.doesNotMatch(corrected, /批准上线/);
   assert.match(corrected, /## Action Items\n- 提交预算。 \[\[action:S2\]\]/);
 });
+
+test('oversized chunked provider error bodies are bounded before logging or parsing', async (t) => {
+  const endpoint = await server(t, (_req, res) => {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.write('x'.repeat(12000));
+    res.end('y'.repeat(12000));
+  });
+  await assert.rejects(
+    complete({ endpoint, model: 'test' }, 'fixed sample'),
+    /size limit \(HTTP 500\)/,
+  );
+});
