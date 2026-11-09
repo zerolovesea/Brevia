@@ -9,7 +9,7 @@
     "start:fresh": "node scripts/start.cjs --reset-onboarding",
     "test": "npm run test:dead && npm run test:desktop && npm run test:ui && npm run test:e2e && npm run test:backend && npm run test:release",
     "test:dead": "node scripts/check_dead_code.mjs",
-    "test:ui": "cd frontend && node ./test-ui.mjs && node ../scripts/test-motion.mjs && node ../scripts/test-desktop-mobile-preview.mjs",
+    "test:ui": "cd frontend && node ./test-ui.mjs && node ../scripts/test-motion.mjs && node ../scripts/test-capsule.cjs && node ../scripts/test-desktop-mobile-preview.mjs",
     "test:backend": "node scripts/test-backend.cjs",
     "dist": "npm run dist:mac",
     "package:mac": "npm run package:mac:webkit",

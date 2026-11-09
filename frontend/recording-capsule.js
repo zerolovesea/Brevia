@@ -33,8 +33,10 @@
   let expandRevision = 0;
   let closingAnimation;
   async function expand(value) {
+    if (!value && closingAnimation) return;
     const revision = ++expandRevision;
     closingAnimation?.cancel();
+    closingAnimation = null;
     clearTimeout(openTimer);
     clearTimeout(closeTimer);
     if (expanded === value) return;
@@ -43,13 +45,18 @@
         closingAnimation = panel.animate([{ opacity: 1 }, { opacity: 0 }], {
           duration: window.BreviaMotion.duration('exit'),
           easing: window.BreviaMotion.easing.in,
+          fill: 'forwards',
         });
         await closingAnimation.finished.catch(() => {});
         if (revision !== expandRevision) return;
       }
       await bridge.expand({ expanded: value });
     } catch (error) {
-      showError(error);
+      if (revision === expandRevision) {
+        closingAnimation?.cancel();
+        closingAnimation = null;
+        showError(error);
+      }
     }
   }
   function showError(error) {
@@ -149,16 +156,25 @@
       ['playing', 'playback-paused'].includes(state?.phase) !==
         ['playing', 'playback-paused'].includes(next.phase);
     const previousError = state?.error;
+    const previousCaption = state?.activeCaptionId;
+    const wasExpanded = expanded;
     state = next;
     if (state.error) showError({ message: state.error });
     else if (previousError) select('#capsule-error').hidden = true;
     if (changed) {
+      ++expandRevision;
+      closingAnimation?.cancel();
+      closingAnimation = null;
       pinned = false;
       follow = true;
       setTab('captions');
     }
     expanded = Boolean(state.expanded);
     panel.hidden = !expanded;
+    if (!expanded) {
+      closingAnimation?.cancel();
+      closingAnimation = null;
+    }
     select('#capsule-preview').setAttribute('aria-expanded', String(expanded));
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.lang = state.locale;
@@ -208,6 +224,9 @@
       previous = node;
       existing.delete(entry.id);
       node.dataset.draft = String(entry.draft);
+      node.dataset.current = String(entry.id === state.activeCaptionId);
+      if (entry.id === state.activeCaptionId) node.setAttribute('aria-current', 'true');
+      else node.removeAttribute('aria-current');
       const time = node.querySelector('time'),
         text = node.querySelector('[data-caption-text]'),
         progress = node.querySelector('.capsule-progress'),
@@ -224,7 +243,13 @@
     existing.forEach((node) => node.remove());
     if (!state.captions.length)
       captions.innerHTML = `<div class="capsule-empty">${escape(state.captionNotice || t(['playing', 'playback-paused'].includes(state.phase) ? '暂无内容' : '等待语音'))}${state.captionNotice ? `<p><button data-action="models" type="button">${escape(t('模型库'))}</button></p>` : ''}</div>`;
-    if (follow) captionBody.scrollTop = captionBody.scrollHeight;
+    if (
+      follow &&
+      (!['playing', 'playback-paused'].includes(state.phase) ||
+        (state.activeCaptionId &&
+          (previousCaption !== state.activeCaptionId || (!wasExpanded && expanded))))
+    )
+      scrollToCurrentCaption();
     const suggestion = state.suggestion;
     const suggestionHtml = suggestion
       ? `<section class="capsule-suggestion"><h3>${escape(t('待采纳建议'))}</h3><p>${escape(suggestion.text)}</p><div class="capsule-suggestion-actions"><button data-action="accept" type="button">${escape(t('采纳'))}</button><button data-action="ignore" type="button">${escape(t('忽略'))}</button></div></section>`
@@ -239,7 +264,10 @@
     renderControls();
   }
   const shell = select('.capsule-shell');
-  shell.addEventListener('pointerenter', () => clearTimeout(closeTimer));
+  shell.addEventListener('pointerenter', () => {
+    clearTimeout(closeTimer);
+    if (closingAnimation) void expand(true);
+  });
   // 靠近暂停或结束时保持位置稳定，只有读数和字幕按钮触发悬停预览。
   document.querySelectorAll('.capsule-identity, .capsule-preview').forEach((trigger) => {
     trigger.addEventListener('pointerenter', () => {
@@ -275,14 +303,32 @@
     pinned = !pinned;
     renderControls();
   };
+  function scrollToCurrentCaption() {
+    const current = captions.querySelector('[data-current="true"]');
+    if (!current) {
+      if (['playing', 'playback-paused'].includes(state?.phase)) return;
+      captionBody.scrollTop = captionBody.scrollHeight;
+      return;
+    }
+    const bounds = captionBody.getBoundingClientRect();
+    const row = current.getBoundingClientRect();
+    captionBody.scrollTop +=
+      row.top - bounds.top - Math.max(0, (captionBody.clientHeight - row.height) / 2);
+  }
   select('#capsule-follow').onclick = () => {
     follow = true;
-    captionBody.scrollTop = captionBody.scrollHeight;
+    scrollToCurrentCaption();
     renderControls();
   };
   captionBody.addEventListener('scroll', () => {
-    if (tab !== 'captions') return;
-    follow = captionBody.scrollHeight - captionBody.scrollTop - captionBody.clientHeight < 24;
+    if (tab !== 'captions' || !expanded) return;
+    const current = state?.activeCaptionId && captions.querySelector('[data-current="true"]');
+    if (current) {
+      const body = captionBody.getBoundingClientRect(),
+        row = current.getBoundingClientRect();
+      follow = row.bottom > body.top && row.top < body.bottom;
+    } else
+      follow = captionBody.scrollHeight - captionBody.scrollTop - captionBody.clientHeight < 24;
     renderControls();
   });
   document.addEventListener('click', (event) => {

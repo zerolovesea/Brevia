@@ -9707,10 +9707,33 @@ for (const failure of ['notes', 'request', null]) {
   assert.equal(snapshot.elapsed, 12);
   assert.equal(snapshot.captions[0].text, '当前段落');
   assert.equal(snapshot.notes, '会议笔记');
+  assert.equal(snapshot.activeCaptionId, '10');
+  context.uiData.detail.transcript.push({
+    startSeconds: 16,
+    endSeconds: 18,
+    time: '00:16',
+    text: '下一段',
+  });
+  assert.equal(context.desktopRecordingSnapshot().captions[1].text, '下一段');
   context.uiData.detail.transcript[0].text = '字'.repeat(20001);
   assert.equal(context.desktopRecordingSnapshot().captions[0].text.length, 20000);
   context.playerAudio.currentTime = 20;
-  assert.equal(context.desktopRecordingSnapshot().captions.length, 0);
+  assert.equal(context.desktopRecordingSnapshot().captions.length, 2);
+  assert.equal(context.desktopRecordingSnapshot().activeCaptionId, null);
+  const beforeContext = context.uiData.detail.transcript;
+  context.uiData.detail.transcript = Array.from({ length: 150 }, (_, index) => ({
+    startSeconds: index * 2,
+    endSeconds: index * 2 + 1.5,
+    text: `段落 ${index}`,
+  }));
+  context.playerAudio.currentTime = 201;
+  const surrounding = context.desktopRecordingSnapshot();
+  assert.equal(surrounding.captions.length, 80);
+  assert.equal(surrounding.activeCaptionId, '200');
+  assert.equal(surrounding.captions[0].text, '段落 60');
+  assert.equal(surrounding.captions.at(-1).text, '段落 139');
+  context.uiData.detail.transcript = beforeContext;
+  context.playerAudio.currentTime = 20;
   await handler({ action: 'playback-pause', meetingId: 'playback' });
   assert.equal(context.desktopRecordingSnapshot().phase, 'playback-paused');
   await handler({ action: 'playback-pause', meetingId: 'playback' });

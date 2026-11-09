@@ -11917,10 +11917,20 @@ function desktopRecordingSnapshot() {
     !playerAudio.ended &&
     currentMeetingDetail;
   if (playback) {
-    const segment = uiData.detail.transcript.find(
+    const transcript = uiData.detail.transcript;
+    const activeIndex = transcript.findIndex(
       (item) =>
         playerAudio.currentTime >= item.startSeconds && playerAudio.currentTime < item.endSeconds,
     );
+    const nextIndex =
+      activeIndex >= 0
+        ? activeIndex
+        : transcript.findIndex((item) => item.startSeconds > playerAudio.currentTime);
+    const start = Math.max(
+      0,
+      Math.min((nextIndex >= 0 ? nextIndex : transcript.length) - 40, transcript.length - 80),
+    );
+    const captionId = (item) => String(item.speaker?.segmentId ?? item.startSeconds);
     return {
       ready: Boolean(breviaClient?.state.initialized && desktopPreferences),
       meetingId: playback.id,
@@ -11932,17 +11942,14 @@ function desktopRecordingSnapshot() {
       canPause: true,
       locale,
       theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
-      captions: segment
-        ? [
-            {
-              id: String(segment.speaker?.segmentId || segment.startSeconds),
-              time: segment.time || '',
-              text: (segment.text || '').slice(0, 20000),
-              translation: (segment.translation || '').slice(0, 20000),
-              draft: false,
-            },
-          ]
-        : [],
+      activeCaptionId: activeIndex >= 0 ? captionId(transcript[activeIndex]) : null,
+      captions: transcript.slice(start, start + 80).map((item) => ({
+        id: captionId(item),
+        time: item.time || '',
+        text: (item.text || '').slice(0, 20000),
+        translation: (item.translation || '').slice(0, 20000),
+        draft: false,
+      })),
       notes: (uiData.detail.notes || '').slice(0, 200000),
       suggestion: null,
       aiEnabled: false,

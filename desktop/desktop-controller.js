@@ -63,6 +63,7 @@ const desktopStateSchema = z.object({
   aiBusy: z.boolean(),
   error: z.string().max(2000),
   captionNotice: z.string().max(2000).default(''),
+  activeCaptionId: z.string().nullable().default(null),
 });
 
 // 同一窗口拥有采集；胶囊与原生菜单只发送动作，不能另开一套录音。

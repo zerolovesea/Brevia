@@ -424,3 +424,14 @@ body[data-above="true"] .capsule-panel {
   border-radius: 50%;
   background: currentColor;
 }
+
+.capsule-line[data-current="true"] {
+  background: var(--color-selected);
+  border-radius: 6px;
+  padding-inline: 6px;
+  margin-inline: -6px;
+}
+.capsule-line[data-current="true"] time {
+  color: var(--color-text);
+  font-weight: 600;
+}
