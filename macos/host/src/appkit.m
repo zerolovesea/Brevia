@@ -97,6 +97,15 @@ static NSString *dialogPath(NSString *value) {
     return [value isKindOfClass:NSString.class] && value.length ? value : nil;
 }
 
+static WKWebView *capsuleWebView(NSView *view) {
+    if ([view isKindOfClass:WKWebView.class]) return (WKWebView *)view;
+    for (NSView *child in view.subviews) {
+        WKWebView *web = capsuleWebView(child);
+        if (web) return web;
+    }
+    return nil;
+}
+
 static void perform(NSString *method, NSDictionary *args, NSWindow *window, Completion done) {
     if ([method isEqual:@"window.setBounds"]) {
         if (!window) { done(nil, @"Window closed"); return; }
@@ -106,17 +115,56 @@ static void perform(NSString *method, NSDictionary *args, NSWindow *window, Comp
             done(nil, @"Invalid window bounds"); return;
         }
         NSRect frame = NSMakeRect(x, NSMaxY(NSScreen.screens.firstObject.frame) - y - height, width, height);
-        // 同一次 AppKit 刷新完成移动与缩放，避免透明窗口的中间尺寸露出底色。
-        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
-            context.duration = 0;
-            context.allowsImplicitAnimation = NO;
-            window.opaque = NO;
-            window.backgroundColor = NSColor.clearColor;
-            window.animationBehavior = NSWindowAnimationBehaviorNone;
-            [window setFrame:frame display:YES animate:NO];
-            [window.contentView layoutSubtreeIfNeeded];
-        } completionHandler:nil];
-        done(@YES, nil);
+        NSRect previous = window.frame;
+        WKWebView *web = capsuleWebView(window.contentView);
+        CGFloat opacity = web.alphaValue;
+        __block NSImageView *cover = nil;
+        __block BOOL finished = NO;
+        Completion finish = ^(id value, NSString *error) {
+            if (finished) return;
+            finished = YES;
+            if (cover) web.alphaValue = opacity;
+            [cover removeFromSuperview];
+            done(value, error);
+        };
+        void (^resize)(NSImage *) = ^(NSImage *image) {
+            if (finished) return;
+            if (image) {
+                cover = [[NSImageView alloc] initWithFrame:NSMakeRect(previous.origin.x - frame.origin.x,
+                    previous.origin.y - frame.origin.y, previous.size.width, previous.size.height)];
+                cover.image = image;
+                cover.imageScaling = NSImageScaleAxesIndependently;
+                [window.contentView addSubview:cover positioned:NSWindowAbove relativeTo:nil];
+            }
+            [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+                context.duration = 0;
+                context.allowsImplicitAnimation = NO;
+                if (cover) web.alphaValue = 0;
+                window.opaque = NO;
+                window.backgroundColor = NSColor.clearColor;
+                window.animationBehavior = NSWindowAnimationBehaviorNone;
+                [window setFrame:frame display:YES animate:NO];
+                [window.contentView layoutSubtreeIfNeeded];
+            } completionHandler:nil];
+            if (!cover) { finish(@YES, nil); return; }
+            // AppKit 的事务不等待 WebKit 提交新尺寸；保留原画面直到新一帧绘制完成。
+            WKSnapshotConfiguration *updated = [WKSnapshotConfiguration new];
+            updated.afterScreenUpdates = YES;
+            [web takeSnapshotWithConfiguration:updated completionHandler:^(NSImage *result, NSError *error) {
+                (void)result; (void)error;
+                finish(@YES, nil);
+            }];
+        };
+        if (web && window.visible && !NSEqualSizes(previous.size, frame.size)) {
+            // WebContent 异常时也必须释放串行原生操作队列；迟到的快照不能再改窗口。
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                finish(nil, @"Window redraw timed out");
+            });
+            [web takeSnapshotWithConfiguration:nil completionHandler:^(NSImage *image, NSError *error) {
+                (void)error;
+                resize(image);
+            }];
+        } else resize(nil);
     } else if ([method isEqual:@"dialog.open"] || [method isEqual:@"dialog.save"]) {
         BOOL save = [method isEqual:@"dialog.save"];
         NSSavePanel *panel = save ? NSSavePanel.savePanel : NSOpenPanel.openPanel;

@@ -10,6 +10,8 @@ fi
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 macos/host/cargo.sh test --release --locked --manifest-path macos/host/Cargo.toml
+xcrun clang -fobjc-arc -fblocks -framework AppKit -framework WebKit -framework UniformTypeIdentifiers macos/host/test-capsule.m -o "$scratch/capsule-test"
+"$scratch/capsule-test"
 xcrun swift-format lint --strict macos/audio/*.swift macos/inference/Package.swift macos/inference/Sources/main.swift
 xcrun swiftc -D BREVIA_AUDIO_TEST -parse-as-library macos/audio/*.swift -o "$scratch/audio-test"
 "$scratch/audio-test" > /dev/null
