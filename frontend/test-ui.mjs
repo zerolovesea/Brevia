@@ -9617,6 +9617,115 @@ for (const failure of ['notes', 'request', null]) {
   assert.equal(button.disabled, failure === null);
 }
 
+// 动作立即发布后仍能安排后续播放进度，不能留下已取消的定时器 ID。
+{
+  let scheduled = 0,
+    published = 0;
+  const context = {
+    desktopPublishTimer: 7,
+    clearTimeout() {},
+    setTimeout() {
+      scheduled++;
+      return 8;
+    },
+    desktopRecordingSnapshot: () => ({}),
+    window: {
+      brevia: {
+        desktop: {
+          publish: async () => {
+            published++;
+          },
+        },
+      },
+    },
+  };
+  runInNewContext(
+    summaryFn('publishDesktopRecording') + '\n' + summaryFn('scheduleDesktopRecording'),
+    context,
+  );
+  context.publishDesktopRecording();
+  context.scheduleDesktopRecording();
+  assert.equal(published, 1);
+  assert.equal(scheduled, 1);
+}
+
+// 播放胶囊读取当前稿，动作不得操作已切换的会议或正在录音的会话。
+{
+  const completions = [];
+  let handler,
+    plays = 0,
+    closes = 0;
+  const context = {
+    meetingActive: false,
+    playbackStarted: true,
+    currentMeetingDetail: { id: 'playback', title: '回看' },
+    playerAudio: {
+      src: 'audio',
+      ended: false,
+      paused: false,
+      currentTime: 12.9,
+      pause() {
+        this.paused = true;
+      },
+      async play() {
+        this.paused = false;
+        plays++;
+      },
+    },
+    uiData: {
+      detail: {
+        transcript: [{ startSeconds: 10, endSeconds: 15, time: '00:10', text: '当前段落' }],
+        notes: '会议笔记',
+      },
+    },
+    desktopPreferences: {},
+    breviaClient: { state: { initialized: true } },
+    locale: 'zh',
+    document: { documentElement: { dataset: { theme: 'light' } } },
+    t: (key) => key,
+    clearSegmentPlayback() {},
+    publishDesktopRecording() {},
+    miniPlaybackClose: {
+      click() {
+        closes++;
+        context.playbackStarted = false;
+      },
+    },
+    window: {
+      brevia: {
+        on: (_, fn) => {
+          handler = fn;
+        },
+        desktop: { complete: async (value) => completions.push(value) },
+      },
+    },
+  };
+  const listener = text(app).match(/window\.brevia\.on\(\s*'desktop.action',[\s\S]*?\n  \);/)[0];
+  runInNewContext(summaryFn('desktopRecordingSnapshot') + '\n' + listener, context);
+  let snapshot = context.desktopRecordingSnapshot();
+  assert.equal(snapshot.phase, 'playing');
+  assert.equal(snapshot.elapsed, 12);
+  assert.equal(snapshot.captions[0].text, '当前段落');
+  assert.equal(snapshot.notes, '会议笔记');
+  context.uiData.detail.transcript[0].text = '字'.repeat(20001);
+  assert.equal(context.desktopRecordingSnapshot().captions[0].text.length, 20000);
+  context.playerAudio.currentTime = 20;
+  assert.equal(context.desktopRecordingSnapshot().captions.length, 0);
+  await handler({ action: 'playback-pause', meetingId: 'playback' });
+  assert.equal(context.desktopRecordingSnapshot().phase, 'playback-paused');
+  await handler({ action: 'playback-pause', meetingId: 'playback' });
+  assert.equal(plays, 1);
+  context.meetingActive = true;
+  await handler({ action: 'playback-stop', meetingId: 'playback' });
+  assert.ok(completions.at(-1).error);
+  context.meetingActive = false;
+  await handler({ action: 'playback-stop', meetingId: 'stale-meeting' });
+  assert.ok(completions.at(-1).error);
+  assert.equal(closes, 0);
+  await handler({ action: 'playback-stop', meetingId: 'playback' });
+  assert.equal(closes, 1);
+}
+
 // 胶囊必须等待共享采纳结果；一次动作只保存一次，失败后原建议仍可重试。
 {
   const completions = [];

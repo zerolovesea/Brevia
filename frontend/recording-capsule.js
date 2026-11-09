@@ -64,7 +64,11 @@
     renderControls();
     try {
       await bridge.action({
-        action: actionName,
+        action:
+          ['playing', 'playback-paused'].includes(state?.phase) &&
+          ['pause', 'stop'].includes(actionName)
+            ? `playback-${actionName}`
+            : actionName,
         meetingId: state?.meetingId || null,
         tab,
         ...(state?.suggestion ? { suggestionId: state.suggestion.id } : {}),
@@ -79,7 +83,8 @@
   }
   function renderControls() {
     if (!state) return;
-    const paused = state.phase === 'paused';
+    const playback = ['playing', 'playback-paused'].includes(state.phase);
+    const paused = ['paused', 'playback-paused'].includes(state.phase);
     const saving = state.phase === 'saving';
     const inactive = ['idle', 'saved'].includes(state.phase);
     const pause = select('.capsule-pause'),
@@ -90,7 +95,7 @@
     pause.disabled = busy || saving || inactive || !state.canPause || state.phase === 'failed';
     pause.hidden = saving || inactive || state.phase === 'failed';
     stop.innerHTML = icon(state.phase === 'failed' ? 'retry' : 'stop');
-    stop.title = t(state.phase === 'failed' ? '重试保存' : '结束会议');
+    stop.title = t(playback ? '关闭播放' : state.phase === 'failed' ? '重试保存' : '结束会议');
     stop.setAttribute('aria-label', stop.title);
     stop.disabled = busy || saving || inactive;
     stop.hidden = saving || inactive;
@@ -139,7 +144,10 @@
   }
   function render(next) {
     if (!next?.phase) return;
-    const changed = state?.meetingId !== next.meetingId;
+    const changed =
+      state?.meetingId !== next.meetingId ||
+      ['playing', 'playback-paused'].includes(state?.phase) !==
+        ['playing', 'playback-paused'].includes(next.phase);
     const previousError = state?.error;
     state = next;
     if (state.error) showError({ message: state.error });
@@ -161,6 +169,8 @@
     select('#capsule-title').title = state.title;
     select('#capsule-status').textContent = t(
       {
+        playing: '正在播放',
+        'playback-paused': '已暂停',
         recording: '录音中',
         paused: '已暂停',
         saving: '正在保存录音',
@@ -174,7 +184,9 @@
       .toISOString()
       .slice(state.elapsed >= 3600 ? 11 : 14, 19);
     meter.style.setProperty('--level', state.phase === 'recording' ? state.level : 0);
-    meter.hidden = ['saving', 'saved', 'failed', 'idle'].includes(state.phase);
+    meter.hidden = ['saving', 'saved', 'failed', 'idle', 'playing', 'playback-paused'].includes(
+      state.phase,
+    );
     select('[role="tablist"]').setAttribute('aria-label', t('展开字幕与笔记'));
     select('#captions-tab').textContent = t('实时字幕');
     select('#notes-tab').textContent = t('笔记');
@@ -211,7 +223,7 @@
     }
     existing.forEach((node) => node.remove());
     if (!state.captions.length)
-      captions.innerHTML = `<div class="capsule-empty">${escape(state.captionNotice || t('等待语音'))}${state.captionNotice ? `<p><button data-action="models" type="button">${escape(t('模型库'))}</button></p>` : ''}</div>`;
+      captions.innerHTML = `<div class="capsule-empty">${escape(state.captionNotice || t(['playing', 'playback-paused'].includes(state.phase) ? '暂无内容' : '等待语音'))}${state.captionNotice ? `<p><button data-action="models" type="button">${escape(t('模型库'))}</button></p>` : ''}</div>`;
     if (follow) captionBody.scrollTop = captionBody.scrollHeight;
     const suggestion = state.suggestion;
     const suggestionHtml = suggestion

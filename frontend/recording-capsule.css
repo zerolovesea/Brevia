@@ -40,10 +40,10 @@ button svg {
   gap: 5px;
   height: 56px;
   padding: 0 9px;
-  border: 1px solid #444442;
+  border: 1px solid var(--color-line);
   border-radius: 28px;
-  background: #20201f;
-  color: #faf9f6;
+  background: var(--color-overlay);
+  color: var(--color-text);
   box-shadow:
     0 3px 9px #0003,
     inset 0 1px #ffffff09;
@@ -65,7 +65,7 @@ button svg {
   transition: background-color 120ms ease-out;
 }
 .recording-pill button:hover {
-  background: #464644;
+  background: var(--color-selected);
 }
 .recording-pill.is-dragging,
 .recording-pill.is-dragging * {
@@ -75,11 +75,11 @@ button svg {
   flex: none;
   width: 7px;
   height: 16px;
-  background: radial-gradient(circle, #91918c 1px, transparent 1.3px) 0 0 / 4px 5px;
+  background: radial-gradient(circle, var(--color-text-subtle) 1px, transparent 1.3px) 0 0 / 4px 5px;
 }
 .recording-pill .capsule-logo {
   position: relative;
-  background: #383836;
+  background: var(--color-selected);
   box-shadow: inset 0 0 0 1px #ffffff0e;
   width: 36px;
   height: 36px;
@@ -110,7 +110,7 @@ button svg {
   width: 2px;
   height: 20px;
   border-radius: 2px;
-  background: #f4f3ed;
+  background: var(--color-text);
   transform: scaleY(calc(0.14 + var(--level, 0) * 0.86 * var(--weight)));
   transition: transform 75ms linear;
 }
@@ -128,7 +128,7 @@ button svg {
 }
 .capsule-identity strong {
   margin-top: 2px;
-  color: #c5c5bf;
+  color: var(--color-text-muted);
   font-size: 11px;
   line-height: 1.3;
   font-weight: 450;
@@ -147,7 +147,7 @@ button svg {
 }
 .capsule-readout small {
   font-size: 10px;
-  color: #d2d2cc;
+  color: var(--color-text-muted);
 }
 .capsule-readout small::before {
   content: "";
@@ -157,37 +157,37 @@ button svg {
   margin-right: 4px;
   vertical-align: 1px;
   border-radius: 50%;
-  background: #a8a8a2;
+  background: var(--color-text-subtle);
 }
 body[data-phase="recording"] .capsule-readout small::before,
 body[data-phase="failed"] .capsule-readout small::before {
-  background: #ff8f83;
+  background: var(--color-danger);
 }
 body[data-phase="paused"] .capsule-readout small::before {
-  background: #e6c180;
+  background: var(--color-warning);
 }
 .recording-pill .capsule-preview {
   width: 28px;
-  color: #d2d2cc;
+  color: var(--color-text-muted);
   border-radius: 9px;
 }
 .recording-pill .capsule-preview[aria-expanded="true"] {
-  color: #fff;
-  background: #424240;
+  color: var(--color-text);
+  background: var(--color-selected);
 }
 .recording-pill .capsule-pause {
-  background: #f4f3ed;
-  color: #1b1b1a;
+  background: var(--color-text);
+  color: var(--color-text-inverse);
 }
 .recording-pill .capsule-pause:hover {
-  background: #fff;
+  background: var(--color-text-strong);
 }
 .recording-pill .capsule-stop {
-  color: #ffa79b;
-  background: #3e3432;
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-overlay));
 }
 .recording-pill .capsule-stop:hover {
-  background: #57413e;
+  background: color-mix(in srgb, var(--color-danger) 20%, var(--color-overlay));
 }
 .recording-pill button svg {
   width: 16px;

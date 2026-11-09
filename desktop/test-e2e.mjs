@@ -5530,6 +5530,43 @@ try {
     };
     writeFileSync(path.join(output, 'capture-run.json'), JSON.stringify(run, null, 2) + '\n');
   }
+  const playbackCapsule = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const data = await window.brevia.initialize();
+      const meeting = await window.brevia.meeting.get({meeting_id: data.meetings[0].id});
+      meetingActive = false;
+      await window.brevia.desktop.savePreferences({autoCapsule: true});
+      applyBackendDetail(meeting);
+      const deadline = Date.now() + 10000;
+      while (!playerAudio.src || playerAudio.readyState < 2) {
+        if (Date.now() > deadline) throw Error('Playback capsule audio did not load');
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      playerAudio.loop = true;
+      await playerAudio.play();
+      await window.brevia.desktop.publish(desktopRecordingSnapshot());
+      const playing = await window.brevia.desktop.state();
+      await window.brevia.desktop.action({action: 'playback-pause', meetingId: meeting.id});
+      const paused = await window.brevia.desktop.state();
+      await window.brevia.desktop.action({action: 'playback-pause', meetingId: meeting.id});
+      const resumed = await window.brevia.desktop.state();
+      await window.brevia.desktop.action({action: 'return', meetingId: meeting.id});
+      const returned = activeView === 'detail' && currentMeetingDetail.id === meeting.id;
+      await window.brevia.desktop.action({action: 'playback-stop', meetingId: meeting.id});
+      const stopped = await window.brevia.desktop.state();
+      playerAudio.loop = false;
+      return playing.phase === 'playing' && paused.phase === 'playback-paused' &&
+        resumed.phase === 'playing' && returned && !playbackStarted &&
+        !['playing', 'playback-paused'].includes(stopped.phase);
+    })()`,
+    userGesture: true,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    playbackCapsule.result?.value === true,
+    `真实录音播放胶囊应支持暂停、继续、返回会议和关闭：${JSON.stringify(playbackCapsule.exceptionDetails || playbackCapsule.result)}`,
+  );
   check(consoleErrors.length === 0, `渲染进程控制台错误：${consoleErrors.join('\n')}`);
   check(pageErrors.length === 0, `页面操作期间脚本异常：${pageErrors.join('\n')}`);
   client.close();

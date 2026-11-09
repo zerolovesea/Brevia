@@ -30,7 +30,16 @@ const desktopStateSchema = z.object({
   ready: z.boolean().default(false),
   meetingId: z.string().nullable(),
   title: z.string().max(500),
-  phase: z.enum(['idle', 'recording', 'paused', 'saving', 'failed', 'saved']),
+  phase: z.enum([
+    'idle',
+    'recording',
+    'paused',
+    'saving',
+    'failed',
+    'saved',
+    'playing',
+    'playback-paused',
+  ]),
   elapsed: z.number().int().nonnegative(),
   level: z.number().min(0).max(1),
   input: z.string().max(500),
@@ -226,12 +235,21 @@ class DesktopController {
     return !this.mainWindow?.isVisible() || this.mainWindow.isMinimized();
   }
   active() {
-    return this.state?.meetingId && !['idle', 'saved'].includes(this.state.phase);
+    return (
+      this.state?.meetingId &&
+      ['recording', 'paused', 'saving', 'failed'].includes(this.state.phase)
+    );
+  }
+
+  playback() {
+    return this.state?.meetingId && ['playing', 'playback-paused'].includes(this.state.phase);
   }
 
   update(payload) {
     const state = desktopStateSchema.parse(payload);
-    const changed = this.state?.meetingId !== state.meetingId;
+    const changed =
+      this.state?.meetingId !== state.meetingId ||
+      Boolean(this.playback()) !== ['playing', 'playback-paused'].includes(state.phase);
     if (state.phase === 'saved' && this.state?.phase !== 'saved' && this.capsule?.isVisible()) {
       this.showSaved = true;
       clearTimeout(this.savedTimer);
@@ -308,9 +326,11 @@ class DesktopController {
     }
     const wasVisible = Boolean(this.capsule?.isVisible());
     const visible =
-      (this.active() || this.showSaved) &&
+      (this.active() || this.playback() || this.showSaved) &&
       (this.override === true ||
-        (this.override !== false && this.preferences.autoCapsule && this.background()));
+        (this.override !== false &&
+          this.preferences.autoCapsule &&
+          (this.playback() || this.background())));
     if (visible) this.showCapsule();
     else this.capsule?.hide();
     this.capsule?.setAlwaysOnTop(true, 'floating');
@@ -322,14 +342,25 @@ class DesktopController {
     const t = (key) => this.text(key, this.state?.locale);
     const run = (action) => () => void this.action(action).catch(this.reportError);
     const state = this.state;
-    const active = this.active();
+    const playback = this.playback();
+    const active = this.active() || playback;
+    const paused = ['paused', 'playback-paused'].includes(state?.phase);
+    const status = paused
+      ? '已暂停'
+      : playback
+        ? '正在播放'
+        : state?.phase === 'saving'
+          ? '正在保存录音'
+          : state?.phase === 'failed'
+            ? '保存失败'
+            : '录音中';
     const busy = state?.phase === 'saving';
     const template = [
       { label: active ? state.title : 'Brevia', enabled: false },
       ...(active
         ? [
             {
-              label: `${t(state.phase === 'paused' ? '已暂停' : busy ? '正在保存录音' : state.phase === 'failed' ? '保存失败' : '录音中')} · ${new Date(state.elapsed * 1000).toISOString().slice(11, 19)}`,
+              label: `${t(status)} · ${new Date(state.elapsed * 1000).toISOString().slice(11, 19)}`,
               enabled: false,
             },
             { label: state.input, enabled: false },
@@ -343,19 +374,23 @@ class DesktopController {
       ...(active
         ? [
             {
-              label: t(state.phase === 'paused' ? '继续录音' : '暂停录音'),
+              label: t(playback ? (paused ? '继续' : '暂停') : paused ? '继续录音' : '暂停录音'),
               enabled: state.canPause && !busy && state.phase !== 'failed',
-              accelerator: this.preferences.pauseShortcut || undefined,
+              accelerator: !playback ? this.preferences.pauseShortcut || undefined : undefined,
               registerAccelerator: false,
-              click: run('pause'),
+              click: run(playback ? 'playback-pause' : 'pause'),
             },
-            { label: t('标记重点'), enabled: state.phase === 'recording', click: run('mark') },
+            ...(!playback
+              ? [{ label: t('标记重点'), enabled: state.phase === 'recording', click: run('mark') }]
+              : []),
             {
-              label: t(state.phase === 'failed' ? '重试保存' : '结束并保存'),
+              label: t(
+                playback ? '关闭播放' : state.phase === 'failed' ? '重试保存' : '结束并保存',
+              ),
               enabled: !busy,
-              accelerator: this.preferences.recordingShortcut || undefined,
+              accelerator: !playback ? this.preferences.recordingShortcut || undefined : undefined,
               registerAccelerator: false,
-              click: run('stop'),
+              click: run(playback ? 'playback-stop' : 'stop'),
             },
           ]
         : [
@@ -390,11 +425,7 @@ class DesktopController {
       this.menuOpen = false;
     });
     this.tray.setContextMenu(menu);
-    this.tray.setToolTip(
-      active
-        ? `Brevia · ${state.title} · ${t(state.phase === 'paused' ? '已暂停' : busy ? '正在保存录音' : state.phase === 'failed' ? '保存失败' : '录音中')}`
-        : 'Brevia',
-    );
+    this.tray.setToolTip(active ? `Brevia · ${state.title} · ${t(status)}` : 'Brevia');
     if (process.platform === 'darwin') this.tray.setTitle(state?.phase === 'recording' ? '●' : '');
   }
 
@@ -509,9 +540,11 @@ class DesktopController {
       this.ready = true;
       this.sendState();
       if (
-        this.active() &&
+        (this.active() || this.playback()) &&
         (this.override === true ||
-          (this.override !== false && this.background() && this.preferences.autoCapsule))
+          (this.override !== false &&
+            (this.playback() || this.background()) &&
+            this.preferences.autoCapsule))
       )
         window.showInactive();
       this.updateMenuIfPresent();

@@ -332,8 +332,9 @@
         '始终显示': '始终显示',
         '仅窗口隐藏时': '仅窗口隐藏时',
         '桌面录音胶囊': '桌面录音胶囊',
-        '最小化时自动显示胶囊': '最小化时自动显示胶囊',
-        '录音或暂停时显示；隐藏胶囊不会停止录音': '录音或暂停时显示；隐藏胶囊不会停止录音',
+        '自动显示会议胶囊': '自动显示会议胶囊',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          '录音时随主窗口最小化显示，播放录音时自动显示',
         '展开讨论记录': '展开讨论记录',
         '返回当前会议': '返回当前会议',
         '展开字幕与笔记': '展开字幕与笔记',
@@ -1253,9 +1254,9 @@
         '始终显示': 'Always show',
         '仅窗口隐藏时': 'Only when window is hidden',
         '桌面录音胶囊': 'Desktop recording capsule',
-        '最小化时自动显示胶囊': 'Show capsule when minimized',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          'Show while recording or paused. Hiding the capsule keeps recording.',
+        '自动显示会议胶囊': 'Show meeting capsule automatically',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          'Appears when recording is minimized and when playing a recording',
         '展开讨论记录': 'Expand discussion',
         '返回当前会议': 'Return to current meeting',
         '展开字幕与笔记': 'Expand captions and notes',
@@ -2377,9 +2378,9 @@
         '始终显示': 'Mostrar siempre',
         '仅窗口隐藏时': 'Solo con la ventana oculta',
         '桌面录音胶囊': 'Cápsula de grabación',
-        '最小化时自动显示胶囊': 'Mostrar cápsula al minimizar',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          'Se muestra al grabar o pausar. Ocultarla no detiene la grabación.',
+        '自动显示会议胶囊': 'Mostrar cápsula de reunión automáticamente',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          'Aparece al minimizar durante la grabación y al reproducir una grabación',
         '展开讨论记录': 'Ampliar discusión',
         '返回当前会议': 'Volver a la reunión actual',
         '展开字幕与笔记': 'Abrir subtítulos y notas',
@@ -3506,9 +3507,9 @@
         '始终显示': '常に表示',
         '仅窗口隐藏时': 'ウィンドウ非表示時のみ',
         '桌面录音胶囊': 'デスクトップ録音カプセル',
-        '最小化时自动显示胶囊': '最小化時にカプセルを表示',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          '録音中・一時停止中に表示。非表示にしても録音は続きます',
+        '自动显示会议胶囊': '会議カプセルを自動表示',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          '録音中は最小化時に、録音の再生時は自動的に表示します',
         '展开讨论记录': '議論の記録を展開',
         '返回当前会议': '現在の会議に戻る',
         '展开字幕与笔记': '字幕とノートを展開',
@@ -4630,9 +4631,9 @@
         '始终显示': '항상 표시',
         '仅窗口隐藏时': '창이 숨겨진 경우에만',
         '桌面录音胶囊': '데스크톱 녹음 캡슐',
-        '最小化时自动显示胶囊': '최소화 시 캡슐 표시',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          '녹음 또는 일시 정지 중 표시됩니다. 숨겨도 녹음은 계속됩니다',
+        '自动显示会议胶囊': '회의 캡슐 자동 표시',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          '녹음 중 창을 최소화하거나 녹음을 재생할 때 표시합니다',
         '展开讨论记录': '논의 기록 펼치기',
         '返回当前会议': '현재 회의로 돌아가기',
         '展开字幕与笔记': '자막 및 노트 펼치기',
@@ -5742,9 +5743,9 @@
         '始终显示': 'Toujours afficher',
         '仅窗口隐藏时': 'Seulement si la fenêtre est masquée',
         '桌面录音胶囊': 'Capsule d’enregistrement',
-        '最小化时自动显示胶囊': 'Afficher la capsule à la réduction',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          'Visible pendant l’enregistrement ou la pause. La masquer n’arrête pas l’enregistrement.',
+        '自动显示会议胶囊': 'Afficher automatiquement la capsule de réunion',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          'Apparaît à la réduction pendant l’enregistrement et à la lecture d’un enregistrement',
         '展开讨论记录': 'Développer la discussion',
         '返回当前会议': 'Revenir à la réunion',
         '展开字幕与笔记': 'Ouvrir les sous-titres et notes',
@@ -6888,9 +6889,9 @@
         '始终显示': 'Immer anzeigen',
         '仅窗口隐藏时': 'Nur bei ausgeblendetem Fenster',
         '桌面录音胶囊': 'Aufnahmekapsel',
-        '最小化时自动显示胶囊': 'Kapsel beim Minimieren anzeigen',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          'Bei Aufnahme oder Pause anzeigen. Ausblenden beendet keine Aufnahme.',
+        '自动显示会议胶囊': 'Besprechungskapsel automatisch anzeigen',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          'Erscheint beim Minimieren während der Aufnahme und beim Abspielen einer Aufnahme',
         '展开讨论记录': 'Diskussion aufklappen',
         '返回当前会议': 'Zur aktuellen Besprechung',
         '展开字幕与笔记': 'Untertitel und Notizen öffnen',
@@ -8041,9 +8042,9 @@
         '始终显示': 'Всегда показывать',
         '仅窗口隐藏时': 'Только при скрытом окне',
         '桌面录音胶囊': 'Капсула записи',
-        '最小化时自动显示胶囊': 'Показывать капсулу при сворачивании',
-        '录音或暂停时显示；隐藏胶囊不会停止录音':
-          'Показывать при записи или паузе. Скрытие не останавливает запись.',
+        '自动显示会议胶囊': 'Автоматически показывать капсулу встречи',
+        '录音时随主窗口最小化显示，播放录音时自动显示':
+          'Появляется при сворачивании во время записи и при воспроизведении записи',
         '展开讨论记录': 'Развернуть обсуждение',
         '返回当前会议': 'Вернуться к текущей встрече',
         '展开字幕与笔记': 'Открыть субтитры и заметки',

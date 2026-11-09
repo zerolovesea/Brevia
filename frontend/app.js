@@ -9014,6 +9014,7 @@ const updatePlayerControl = () => {
   playButton.innerHTML = interfaceIcon(playing ? 'pause' : 'play');
   playButton.setAttribute('aria-label', t(playing ? '暂停录音' : '播放录音'));
   renderMiniPlayback();
+  scheduleDesktopRecording();
 };
 /** 将音频进度控件格式化为 mm:ss 显示。@returns {void} */
 const renderPlayerTime = () => {
@@ -9083,6 +9084,7 @@ playerAudio.addEventListener('timeupdate', () => {
   renderPlayerTime();
   syncPlaybackTranscript();
   renderMiniPlayback();
+  scheduleDesktopRecording();
 });
 document.querySelector('#playback-floating-caption-toggle')?.addEventListener('click', async () => {
   floatingCaptionMode = nextFloatingCaptionMode('playback');
@@ -11908,6 +11910,46 @@ function confirmQuitRecording() {
   });
 }
 function desktopRecordingSnapshot() {
+  const playback =
+    !meetingActive &&
+    playbackStarted &&
+    playerAudio.src &&
+    !playerAudio.ended &&
+    currentMeetingDetail;
+  if (playback) {
+    const segment = uiData.detail.transcript.find(
+      (item) =>
+        playerAudio.currentTime >= item.startSeconds && playerAudio.currentTime < item.endSeconds,
+    );
+    return {
+      ready: Boolean(breviaClient?.state.initialized && desktopPreferences),
+      meetingId: playback.id,
+      title: playback.title,
+      phase: playerAudio.paused ? 'playback-paused' : 'playing',
+      elapsed: Math.max(0, Math.floor(playerAudio.currentTime)),
+      level: 0,
+      input: t('播放录音'),
+      canPause: true,
+      locale,
+      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+      captions: segment
+        ? [
+            {
+              id: String(segment.speaker?.segmentId || segment.startSeconds),
+              time: segment.time || '',
+              text: (segment.text || '').slice(0, 20000),
+              translation: (segment.translation || '').slice(0, 20000),
+              draft: false,
+            },
+          ]
+        : [],
+      notes: (uiData.detail.notes || '').slice(0, 200000),
+      suggestion: null,
+      aiEnabled: false,
+      aiBusy: false,
+      error: '',
+    };
+  }
   const meeting = meetingActive ? breviaClient?.state.meeting : null;
   const stopping = document.querySelector('#end-meeting').getAttribute('aria-busy') === 'true';
   const phase = meetingActive
@@ -11961,6 +12003,7 @@ function desktopRecordingSnapshot() {
 }
 function publishDesktopRecording() {
   clearTimeout(desktopPublishTimer);
+  desktopPublishTimer = null;
   const state = desktopRecordingSnapshot();
   if (window.brevia?.desktop)
     void window.brevia.desktop
@@ -12084,6 +12127,16 @@ if (window.brevia?.desktop) {
     async ({ action, requestId, suggestionId, tab, meetingId, background, recording }) => {
       let error, result;
       try {
+        if (['playback-pause', 'playback-stop'].includes(action)) {
+          if (meetingActive || !playbackStarted || currentMeetingDetail?.id !== meetingId)
+            throw new Error(t('操作未完成，请在主窗口查看'));
+          if (action === 'playback-stop') miniPlaybackClose.click();
+          else {
+            clearSegmentPlayback();
+            if (playerAudio.paused) await playerAudio.play();
+            else playerAudio.pause();
+          }
+        }
         if (action === 'agent-recording') result = await controlAgentRecording(recording);
         if (action === 'agent-devices') result = await breviaClient.listMicrophones();
         if (
@@ -12129,6 +12182,8 @@ if (window.brevia?.desktop) {
             miniMeeting.hidden = true;
             showView('live');
             if (tab === 'notes') liveNotesRoot.scrollIntoView({ block: 'nearest' });
+          } else if (playbackStarted && currentMeetingDetail?.id === meetingId) {
+            showView('detail');
           } else if (desktopSavedMeeting) {
             applyBackendDetail(desktopSavedMeeting);
             showView('detail');

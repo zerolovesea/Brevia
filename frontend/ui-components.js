@@ -692,7 +692,7 @@ function renderDesktopPreferences() {
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}${renderPreferenceRow('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '最小化时自动显示胶囊')}</span>`)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
+  )}${renderPreferenceRow('自动显示会议胶囊', t('录音时随主窗口最小化显示，播放录音时自动显示'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '自动显示会议胶囊')}</span>`)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {

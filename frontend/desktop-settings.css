@@ -2032,10 +2032,10 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   height: 36px;
   gap: 4px;
   padding: 0 6px;
-  border: 1px solid #444442;
+  border: 1px solid var(--color-line);
   border-radius: 20px;
-  color: #faf9f6;
-  background: #20201f;
+  color: var(--color-text);
+  background: var(--color-overlay);
   box-shadow: 0 2px 4px #0002;
   user-select: none;
 }
@@ -2046,7 +2046,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   height: 12px;
   width: 4px;
   flex: none;
-  background: radial-gradient(circle, #91918c 0.7px, transparent 1px) 0 0 / 3px 4px;
+  background: radial-gradient(circle, var(--color-text-subtle) 0.7px, transparent 1px) 0 0 / 3px 4px;
 }
 .pref-capsule-wave,
 .pref-capsule-pause,
@@ -2065,7 +2065,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   gap: 1px;
   width: 24px;
   height: 24px;
-  background: #383836;
+  background: var(--color-selected);
 }
 .pref-capsule .interface-icon {
   flex: none;
@@ -2105,7 +2105,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #d2d2cc;
+  color: var(--color-text-muted);
   font-size: 8px;
   line-height: 10px;
   font-weight: 500;
@@ -2117,16 +2117,16 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   height: 3px;
   margin-right: 2px;
   border-radius: 50%;
-  background: #ff8f83;
+  background: var(--color-danger);
   vertical-align: middle;
 }
 .pref-capsule-pause {
-  background: #f4f3ed;
-  color: #1b1b1a;
+  background: var(--color-text);
+  color: var(--color-text-inverse);
 }
 .pref-capsule-stop {
-  color: #ffa79b;
-  background: #3e3432;
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-overlay));
 }
 .pref-capsule-stop svg rect {
   fill: currentColor;

@@ -1326,6 +1326,8 @@ function registerIpc() {
       .object({
         action: z.enum([
           'return',
+          'playback-pause',
+          'playback-stop',
           'pause',
           'stop',
           'mark',
