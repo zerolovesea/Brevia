@@ -808,9 +808,6 @@
   .capture-mode-select .flow-select-options button {
     @apply grid gap-0.5;
   }
-  .capture-mode-select.opens-upward .flow-select-options {
-    @apply top-auto bottom-full;
-  }
   .capture-mode-select .flow-select-options b {
     @apply font-medium text-black;
   }

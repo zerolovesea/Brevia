@@ -29,7 +29,7 @@
 
 Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat heruntergeladen.
 
-> Die aktuelle Version nutzt MLX als Inferenz-Backend unter macOS und sherpa-onnx unter Windows. Die macOS-Version bietet derzeit eine höhere Leistung bei geringerem Stromverbrauch, während die Windows-Version weiter optimiert wird. Die Roadmap sieht die Entwicklung einer universellen Inferenz-Engine mit CUDA-Beschleunigung vor.
+> Die aktuelle Version nutzt MLX als Inferenz-Backend unter macOS und sherpa-onnx unter Windows. Die macOS-Version bietet derzeit eine höhere Leistung bei geringerem Stromverbrauch, während die Windows-Version weiter optimiert wird. Die Roadmap sieht die Entwicklung einer universellen Inferenz-Engine mit CUDA-Beschleunigung vor. Die Spracherkennungsbibliothek zeigt MLX-Modelle unter macOS und ONNX-Modelle unter Windows mit ihren ursprünglichen Modellnamen an.
 
 ## Funktionen
 

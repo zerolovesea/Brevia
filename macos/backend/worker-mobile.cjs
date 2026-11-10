@@ -223,6 +223,16 @@ function createMobileHandlers(worker) {
         }
         if (p.action === 'end' && meeting.status === 'ready' && !worker.active) return meeting;
         if (!worker.active) {
+          const prior =
+            worker.models.isKnown(meeting.refined_model_id) &&
+            worker.models.get(meeting.refined_model_id);
+          if (!prior || prior.retired || !modelSupportsLanguage(prior, meeting.language))
+            meeting = store.updateMeeting(meeting.id, {
+              refined_model_id: worker.models.defaultModel(
+                meeting.language,
+                meeting.refined_model_id,
+              ),
+            });
           const manifest = store.readManifest(meeting.id);
           manifest.closed = false;
           store.writeManifest(meeting.id, manifest);

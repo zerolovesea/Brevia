@@ -68,6 +68,18 @@
     return candidates.find((model) => modelSupportsLanguage(model, language || 'auto'))?.id;
   }
 
+  /** 历史偏好跨平台时保留同一模型家族与容量，不让另一平台的 ID 覆盖为语言默认。 */
+  function compatibleRefinedModelId(catalog, modelId, language) {
+    if (typeof modelId !== 'string') return null;
+    const candidates = refinedModelsForLanguage(catalog, language);
+    const family = modelId.replace(/-(mlx|int8)$/, '');
+    return (
+      candidates.find((model) => model.id === modelId)?.id ||
+      candidates.find((model) => model.id.replace(/-(mlx|int8)$/, '') === family)?.id ||
+      null
+    );
+  }
+
   /** 该语言最终用哪个识别模型：用户偏好 → 清单默认 → 首个已安装的同语言模型。
    *
    * 第 ③ 步是必需的：首次准备时用户只装了部分模型，没有它，中文用户第一次开会会被要求
@@ -80,16 +92,8 @@
     const isInstalled = (modelId) => Boolean(installed && installed.has(modelId));
     // ① 用户偏好优先，且**即便尚未安装也照样返回**：偏好只在准备页显式改选时写入，
     // 用「已安装回退」把它盖掉等于静默丢弃用户的选择；用户仍可在下拉里改回去。
-    const preferredModel = preferredId
-      ? (catalog || []).find((model) => model.id === preferredId)
-      : null;
-    if (
-      preferredModel &&
-      !preferredModel.retired &&
-      modelSupportsLanguage(preferredModel, language)
-    ) {
-      return preferredId;
-    }
+    const preferredModel = compatibleRefinedModelId(catalog, preferredId, language);
+    if (preferredModel) return preferredModel;
     // ② 清单声明的默认；没装时才回退到已安装的同语言模型（见函数头注释第 ③ 步）。
     const declared = declaredDefaultModelId(catalog, language) || fallbackId;
     if (!declared) return undefined;
@@ -173,6 +177,7 @@
     DEFAULT_REFINED_PRIORITY,
     LOCALES,
     MULTILINGUAL_MODEL_KINDS,
+    compatibleRefinedModelId,
     declaredDefaultModelId,
     defaultRefinedModelId,
     modelLibraryGroup,

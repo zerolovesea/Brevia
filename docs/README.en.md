@@ -29,7 +29,7 @@
 
 The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **38 MB**. Download the language models you need on first use.
 
-> The current version uses MLX as the inference backend on macOS and sherpa-onnx on Windows. The macOS version currently offers better performance and lower power consumption, while the Windows version continues to be optimized. The roadmap includes a general-purpose inference engine with CUDA acceleration.
+> The current version uses MLX as the inference backend on macOS and sherpa-onnx on Windows. The macOS version currently offers better performance and lower power consumption, while the Windows version continues to be optimized. The roadmap includes a general-purpose inference engine with CUDA acceleration. The speech recognition library shows MLX models on macOS and ONNX models on Windows, using their original model names.
 
 ## From conversation to minutes
 
@@ -90,7 +90,7 @@ No account required. Recordings and meetings stay on your devices. Local models 
 
 - **Desktop** uses Tauri and Rust with the built-in WebKit on macOS and WebView2 on Windows. Meeting records are stored locally in SQLite.
 - **Mobile** uses Flutter to share the recording and pairing interface across iOS and Android.
-- **Local AI** uses sherpa-onnx to identify speakers and llama.cpp to generate meeting summaries. On Apple Silicon Macs, Brevia uses MLX to run the FunASR Nano, Qwen3-ASR and Parakeet transcription models.
+- **Local AI** uses sherpa-onnx to identify speakers and llama.cpp to generate meeting summaries. On Apple Silicon Macs, Brevia uses MLX to run the Fun-ASR-Nano, Qwen3-ASR and Parakeet transcription models.
 
 ## Contribute
 

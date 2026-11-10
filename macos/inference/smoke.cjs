@@ -5,10 +5,14 @@ const os = require('node:os');
 const path = require('node:path');
 const { EngineClient } = require('../backend/engine.cjs');
 
-function smokeModelIds() {
+function smokeModelIds(platform = process.platform) {
   const asr =
     process.env.BREVIA_TEST_MODEL ||
-    (process.env.BREVIA_TEST_MLX ? 'qwen3-asr-0.6b-mlx' : 'funasr-nano-int8');
+    (process.env.BREVIA_TEST_MLX
+      ? 'qwen3-asr-0.6b-mlx'
+      : platform === 'darwin'
+        ? 'funasr-nano-mlx'
+        : 'funasr-nano-int8');
   return process.env.BREVIA_TEST_MLX
     ? [asr]
     : [
@@ -54,10 +58,10 @@ async function main() {
   }
   assert.ok(audio);
   const pcm = audio.subarray(0, 16000 * 2 * 10).toString('base64');
+  const mlx = lookup(modelID).runtime === 'mlx-audio';
   const binary =
-    (process.env.BREVIA_TEST_MLX ? 'brevia-mlx' : 'brevia-inference') +
-    (process.platform === 'win32' ? '.exe' : '');
-  const engine = new EngineClient(path.join(engines, binary));
+    (mlx ? 'brevia-mlx' : 'brevia-inference') + (process.platform === 'win32' ? '.exe' : '');
+  let engine = new EngineClient(path.join(engines, binary));
   const signal = AbortSignal.timeout(300000);
   const call = (type, payload) => engine.request(type, payload, { signal });
   try {
@@ -72,9 +76,7 @@ async function main() {
     });
     assert.equal(
       loaded.max_speech_seconds,
-      process.env.BREVIA_TEST_MLX
-        ? 20
-        : { qwen3: 50, 'funasr-nano': 22, whisper: 30 }[asr.kind] || 20,
+      mlx ? 20 : { qwen3: 50, 'funasr-nano': 22, whisper: 30 }[asr.kind] || 20,
     );
     const result = await call('asr.decode', { pcm, sample_rate: 16000 });
     assert.ok(result.text.length > 3, result.text);
@@ -88,7 +90,13 @@ async function main() {
       assert.ok(result.words.every((word) => word.end_ms <= 10000));
       console.log('Word alignment', result.words.length, result.words[0]);
     }
+    await assert.rejects(call('asr.decode', { pcm: '*', sample_rate: 16000 }), /PCM/);
     if (process.env.BREVIA_TEST_MLX) return;
+    // macOS 的识别走 MLX，分段、声纹和 GGUF 仍由 C++ 引擎验收。
+    if (mlx) {
+      engine.close();
+      engine = new EngineClient(path.join(engines, 'brevia-inference'));
+    }
     const vad = lookup('silero-vad');
     await call('vad.load', { path: path.join(vad.path, vad.files[0]) });
     const parts = await call('vad.feed', { pcm });
@@ -167,7 +175,6 @@ async function main() {
       'Native VAD, speaker embedding, diarization and GGUF translation passed.',
       translation.text,
     );
-    await assert.rejects(call('asr.decode', { pcm: '*', sample_rate: 16000 }), /PCM/);
   } finally {
     engine.close();
   }

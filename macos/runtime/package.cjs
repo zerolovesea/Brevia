@@ -348,12 +348,21 @@ async function main() {
     sign(app, 'host-entitlements.plist');
     run('codesign', ['--verify', '--deep', '--strict', app]);
     // Hardened Runtime 对 dylib 名称与签名的检查比 ad-hoc 严格，必须启动成品验证。
-    for (const engine of ['brevia-inference', 'brevia-mlx'])
-      run(path.join(resources, 'engines', engine), [], {
-        input: '',
+    run(path.join(resources, 'engines/brevia-inference'), [], {
+      input: '',
+      stdio: 'pipe',
+      timeout: 30000,
+    });
+    const mlxCheck = JSON.parse(
+      run(path.join(resources, 'engines/brevia-mlx'), [], {
+        cwd: stage,
+        input: JSON.stringify({ id: 1, type: 'engine.check', payload: {} }) + '\n',
         stdio: 'pipe',
         timeout: 30000,
-      });
+      }),
+    );
+    if (!mlxCheck.ok || mlxCheck.result?.value !== 5)
+      throw new Error('Packaged MLX computation check failed');
     run('node', ['macos/test-packaged-control.cjs', app]);
     notarize(app);
     if (process.argv[2] === 'app') {

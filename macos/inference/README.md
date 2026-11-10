@@ -5,7 +5,7 @@
 - `brevia-inference`：sherpa-onnx 的 ONNX 转写、Silero VAD、ERes2Net 声纹、Pyannote 分段，以及 llama.cpp 的 GGUF 对话和翻译。miniaudio + stb_vorbis 为系统解码器补充旧版 macOS 的 Ogg/Vorbis 支持；官方 libogg、libopus、libopusfile 静态链接提供 Ogg/Opus，未启用 HTTP、编码工具或神经网络扩展。Opus 中间输出固定为双声道，再交给 miniaudio 转换目标格式，避免串联 Ogg 切换声道导致缓冲区格式不一致。
 - `brevia-mlx`（仅 macOS）：Swift MLX 的 FunASR Nano、Qwen3 ASR、Parakeet、FireRedASR2 和 Whisper；直接使用现有本地 MLX 权重目录。
 
-依赖版本固定，原生归档校验 SHA256，Swift 依赖由 `Package.resolved` 固定。构建仅将完整的新目录替换到输出位置，避免残留旧运行组件。原生库只使用系统路径或同目录相对路径；依赖名统一为符号链接指向的实体文件名，以满足 Hardened Runtime 的库名校验。Swift 兼容库与 Metal 资源一并复制。
+依赖版本固定，原生归档校验 SHA256，Swift 依赖由 `Package.resolved` 固定。MLX 通过 `xcodebuild` 编译执行文件及 Metal 着色器，构建时检查 `mlx-swift_Cmlx.bundle` 内的 `default.metallib`；普通 `swift build` 不能替代此步骤。构建仅将完整的新目录替换到输出位置，避免残留旧运行组件。原生库只使用系统路径或同目录相对路径；依赖名统一为符号链接指向的实体文件名，以满足 Hardened Runtime 的库名校验。Swift 兼容库与 Metal 资源一并复制。打包签名后从隔离工作目录调用 MLX 专用的 `engine.check`（空 payload，返回 `value: 5`），执行真实 GPU 加法与求和，资源缺失或运算失败即阻止交付。
 
 ## 子进程协议
 

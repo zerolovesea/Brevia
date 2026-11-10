@@ -164,6 +164,52 @@ test('Lost phone chunk responses replay safely, including partial overlap and st
     24000,
   );
 });
+test('Phone chunks resume a legacy meeting with a model supported on this platform', async (t) => {
+  const { w, events } = await setup(t);
+  const foreign = process.platform === 'darwin' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
+  const expected = process.platform === 'darwin' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
+  w.store.createMeeting({
+    meeting_id: 'legacy-mobile',
+    title: 'Phone',
+    language: 'zh',
+    refined_model_id: foreign,
+  });
+  assert.deepEqual(
+    await w.handlers['mobile.apply']({
+      action: 'chunk',
+      meeting_id: 'legacy-mobile',
+      start_sample: 0,
+      pcm: Buffer.alloc(32000, 4).toString('base64'),
+    }),
+    { samples: 16000 },
+  );
+  assert.ok(w.session.recognition);
+  assert.equal(w.store.getMeeting('legacy-mobile').refined_model_id, expected);
+  const saved = await w.handlers['mobile.apply']({
+    action: 'end',
+    meeting_id: 'legacy-mobile',
+    samples: 16000,
+  });
+  assert.equal(saved.duration_ms, 1000);
+  assert.equal(events.filter((event) => event.payload?.code === 'asr_unavailable').length, 0);
+});
+test('Desktop resume and refinement preserve the model family across platforms', async (t) => {
+  const { w } = await setup(t);
+  const foreign = process.platform === 'darwin' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
+  const expected = process.platform === 'darwin' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
+  w.store.createMeeting({
+    meeting_id: 'legacy-qwen',
+    title: 'Meeting',
+    language: 'zh',
+    refined_model_id: foreign,
+  });
+  const resumed = await w.handlers['meeting.resume']({ meeting_id: 'legacy-qwen' });
+  assert.equal(resumed.refined_model_id, expected);
+  await audio(w, resumed.id, Buffer.alloc(32000, 4));
+  await w.handlers['meeting.stop']({ meeting_id: resumed.id, duration_ms: 1000 });
+  await w.handlers['meeting.refine']({ meeting_id: resumed.id, refined_model_id: foreign });
+  assert.equal(w.store.getMeeting(resumed.id).refined_model_id, expected);
+});
 test('Phone note proposals use optimistic updates and preserve pending conflicts', async (t) => {
   const { w } = await setup(t);
   await start(w);

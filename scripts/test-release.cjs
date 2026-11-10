@@ -15,6 +15,16 @@ test('desktop package, release notes and current bilingual changelog agree', () 
   const [current, previous] = window.BreviaChangelog;
   assert.equal(current.version, version);
   assert.equal(current.previousVersion, previous.version);
+  const cargo = fs.readFileSync(path.join(root, 'macos/host/Cargo.toml'), 'utf8');
+  assert.equal(cargo.match(/^version = "([^"]+)"/m)?.[1], version);
+  const lock = fs.readFileSync(path.join(root, 'macos/host/Cargo.lock'), 'utf8');
+  assert.equal(lock.match(/name = "brevia-host"\nversion = "([^"]+)"/)?.[1], version);
+  const plist = fs.readFileSync(path.join(root, 'macos/host/Info.plist'), 'utf8');
+  for (const key of ['CFBundleVersion', 'CFBundleShortVersionString'])
+    assert.equal(
+      plist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`))?.[1],
+      version,
+    );
   const notes = fs.readFileSync(path.join(root, 'docs/releases', 'v' + version + '.md'), 'utf8');
   for (const locale of ['zh', 'en']) assert.ok(notes.includes(current[locale].summary));
   if (process.env.GITHUB_REF_TYPE === 'tag')
@@ -147,5 +157,31 @@ test('native notarization rejects failed Apple submissions and staples only acce
       status === 'Accepted' ? 2 : 0,
     );
     assert.equal(calls[0][0], 'ditto');
+  }
+});
+
+test('native smoke defaults to the platform ASR and retains shared model checks', () => {
+  const script = fs.readFileSync(path.join(root, 'macos/inference/smoke.cjs'), 'utf8');
+  for (const platform of ['darwin', 'win32']) {
+    const module = { exports: {} };
+    const env = {};
+    runInNewContext(script, {
+      require: (id) =>
+        id === '../backend/engine.cjs' ? require('../macos/backend/engine.cjs') : require(id),
+      process: { platform, env },
+      module,
+    });
+    const ids = () => Array.from(module.exports.smokeModelIds());
+    assert.deepEqual(ids(), [
+      platform === 'darwin' ? 'funasr-nano-mlx' : 'funasr-nano-int8',
+      'silero-vad',
+      'eres2net-base-3dspeaker-zh',
+      'pyannote-segmentation-3.0',
+      'hy-mt2-1.8b-q4km',
+    ]);
+    env.BREVIA_TEST_MLX = '1';
+    assert.deepEqual(ids(), ['qwen3-asr-0.6b-mlx']);
+    env.BREVIA_TEST_MODEL = 'parakeet-tdt-0.6b-v3-mlx';
+    assert.deepEqual(ids(), ['parakeet-tdt-0.6b-v3-mlx']);
   }
 });

@@ -220,13 +220,21 @@ class ModelManager {
   missing(ids) {
     return [...new Set(ids.filter((id) => id && !this.isReady(id)))];
   }
-  defaultModel(language) {
+  defaultModel(language, previousId) {
     const candidates = [...this.catalog.values()]
       .filter(
         (m) => m.capabilities.transcription && !m.retired && modelSupportsLanguage(m, language),
       )
       .sort((a, b) => (a.refined_priority ?? 99) - (b.refined_priority ?? 99));
     const declared = candidates.find((m) => m.default_for_languages?.includes(language));
+    // 跨平台恢复保留同名模型偏好，缺权重仍走安装提示，不静默改成另一个模型。
+    const previous = !this.isKnown(previousId) && this.all.find((m) => m.id === previousId);
+    const counterpart =
+      previous &&
+      candidates.find(
+        (m) => m.id.replace(/-(?:mlx|int8)$/, '') === previous.id.replace(/-(?:mlx|int8)$/, ''),
+      );
+    if (counterpart) return counterpart.id;
     return (
       declared && this.isReady(declared.id)
         ? declared

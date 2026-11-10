@@ -420,7 +420,7 @@ function createRefinementHandlers(worker) {
       (!('refined_model_id' in payload) &&
         (!worker.models.isReady(modelId) || !modelSupportsLanguage(model, language)))
     )
-      modelId = worker.models.defaultModel(language);
+      modelId = worker.models.defaultModel(language, modelId);
     worker.sentencePayload({ language, refined_model_id: modelId });
     meeting = { ...meeting, language, refined_model_id: modelId };
     model = worker.models.get(modelId);
