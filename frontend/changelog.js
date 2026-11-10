@@ -2,9 +2,83 @@
 (() => {
   const releases = [
     {
+      'version': '2.0.3',
+      'date': '2026-11-10',
+      'current': true,
+      'previousVersion': '2.0.2',
+      'contributors': [],
+      'zh': {
+        'summary': '修复 macOS 识别模型加载失败，模型库按平台展示，并在录制来源下标明适用场景。',
+        'what': [
+          {
+            'text':
+              '新建会议时，在麦克风、系统音频、双轨和手机麦克风下方查看适用场景，便于选择网课、播客、线上或线下会议的录制来源。',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'macOS 的识别模型库仅提供 MLX，Windows 提供 ONNX。模型统一显示原名称，保留已有录音、逐字稿和模型文件。',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              '修复 macOS 安装包缺少 Metal 计算资源，导致部分模型无法生成实时字幕或会后逐字稿的问题。',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+          {
+            'text':
+              '从历史会议快速录音、恢复手机录音或重新精修时，优先保留同家族、同容量的本机模型，避免把原来的 Qwen 选择改成默认模型。',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+          {
+            'text': '快捷开会重新校验模型的语言和识别能力，旧配置中的退役模型不再被重新启用。',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Fix speech model loading on macOS, show models for each platform, and add recording-source guidance.',
+        'what': [
+          {
+            'text':
+              'See suggested uses below each recording source to choose how to record classes, podcasts, online meetings or in-person conversations.',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'The speech model library offers MLX on macOS and ONNX on Windows, using original model names. Existing recordings, transcripts and model files are preserved.',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Fixed missing Metal resources in the macOS app package that prevented some models from producing live captions or post-meeting transcripts.',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+          {
+            'text':
+              'Quick recording, phone recording recovery and transcript refinement preserve the matching local model family and size instead of replacing a previous Qwen choice with the default model.',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+          {
+            'text':
+              'Quick recording validates the model’s language and transcription support. Retired models saved in older configurations are no longer reactivated.',
+            'commit': '9fcdae4ce459f42460cc3ca85db04d54a42a4543',
+          },
+        ],
+      },
+    },
+    {
       'version': '2.0.2',
       'date': '2026-11-09',
-      'current': true,
       'previousVersion': '2.0.1',
       'contributors': [],
       'zh': {
