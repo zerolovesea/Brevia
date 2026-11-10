@@ -180,16 +180,6 @@ assert.match(
 );
 assert.match(
   text(tailwind),
-  /\.capture-mode-select\.opens-upward \.flow-select-options/,
-  'capture mode menu opens upward when it would overflow',
-);
-assert.match(
-  text(app),
-  /options\.getBoundingClientRect\(\)\.bottom > window\.innerHeight/,
-  'capture mode menu checks available viewport space',
-);
-assert.match(
-  text(tailwind),
   /\.live-caption-controls\s+\{\s+@apply\s+flex\s+flex-wrap\s+items-center\s+gap-2;\s+\}/,
   'live controls fit the floating bar',
 );
@@ -2465,6 +2455,9 @@ assert.match(
   /aria-checked="true" data-flow-select-choice="capture-mode" data-value="both"/,
 );
 assert.doesNotMatch(defaultSource, /data-value="auto"|data-capture-phone/);
+assert.equal((defaultSource.match(/class="compose-source-scene"/g) || []).length, 4);
+for (const scene of ['线下会议 · 口述', '网课 · 播客', '线上会议', '线下会议 · 访谈'])
+  assert.ok(defaultSource.includes(`<small class="compose-source-scene">${scene}</small>`));
 for (const hint of [
   '适合面对面交流、个人口述',
   '适合网课、视频和电脑播放的音频',
@@ -3476,6 +3469,37 @@ assert.equal(
   }),
   'multi',
   '已退役模型不接受的偏好必须回落到清单默认/已安装模型',
+);
+
+const platformPreferenceCatalog = [
+  {
+    id: 'funasr-nano-mlx',
+    stages: ['refined'],
+    kind: 'funasr-nano',
+    languages: ['zh'],
+    default_for_languages: ['zh'],
+  },
+  { id: 'qwen3-asr-0.6b-mlx', stages: ['refined'], kind: 'qwen3', languages: ['zh'] },
+];
+assert.equal(
+  MS.defaultRefinedModelId({
+    catalog: platformPreferenceCatalog,
+    language: 'zh',
+    installed: new Set(['funasr-nano-mlx']),
+    preferredId: 'qwen3-asr-0.6b-int8',
+  }),
+  'qwen3-asr-0.6b-mlx',
+  '偏好从另一平台迁移后仍保留家族，即便需要下载',
+);
+assert.equal(
+  MS.compatibleRefinedModelId(platformPreferenceCatalog, 'qwen3-asr-1.7b-int8', 'zh'),
+  null,
+  '不同容量不能当作同一模型迁移',
+);
+assert.equal(
+  MS.compatibleRefinedModelId(platformPreferenceCatalog, 'funasr-nano-int8', 'auto'),
+  null,
+  '不支持混说的家族不能用于auto会议',
 );
 
 // 下拉选项：未安装的带体积，推荐角标只给声明的默认。
@@ -5617,9 +5641,14 @@ const quickContext = {
         ? quickError
         : quickInputs.get(selector.match(/name="([^"]+)"/)[1]),
   },
-  modelCatalog: [{ id: 'translation-model', stages: ['translation'] }],
+  modelCatalog: [
+    { id: 'last-model', stages: ['refined'], kind: 'funasr-nano', languages: ['zh'] },
+    { id: 'mixed-model', stages: ['refined'], kind: 'qwen3', languages: ['zh', 'en'] },
+    { id: 'translation-model', stages: ['translation'] },
+  ],
   modelPaths: new Set(['last-model', 'last-vad', 'translation-model', 'mixed-model', 'silero-vad']),
   defaultRefinedModelId: () => 'mixed-model',
+  modelSelection: MS,
   preferredModelsForLanguage: () => ({ segmentation: 'default-segmentation' }),
   startConfiguredRecording: async (payload, mode) =>
     quickStarts.push({ payload: JSON.parse(JSON.stringify(payload)), mode }),
@@ -5673,6 +5702,47 @@ quickContext.window.brevia.desktop = { show: async () => backgroundPreparationSh
 await quickContext.startQuickRecording({ background: true });
 assert.equal(backgroundPreparationShown, 1, '后台缺模型时显示主窗口处理准备配置');
 assert.equal(quickStarts.length, 2, '显示准备页不能启动第二套采集');
+quickContext.modelCatalog = quickContext.modelCatalog.filter((model) => model.id !== 'last-model');
+quickContext.window.brevia.nativeAudio = {};
+await quickContext.startQuickRecording({ background: true });
+assert.equal(
+  quickStarts.pop().payload.refined_model_id,
+  'mixed-model',
+  '历史会议的另一平台模型不进入快速启动',
+);
+quickContext.modelCatalog.push({
+  id: 'last-model',
+  stages: ['refined'],
+  kind: 'funasr-nano',
+  languages: ['zh'],
+});
+previousMeetings = [{ ...previousMeeting, language: 'auto' }];
+await quickContext.startQuickRecording();
+assert.equal(
+  quickStarts.pop().payload.refined_model_id,
+  'mixed-model',
+  '快速启动不沿用无法混说的历史模型',
+);
+previousMeetings = [{ ...previousMeeting, refined_model_id: 'translation-model' }];
+await quickContext.startQuickRecording();
+assert.equal(
+  quickStarts.pop().payload.refined_model_id,
+  'mixed-model',
+  '历史配置中的非识别模型不进入快速启动',
+);
+quickContext.modelCatalog.push({
+  id: 'qwen3-asr-0.6b-mlx',
+  stages: ['refined'],
+  kind: 'qwen3',
+  languages: ['zh'],
+});
+previousMeetings = [{ ...previousMeeting, refined_model_id: 'qwen3-asr-0.6b-int8' }];
+await quickContext.startQuickRecording();
+assert.equal(
+  quickStarts.pop().payload.refined_model_id,
+  'qwen3-asr-0.6b-mlx',
+  '跨平台快速启动保留历史Qwen家族',
+);
 quickContext.window.brevia.meeting.list = async () => {
   throw new Error('database unavailable');
 };

@@ -76,7 +76,7 @@ const start = (worker) =>
     meeting_id: 'early',
     title: 'Early captions',
     language: 'zh',
-    refined_model_id: 'funasr-nano-int8',
+    refined_model_id: worker.models.defaultModel('zh'),
     audio_tracks: ['mic'],
   });
 async function audio(worker, start, duration) {
@@ -132,7 +132,7 @@ test('Pending tails use the language VAD cap and wait at least six seconds', asy
     worker.settings.vad.zh = { ...worker.settings.vad.default, max_speech_duration: cap };
     const recognition = await worker.loadRecognition({
       language: 'zh',
-      refined_model_id: 'funasr-nano-int8',
+      refined_model_id: worker.models.defaultModel('zh'),
     });
     assert.equal(recognition.maximum, cap);
     assert.equal(recognition.tailHoldMs, hold);
@@ -267,7 +267,7 @@ test('Refinement reuses one speaker engine across windows and closes it afterwar
   worker.settings.refinement.diarization_chunk_ms = 2000;
   await worker.handlers['meeting.refine']({
     meeting_id: 'early',
-    refined_model_id: 'funasr-nano-int8',
+    refined_model_id: worker.models.defaultModel('zh'),
   });
   const speakers = engines.filter((e) => e.calls.includes('speaker.diarize'));
   assert.equal(speakers.length, 1);
@@ -338,7 +338,7 @@ test('Cancelling speaker analysis releases the shared engine and preserves the l
   };
   const pending = worker.handlers['meeting.refine']({
     meeting_id: 'early',
-    refined_model_id: 'funasr-nano-int8',
+    refined_model_id: worker.models.defaultModel('zh'),
   });
   await ready;
   worker.handlers['task.cancel']({ task: 'meeting.refine', meeting_id: 'early' });

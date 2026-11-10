@@ -1474,13 +1474,13 @@ function captureModeInputs(mode = currentCaptureMode) {
 }
 function captureModeSelect(value) {
   const options = [
-    ['mic', t('麦克风'), t('适合面对面交流、个人口述')],
-    ['system', t('系统音频'), t('适合网课、视频和电脑播放的音频')],
-    ['both', t('麦克风 + 系统音频'), t('适合线上会议，同时收录双方声音')],
-    ['phone', t('手机麦克风'), t('适合线下会议，用手机近距离收音')],
+    ['mic', t('麦克风'), t('适合面对面交流、个人口述'), t('线下会议 · 口述')],
+    ['system', t('系统音频'), t('适合网课、视频和电脑播放的音频'), t('网课 · 播客')],
+    ['both', t('麦克风 + 系统音频'), t('适合线上会议，同时收录双方声音'), t('线上会议')],
+    ['phone', t('手机麦克风'), t('适合线下会议，用手机近距离收音'), t('线下会议 · 访谈')],
   ];
   const selected = options.find(([mode]) => mode === value) || options[2];
-  return `<div class="flow-select capture-mode-select compose-source-switch"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false" hidden>${escapeHtml(selected[1])}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="capture-mode" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" role="radiogroup" aria-label="${escapeHtml(t('录制来源'))}">${options.map(([mode, label, scene]) => `<button type="button" role="radio" aria-checked="${mode === selected[0]}" data-flow-select-choice="capture-mode" data-value="${mode}" data-label="${escapeHtml(label)}" title="${escapeHtml(scene)}">${interfaceIcon(mode === 'phone' ? 'phone' : mode === 'mic' ? 'microphone' : mode === 'system' ? 'appearance' : 'waveform')}<span>${escapeHtml(label)}</span></button>`).join('')}</div></div>`;
+  return `<div class="flow-select capture-mode-select compose-source-switch"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false" hidden>${escapeHtml(selected[1])}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="capture-mode" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" role="radiogroup" aria-label="${escapeHtml(t('录制来源'))}">${options.map(([mode, label, scene, tag]) => `<button type="button" role="radio" aria-checked="${mode === selected[0]}" data-flow-select-choice="capture-mode" data-value="${mode}" data-label="${escapeHtml(label)}" title="${escapeHtml(scene)}"><span class="compose-source-label">${interfaceIcon(mode === 'phone' ? 'phone' : mode === 'mic' ? 'microphone' : mode === 'system' ? 'appearance' : 'waveform')}<span>${escapeHtml(label)}</span></span><small class="compose-source-scene">${escapeHtml(tag)}</small></button>`).join('')}</div></div>`;
 }
 function renderPhoneDeviceOptions() {
   const mount = prepareForm.querySelector('#phone-device-mount');
@@ -1636,8 +1636,7 @@ function rememberPreferredModel(modelId, language) {
 function preferredModelForLanguage(language) {
   const modelId = preferredModelMap()[language];
   if (!modelId) return null;
-  const model = modelCatalog.find((item) => item.id === modelId);
-  return model && modelSupportsLanguage(model, language || 'auto') ? modelId : null;
+  return modelSelection.compatibleRefinedModelId(modelCatalog, modelId, language || 'auto');
 }
 function applyLanguageModelDefaults(language) {
   const models = preferredModelsForLanguage(language);
@@ -2595,7 +2594,6 @@ prepareForm.addEventListener('click', (event) => {
   if (toggle) {
     const options = toggle.parentElement.querySelector('.flow-select-options');
     const opening = options.hidden;
-    const captureMode = toggle.closest('.capture-mode-select');
     // 打开麦克风设备下拉前刷新设备列表(插拔后保持最新),就地更新不会打断展开状态。
     if (opening && toggle.closest('#mic-device-mount')) void refreshMicDevices();
     prepareForm.querySelectorAll('.flow-select-options').forEach((list) => {
@@ -2604,11 +2602,8 @@ prepareForm.addEventListener('click', (event) => {
       list.hidden = true;
       trigger.setAttribute('aria-expanded', 'false');
     });
-    captureMode?.classList.remove('opens-upward');
     options.hidden = !opening;
     fitFlowSelectOptions(options, toggle);
-    if (opening && captureMode && options.getBoundingClientRect().bottom > window.innerHeight)
-      captureMode.classList.add('opens-upward');
     toggle.setAttribute('aria-expanded', String(opening));
     return;
   }
@@ -12013,7 +12008,9 @@ async function startQuickRecording({ background = false } = {}) {
       language,
       num_speakers: saved?.num_speakers ?? -1,
       target_language: saved?.target_language || null,
-      refined_model_id: saved?.refined_model_id || defaultRefinedModelId(language),
+      refined_model_id:
+        modelSelection.compatibleRefinedModelId(modelCatalog, saved?.refined_model_id, language) ||
+        defaultRefinedModelId(language),
       speaker_segmentation_model_id:
         saved?.speaker_segmentation_model_id || preferredModelsForLanguage(language).segmentation,
       vad_model_id: saved?.vad_model_id || 'silero-vad',

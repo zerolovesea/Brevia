@@ -29,7 +29,7 @@
 
 Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo sur Windows. Les modèles de langue se téléchargent séparément.
 
-> La version actuelle utilise MLX comme moteur d’inférence sur macOS et sherpa-onnx sous Windows. La version macOS offre actuellement de meilleures performances et une consommation énergétique plus faible, tandis que la version Windows continue d’être optimisée. La feuille de route prévoit la conception d’un moteur d’inférence généraliste avec accélération CUDA.
+> La version actuelle utilise MLX comme moteur d’inférence sur macOS et sherpa-onnx sous Windows. La version macOS offre actuellement de meilleures performances et une consommation énergétique plus faible, tandis que la version Windows continue d’être optimisée. La feuille de route prévoit la conception d’un moteur d’inférence généraliste avec accélération CUDA. La bibliothèque de reconnaissance vocale affiche les modèles MLX sur macOS et ONNX sous Windows, avec leurs noms d’origine.
 
 ## Fonctionnalités
 

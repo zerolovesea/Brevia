@@ -29,7 +29,7 @@
 
 Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次使用时，按需要下载语言模型。
 
-> 当前版本 macOS 使用 MLX 作为推理后端，Windows 使用 sherpa-onnx。macOS 版目前在性能和功耗表现上更好，Windows 版持续优化中。路线图计划设计通用推理引擎，并为 CUDA 提供加速推理。
+> 当前版本 macOS 使用 MLX 作为推理后端，Windows 使用 sherpa-onnx。macOS 版目前在性能和功耗表现上更好，Windows 版持续优化中。路线图计划设计通用推理引擎，并为 CUDA 提供加速推理。 语音识别模型库按系统提供模型：macOS 仅显示 MLX，Windows 仅显示 ONNX；模型使用原名称显示。
 
 ## 从录音到会议纪要
 
@@ -90,7 +90,7 @@ brevia task.get '{"task_id":"123e4567-e89b-42d3-a456-426614174000"}'
 
 - **桌面端**用 Tauri 和 Rust 构建，借助系统自带的 WebKit（macOS）或 WebView2（Windows）显示界面。会议记录存储在本地 SQLite 数据库中。
 - **手机端**用 Flutter 开发，iOS 和 Android 共用一套录音与配对界面。
-- **本地 AI** 使用 sherpa-onnx 识别说话人，使用 llama.cpp 生成会议纪要。在 Apple Silicon Mac 上，Brevia 使用 MLX 运行 FunASR Nano、Qwen3-ASR 和 Parakeet 转写模型。
+- **本地 AI** 使用 sherpa-onnx 识别说话人，使用 llama.cpp 生成会议纪要。在 Apple Silicon Mac 上，Brevia 使用 MLX 运行 Fun-ASR-Nano、Qwen3-ASR 和 Parakeet 转写模型。
 
 ## 参与项目
 

@@ -90,8 +90,13 @@ fi
 if ! grep -q 'public let initialPrompt:' macos/inference/.build/checkouts/mlx-audio-swift/Sources/MLXAudioSTT/Generation.swift; then
   patch -p1 -d macos/inference/.build/checkouts/mlx-audio-swift < macos/inference/mlx-whisper-prompt.patch
 fi
-swift build --package-path macos/inference -c release
-swift_output=$(swift build --package-path macos/inference -c release --show-bin-path)
+# SwiftPM 命令行构建不会编译 Metal 着色器，必须连同 MLX 资源一起由 Xcode 构建。
+(
+  cd macos/inference
+  xcodebuild -scheme BreviaInference -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/xcode -clonedSourcePackagesDirPath .build -disableAutomaticPackageResolution MACOSX_DEPLOYMENT_TARGET=14.0 build
+)
+swift_output="$PWD/macos/inference/.build/xcode/Build/Products/Release"
+test -s "$swift_output/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
 cp "$swift_output/brevia-mlx" "$output/"
 find "$swift_output" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$output/" \;
 xcrun swift-stdlib-tool --copy --scan-executable "$output/brevia-mlx" --destination "$output" --platform macosx

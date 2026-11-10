@@ -31,6 +31,11 @@ while let line = readLine() {
     requestID = id
     var result: [String: Any]
     switch command {
+    case "engine.check":
+      // 实际执行 GPU 运算，避免空 stdin 的启动检查漏掉 Metal 资源缺失。
+      let value = (MLXArray([Float(1), Float(2)]) + 1).sum().item(Float.self)
+      guard value == 5 else { throw InputError("MLX computation check failed") }
+      result = ["value": value]
     case "asr.load":
       guard let path = payload["path"] as? String,
         FileManager.default.fileExists(atPath: path + "/config.json")

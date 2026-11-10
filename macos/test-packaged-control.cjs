@@ -112,12 +112,18 @@ done\n`,
     assert.deepEqual(await call('prompts.save', preferences), preferences);
     assert.deepEqual(await call('prompts.get'), preferences);
     await call('prompts.save', promptDefaults);
-    const model = state.models.find((m) => m.id === 'funasr-nano-int8');
+    const model = state.models.find(
+      (m) => m.id === (windows ? 'funasr-nano-int8' : 'funasr-nano-mlx'),
+    );
     assert.equal(model.status, 'not_installed');
     assert.equal(model.runtime_tier, 'core');
     assert.equal(
       state.models.some((m) => m.id === 'funasr-nano-mlx' && m.runtime_tier === 'core'),
       !windows,
+    );
+    assert.equal(
+      state.models.some((m) => m.id === 'funasr-nano-int8'),
+      windows,
     );
     await assert.rejects(call('meeting.delete', {}, 'floating-caption'));
     const config = {

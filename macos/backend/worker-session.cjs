@@ -26,9 +26,17 @@ function attachRecording(worker) {
     return pcm;
   };
   worker.sentencePayload = (payload) => {
-    const language = payload.language || 'auto',
-      id = payload.refined_model_id || worker.models.defaultModel(language),
-      model = worker.models.get(id);
+    const language = payload.language || 'auto';
+    let id = payload.refined_model_id || worker.models.defaultModel(language);
+    const prior = worker.models.isKnown(id) && worker.models.get(id);
+    // 旧会议的退役或另一平台模型使用本机候选；未知 ID 仍交给目录校验拒绝。
+    if (
+      prior?.retired ||
+      (!prior &&
+        worker.models.all.some((model) => model.id === id && model.stages?.includes('refined')))
+    )
+      id = worker.models.defaultModel(language, id);
+    const model = worker.models.get(id);
     if (!model.capabilities.transcription)
       throw new Error('Sentence transcription requires an offline ASR model');
     if (!modelSupportsLanguage(model, language))
@@ -446,7 +454,10 @@ function attachRecording(worker) {
           worker.models.get(meeting.refined_model_id);
         if (!prior || prior.retired || !modelSupportsLanguage(prior, meeting.language))
           meeting = worker.store.updateMeeting(meeting.id, {
-            refined_model_id: worker.models.defaultModel(meeting.language),
+            refined_model_id: worker.models.defaultModel(
+              meeting.language,
+              meeting.refined_model_id,
+            ),
           });
         await worker.prepareRecording(
           meeting,

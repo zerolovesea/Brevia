@@ -34,7 +34,7 @@ Node.js 随应用提供，两端共用同一业务层与 C++ 推理引擎。旧 
 
 ### 接入模型
 
-在 `backend/models.json` 注册稳定 ID、平台、权重来源、校验摘要、`runtime` 与 `backend`。macOS 优先采用带 `macos-webkit` 平台的条目，Windows 使用 `windows` 条目。`models.list` 中全部引擎的 `runtime_tier` 都是 `core`；这个兼容字段不再决定下载运行包。
+在 `backend/models.json` 注册稳定 ID、平台、权重来源、校验摘要、`runtime` 与 `backend`。语音识别模型按平台隔离：macOS 仅提供 MLX，Windows 提供 ONNX；VAD、说话人分段和声纹仍使用共用的原生 ONNX 引擎。macOS 优先采用带 `macos-webkit` 平台的条目，Windows 使用 `windows` 条目。`models.list` 中全部引擎的 `runtime_tier` 都是 `core`；这个兼容字段不再决定下载运行包。
 
 `capabilities` 按能力名称声明 `input` 和 `output`，支持文本生成、转写、翻译、VAD、音源分离、说话人分段和声纹嵌入。原生业务端定义见 `macos/backend/models.cjs`；例如音源分离声明 `"separation": {"input":"audio","output":"audio_tracks"}`。接入新引擎需要实现对应 JSONL 执行命令、取消与资源释放，并加入完整应用构建。权重下载和执行引擎分开管理，既有模型 ID 不因实现语言变化而重命名。当前音源分离仍是扩展契约，尚未提供分离模型。
 

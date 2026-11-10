@@ -202,6 +202,7 @@
 }
 #prepare-view.compose-page .compose-source-switch [role="radio"] {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
@@ -224,6 +225,17 @@
     background 160ms ease,
     box-shadow 160ms ease,
     color 160ms ease;
+}
+#prepare-view.compose-page .compose-source-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+#prepare-view.compose-page .compose-source-switch .compose-source-scene {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
 }
 #prepare-view.compose-page .compose-source-switch [role="radio"]:hover {
   color: var(--color-text);

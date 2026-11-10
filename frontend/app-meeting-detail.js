@@ -128,10 +128,12 @@ function applyBackendDetail(meeting) {
   // 显式改过。只在切换会议时播种选择，后台刷新不得覆盖用户刚改的选择。
   uiData.detail.refinedModelApplied = meeting.transcript_model_id || null;
   if (!sameDetail) {
-    const options = refinedModelOptions(meeting.language || 'auto');
-    uiData.detail.refinedModelId = options.some(([id]) => id === meeting.refined_model_id)
-      ? meeting.refined_model_id
-      : defaultRefinedModelId(meeting.language || 'auto');
+    uiData.detail.refinedModelId =
+      modelSelection.compatibleRefinedModelId(
+        modelCatalog,
+        meeting.refined_model_id,
+        meeting.language || 'auto',
+      ) || defaultRefinedModelId(meeting.language || 'auto');
     uiData.detail.refinedModelPinned = false;
   }
   // 保存后的字幕才可人工修正：录制中的会议仍在写入实时段落，此时不开放编辑入口。

@@ -24,17 +24,25 @@ async function main() {
   for (const id of smokeModelIds()) {
     reported = -1;
     const model = manager.get(id);
-    assert.match(model.archive_sha256 || '', /^[a-f0-9]{64}$/, id + ' needs a pinned checksum');
+    if (model.downloads) {
+      assert.ok(model.downloads.length, id + ' needs verified files');
+      for (const item of model.downloads)
+        assert.match(item.sha256 || '', /^[a-f0-9]{64}$/, id + '/' + item.path);
+    } else
+      assert.match(model.archive_sha256 || '', /^[a-f0-9]{64}$/, id + ' needs a pinned checksum');
     console.log(id, manager.isReady(id) ? 'cached' : 'installing');
     const directory = await manager.install(id, new TaskControl());
     const marker = JSON.parse(fs.readFileSync(path.join(directory, '.brevia.json'), 'utf8'));
     assert.equal(marker.id, id, 'Unexpected smoke model cache');
     assert.equal(marker.revision, model.revision, 'Stale smoke model cache');
-    assert.equal(
-      marker.archive_sha256,
-      model.archive_sha256,
-      'Unverified smoke model cache: remove ' + directory + ' and retry',
-    );
+    if (model.downloads)
+      assert.deepEqual(marker.downloads, model.downloads, 'Stale smoke model file checksums');
+    else
+      assert.equal(
+        marker.archive_sha256,
+        model.archive_sha256,
+        'Unverified smoke model cache: remove ' + directory + ' and retry',
+      );
   }
   console.log('Native smoke models ready:', root);
 }
