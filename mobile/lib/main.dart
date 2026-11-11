@@ -1984,34 +1984,38 @@ class _MeetingPageState extends State<MeetingPage> {
           final body = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  alignment: Alignment.centerLeft,
-                  minimumSize: Size(48, ended ? 40 : 28),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant,
-                  disabledForegroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant,
-                ),
-                onPressed: ended
-                    ? () => play(
-                        milliseconds: (s['start_ms'] as num? ?? 0).toInt(),
-                      )
-                    : null,
-                child: Text(
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
                   ),
-                  ended
-                      ? '$name   ${durationText((s['start_ms'] as num? ?? 0) * 16)}'
-                      : durationText((s['start_ms'] as num? ?? 0) * 16),
-                ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      minimumSize: Size(48, ended ? 44 : 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: EdgeInsets.zero,
+                      disabledForegroundColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: ended
+                        ? () => play(
+                            milliseconds: (s['start_ms'] as num? ?? 0).toInt(),
+                          )
+                        : null,
+                    child: Text(
+                      durationText((s['start_ms'] as num? ?? 0) * 16),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               SelectableText(
                 (s['text'] ?? '').toString(),
@@ -2032,29 +2036,25 @@ class _MeetingPageState extends State<MeetingPage> {
             ],
           );
           return Padding(
-            padding: EdgeInsets.only(bottom: 32),
-            child: ended
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLowest,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onSurface,
-                          child: Text(name.characters.first),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(child: body),
-                    ],
-                  )
-                : body,
+            padding: EdgeInsets.only(bottom: 20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerLowest,
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                    child: Text(name.characters.first),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(child: body),
+              ],
+            ),
           );
         }),
         if (query.isEmpty)
@@ -2117,10 +2117,6 @@ class _MeetingPageState extends State<MeetingPage> {
       final recordingFocus =
           desktopMicrophone ||
           (!ended && (m['localOnly'] == true || !live || recordingOverview));
-      final darkRecording =
-          !ended &&
-          !recordingFocus &&
-          Theme.of(context).brightness == Brightness.dark;
       final compactRecording =
           MediaQuery.sizeOf(context).width < 360 ||
           MediaQuery.textScalerOf(context).scale(14) > 20;
@@ -2166,10 +2162,7 @@ class _MeetingPageState extends State<MeetingPage> {
           }
         });
       }
-      final toolbarHeight =
-          compactRecording && !recordingFocus && !darkRecording
-          ? kToolbarHeight + MediaQuery.textScalerOf(context).scale(36) - 36
-          : kToolbarHeight;
+      const toolbarHeight = kToolbarHeight;
       final contentHeight =
           (MediaQuery.sizeOf(context).height -
                   MediaQuery.paddingOf(context).vertical -
@@ -2192,59 +2185,29 @@ class _MeetingPageState extends State<MeetingPage> {
       return Scaffold(
         appBar: AppBar(
           toolbarHeight: toolbarHeight,
-          centerTitle: !darkRecording,
-          title: darkRecording
-              ? breviaLogo()
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      m['title'] ?? tr("会议"),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (ended)
-                      Text(
-                        '${durationText(m["samples"] ?? 0)} · ${m["localOnly"] == true
-                            ? tr("仅保存在手机")
-                            : m["finished"] == true
-                            ? tr("已同步")
-                            : tr("待补传")}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      )
-                    else if (!recordingFocus)
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            if (state == 'recording' && live)
-                              TextSpan(
-                                text: '● ',
-                                style: TextStyle(color: Color(0xffff3b30)),
-                              ),
-                            TextSpan(
-                              text: label,
-                              style: TextStyle(
-                                color: state == 'recording' && live
-                                    ? const Color(0xffff3b30)
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' · ${durationText(m['samples'] ?? 0)}',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                  ],
+          centerTitle: false,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                m['title'] ?? tr("会议"),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (ended)
+                Text(
+                  '${durationText(m["samples"] ?? 0)} · ${m['remoteDeleted'] == true
+                      ? tr('会议已在电脑永久删除')
+                      : m["localOnly"] == true
+                      ? tr("仅保存在手机")
+                      : m["finished"] == true
+                      ? tr("已同步")
+                      : tr("待补传")}',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
+            ],
+          ),
           actions: [
             if (sharedOnComputer)
               IconButton(
@@ -2395,39 +2358,12 @@ class _MeetingPageState extends State<MeetingPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (darkRecording)
-                                Padding(
-                                  padding: EdgeInsets.only(bottom: 12),
-                                  child: Text(
-                                    m['title'] ?? tr("会议"),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.headlineLarge,
-                                  ),
-                                ),
-                              if (darkRecording)
-                                Text.rich(
-                                  TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: '● ',
-                                        style: TextStyle(
-                                          color: state == 'recording' && live
-                                              ? const Color(0xffff3b30)
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text:
-                                            '$label · ${durationText(m['samples'] ?? 0)}',
-                                      ),
-                                    ],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                              if (!ended)
+                                RecordingSignal(
+                                  status: label,
+                                  time: durationText(m['samples'] ?? 0),
+                                  recording: state == 'recording' && live,
+                                  level: widget.model.inputLevel,
                                 ),
                               if (ended && m['localOnly'] == true)
                                 Padding(
@@ -2484,8 +2420,8 @@ class _MeetingPageState extends State<MeetingPage> {
                         child: BreviaTabs(
                           entries: [
                             if (ended) (3, tr('会议纪要')),
-                            (1, tr('笔记')),
                             (0, tr('转写')),
+                            (1, tr('笔记')),
                             (2, tr('重点')),
                           ],
                           selected: tab,

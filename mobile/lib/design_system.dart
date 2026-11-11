@@ -497,47 +497,50 @@ class BreviaTabs extends StatelessWidget {
       alignment: AlignmentDirectional.centerStart,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              children: [
-                for (final (value, label) in entries)
-                  Semantics(
-                    selected: selected == value,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(48, 44),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
+        child: Row(
+          children: [
+            for (final (value, label) in entries)
+              Semantics(
+                selected: selected == value,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    shape: const RoundedRectangleBorder(),
+                    foregroundColor: selected == value
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                    textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontSize: 14,
+                      fontWeight: selected == value
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  onPressed: () => onSelect(value),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: selected == value
+                              ? scheme.onSurface
+                              : Colors.transparent,
+                          width: 2,
                         ),
-                        backgroundColor: selected == value
-                            ? scheme.surface
-                            : Colors.transparent,
-                        foregroundColor: selected == value
-                            ? scheme.onSurface
-                            : scheme.onSurfaceVariant,
-                        textStyle: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(
-                              fontSize: 14,
-                              fontWeight: selected == value
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
                       ),
-                      onPressed: () => onSelect(value),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(label),
                     ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
       ),
     );

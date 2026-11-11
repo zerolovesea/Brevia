@@ -962,10 +962,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> connect(
-    DesktopConnection connection, {
-    bool discardSharedDrafts = false,
-  }) async {
+  void _checkRecordingBeforeConnectionChange() {
     if (busy ||
         serviceRunning ||
         (engine != null &&
@@ -982,6 +979,13 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         )) {
       throw StateError(tr("请先完成当前电脑的录音与补传，未传音频会继续保留"));
     }
+  }
+
+  Future<void> connect(
+    DesktopConnection connection, {
+    bool discardSharedDrafts = false,
+  }) async {
+    _checkRecordingBeforeConnectionChange();
     busy = true;
     try {
       final previous = desktop;
@@ -1014,22 +1018,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> forget() async {
-    if (busy ||
-        serviceRunning ||
-        (engine != null &&
-            (engine!.store.meta['state'] != 'ended' ||
-                (engine!.store.meta['localOnly'] != true &&
-                    engine!.store.meta['finished'] != true &&
-                    engine!.store.meta['remoteDeleted'] != true))) ||
-        meetings.any(
-          (m) =>
-              desktop != null &&
-              m['computer'] == desktop!.fingerprint &&
-              m['finished'] != true &&
-              m['remoteDeleted'] != true,
-        )) {
-      throw StateError(tr("请先完成当前电脑的录音与补传，未传音频会继续保留"));
-    }
+    _checkRecordingBeforeConnectionChange();
     busy = true;
     try {
       while (refreshing) {

@@ -66,8 +66,9 @@ Future<void> verifyMeetingStability(
       },
     };
     await show(MeetingPage(model: model, id: 'stability'));
-    final clock = find.byWidgetPredicate(
-      (w) => w is Text && w.data == '12:36' && (w.style?.fontSize ?? 0) >= 36,
+    final clock = find.descendant(
+      of: find.byType(RecordingSignal),
+      matching: find.text('12:36'),
     );
     if (mode != 'online') {
       final scrollable = find.descendant(

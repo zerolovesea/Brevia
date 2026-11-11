@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'design_icons.dart';
 
 import 'package:flutter/material.dart';
@@ -85,14 +86,12 @@ class RecordingControls extends StatelessWidget {
               child: BreviaIcon(icon, key: ValueKey(icon), size: 23),
             ),
             style: IconButton.styleFrom(
-              minimumSize: const Size(58, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+              minimumSize: const Size(48, 48),
+              shape: CircleBorder(
+                side: BorderSide(color: colors.outlineVariant),
               ),
-              backgroundColor: danger
-                  ? colors.onSurface
-                  : colors.surfaceContainer,
-              foregroundColor: danger ? colors.surface : colors.onSurface,
+              backgroundColor: colors.surface,
+              foregroundColor: danger ? colors.error : colors.onSurface,
             ),
           ),
           if (showLabels) ...[
@@ -128,6 +127,176 @@ class RecordingControls extends StatelessWidget {
       ],
     );
   }
+}
+
+/// 最近的麦克风电平；仅音频输入变化时重绘波形。
+class RecordingSignal extends StatefulWidget {
+  const RecordingSignal({
+    super.key,
+    required this.level,
+    required this.recording,
+    required this.status,
+    required this.time,
+  });
+  final ValueListenable<double> level;
+  final bool recording;
+  final String status, time;
+  @override
+  State<RecordingSignal> createState() => _RecordingSignalState();
+}
+
+class _RecordingSignalState extends State<RecordingSignal> {
+  static const count = 40;
+  final samples = List<double>.filled(count, 0);
+  int next = 0;
+  Timer? timer;
+  double get level => widget.recording ? widget.level.value.clamp(0.0, 1.0) : 0;
+  void startSampling() {
+    timer?.cancel();
+    samples.fillRange(0, count, 0);
+    next = 0;
+    if (!widget.recording) return;
+    samples[next++] = level;
+    timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      final value = level;
+      if (samples.every((sample) => sample == value)) return;
+      setState(() {
+        samples[next] = value;
+        next = (next + 1) % count;
+      });
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    startSampling();
+  }
+
+  @override
+  void didUpdateWidget(RecordingSignal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.recording != widget.recording ||
+        oldWidget.level != widget.level) {
+      startSampling();
+    }
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, box) {
+            final clock = FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerEnd,
+              child: Text(
+                widget.time,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            );
+            final status = Row(
+              children: [
+                BreviaIcon(
+                  widget.recording ? Icons.circle : Icons.pause,
+                  size: 9,
+                  color: widget.recording
+                      ? const Color(0xffdb3039)
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: StableStatusText(
+                    widget.status,
+                    states: [
+                      for (final text in [
+                        '录音中',
+                        '仍在本机录音',
+                        '录音已暂停',
+                        '录音已中断',
+                        '正在开始',
+                      ])
+                        tr(text),
+                    ],
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            );
+            if (MediaQuery.textScalerOf(context).scale(14) > 21 ||
+                box.maxWidth < 245) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [status, clock],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: status),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: clock,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Semantics(
+          label: tr('输入音量'),
+          value: '${(level * 100).round()}%',
+          child: CustomPaint(
+            size: const Size(double.infinity, 32),
+            painter: _Waveform([
+              ...samples.skip(next),
+              ...samples.take(next),
+            ], theme.colorScheme.onSurface),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Waveform extends CustomPainter {
+  const _Waveform(this.samples, this.color);
+  final List<double> samples;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = size.width / samples.length;
+    final paint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = (step * .45).clamp(1, 4);
+    for (var i = 0; i < samples.length; i++) {
+      final half = 1 + samples[i] * (size.height / 2 - 3);
+      final x = (i + .5) * step;
+      canvas.drawLine(
+        Offset(x, size.height / 2 - half),
+        Offset(x, size.height / 2 + half),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Waveform old) =>
+      color != old.color || !listEquals(samples, old.samples);
 }
 
 class MicrophoneLevel extends StatefulWidget {
@@ -488,72 +657,12 @@ class RecordingFocus extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  BreviaIcon(
-                                    recording ? Icons.circle : Icons.pause,
-                                    size: 9,
-                                    color: recording
-                                        ? const Color(0xffff3b30)
-                                        : colors.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: StableStatusText(
-                                      status,
-                                      states: [
-                                        for (final text in [
-                                          '录音中',
-                                          '仍在本机录音',
-                                          '录音已暂停',
-                                          '录音已中断',
-                                          '正在开始',
-                                        ])
-                                          tr(text),
-                                      ],
-                                      textAlign: TextAlign.center,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                ],
+                              RecordingSignal(
+                                level: level,
+                                recording: recording,
+                                status: status,
+                                time: durationText(meeting['samples'] ?? 0),
                               ),
-                              SizedBox(height: compact ? 8 : 16),
-                              Text(
-                                durationText(meeting['samples'] ?? 0),
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w400,
-                                      letterSpacing: -1.6,
-                                      fontSize: constraints.maxHeight < 500
-                                          ? 36
-                                          : dense
-                                          ? 40
-                                          : compact
-                                          ? 48
-                                          : 64,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                              ),
-                              SizedBox(height: compact ? 12 : 24),
-                              ValueListenableBuilder<double>(
-                                valueListenable: level,
-                                builder: (_, value, _) => MicrophoneLevel(
-                                  level: recording ? value : 0,
-                                  size: const Size(224, 16),
-                                ),
-                              ),
-                              if (!compact) ...[
-                                const SizedBox(height: 10),
-                                Text(
-                                  tr('输入音量'),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
                               if (!dense) ...[
                                 const SizedBox(height: 12),
                                 StableStatusText(
