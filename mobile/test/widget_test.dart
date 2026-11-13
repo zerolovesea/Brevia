@@ -345,15 +345,10 @@ void main() {
     expect(find.text('● 已连接'), findsOneWidget);
     expect(find.byTooltip('暂停').hitTestable(), findsOneWidget);
     expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
-    await tester.tap(find.byTooltip('返回录音'));
-    await tester.pump();
+    expect(find.byTooltip('返回录音'), findsNothing);
+    await tester.tap(find.text('会议纪要'));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(RecordingFocus), findsOneWidget);
-    await tester.tap(find.byTooltip('转写'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('转写'), findsOneWidget);
-    expect(find.byType(RecordingFocus), findsNothing);
+    expect(find.text('暂无会议纪要'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

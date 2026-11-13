@@ -92,10 +92,6 @@ void main() {
                 ),
               );
               await tester.pump();
-              if (mode == 'online') {
-                await tester.tap(find.byTooltip(tr('返回录音')));
-                await tester.pump();
-              }
               final failure = tester.takeException();
               expect(failure, isNull, reason: '$size / $language / $scale');
               expect(
@@ -103,7 +99,7 @@ void main() {
                 findsOneWidget,
                 reason: '$size / $language / $scale',
               );
-              if (scale == 1) {
+              if (scale == 1 && mode != 'online') {
                 final scrollable = tester.state<ScrollableState>(
                   find.descendant(
                     of: find.byKey(const ValueKey('recording-focus-scroll')),

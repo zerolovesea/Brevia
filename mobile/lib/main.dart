@@ -282,22 +282,64 @@ Future<void> requestPhoneProcessing(
   String action,
 ) async {
   final summary = action == 'summary';
-  final label = tr(summary ? '生成会议纪要' : '重新精修');
-  final confirmed = await confirmMobileAction(
-    context,
-    label,
-    tr(summary ? '如使用在线模型，电脑会将会议文字发送给配置的服务商。' : '电脑将使用已有录音重新生成字幕，当前字幕可能被替换。'),
-    label,
-  );
-  if (!confirmed || !context.mounted) return;
-  await report(context, () async {
+  if (!summary) {
+    final label = tr('重新精修');
+    final confirmed = await confirmMobileAction(
+      context,
+      label,
+      tr('电脑将使用已有录音重新生成字幕，当前字幕可能被替换。'),
+      label,
+    );
+    if (!confirmed || !context.mounted) return;
+  }
+  if (!model.connected) {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('等待电脑连接')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(tr('关闭')),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  try {
     await model.meetingAction(id, action, consent: summary);
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(tr('已提交到电脑处理'))));
     }
-  });
+  } catch (error) {
+    if (!context.mounted) return;
+    final message = error is DesktopHttpException
+        ? error.message
+        : error.toString();
+    if (!model.connected ||
+        (summary &&
+            RegExp('模型|model', caseSensitive: false).hasMatch(message))) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr('关闭')),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 }
 
 class Home extends StatefulWidget {
@@ -468,7 +510,10 @@ class _HomeState extends State<Home> {
             ListTile(
               leading: const BreviaIcon(Icons.auto_awesome),
               title: Text(tr('生成会议纪要')),
-              enabled: online && !processing,
+              enabled:
+                  ready &&
+                  m['remoteDeleted'] != true &&
+                  m['desktopCapture'] != true,
               onTap: () => Navigator.pop(ctx, 'summary'),
             ),
             ListTile(
@@ -520,7 +565,20 @@ class _HomeState extends State<Home> {
       await deleteRecord(m);
       return;
     }
-    if (action == 'summary' || action == 'refine') {
+    if (action == 'summary') {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MeetingPage(
+            model: model,
+            id: m['id'],
+            generateMinutes: !processing,
+          ),
+        ),
+      );
+      return;
+    }
+    if (action == 'refine') {
       await requestPhoneProcessing(context, model, m['id'], action);
       return;
     }
@@ -1832,18 +1890,50 @@ class _ScannerPageState extends State<ScannerPage> {
 class MeetingPage extends StatefulWidget {
   final AppModel model;
   final String id;
-  const MeetingPage({super.key, required this.model, required this.id});
+  const MeetingPage({
+    super.key,
+    required this.model,
+    required this.id,
+    this.generateMinutes = false,
+  });
+  final bool generateMinutes;
   @override
   State<MeetingPage> createState() => _MeetingPageState();
 }
 
 class _MeetingPageState extends State<MeetingPage> {
-  bool recordingOverview = false;
-  String? phoneNoteDraft;
+  bool requestingSummary = false;
+  Object? shownSummaryFailure;
+
+  Future<void> generateSummary() async {
+    if (requestingSummary) return;
+    setState(() => requestingSummary = true);
+    try {
+      await requestPhoneProcessing(context, widget.model, widget.id, 'summary');
+    } finally {
+      if (mounted) setState(() => requestingSummary = false);
+    }
+  }
+
+  final phoneNotes = GlobalKey<_PhoneMeetingNotesState>();
   bool phoneNoteDirty = false;
   int tab = 0;
+  Future<void> selectTab(int next) async {
+    if (tab == next) return;
+    await report(context, () async {
+      if (phoneNoteDirty) await phoneNotes.currentState?.flush();
+      if (mounted && !phoneNoteDirty) {
+        setState(() {
+          tab = next;
+          following = false;
+        });
+      }
+    });
+  }
+
   String query = '';
   final scroll = ScrollController();
+  final searchFocus = FocusNode();
   bool following = true;
   bool waveformCollapsed = false;
   AudioPlayer? _player;
@@ -1857,9 +1947,15 @@ class _MeetingPageState extends State<MeetingPage> {
     if (meeting['state'] == 'ended') tab = meeting['localOnly'] == true ? 1 : 3;
     widget.model.viewedMeetingId = widget.id;
     unawaited(widget.model.loadMeetingSnapshot(widget.id));
+    if (widget.generateMinutes) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(generateSummary());
+      });
+    }
     scroll.addListener(() {
       if (tab == 0 &&
           scroll.positions.length == 1 &&
+          !searchFocus.hasFocus &&
           scroll.position.userScrollDirection.name != 'idle') {
         final collapsed = scroll.position.userScrollDirection.name == 'reverse';
         if (collapsed != waveformCollapsed) {
@@ -1878,6 +1974,7 @@ class _MeetingPageState extends State<MeetingPage> {
       widget.model.viewedMeetingId = null;
     }
     scroll.dispose();
+    searchFocus.dispose();
     unawaited(_player?.dispose());
     super.dispose();
   }
@@ -1915,12 +2012,12 @@ class _MeetingPageState extends State<MeetingPage> {
     try {
       await report(context, () async {
         if (phoneNoteDirty) {
-          final root = await recordingsRoot();
-          await writeJson(
-            File('${root.path}/${widget.id}/phone-notes.json'),
-            phoneNoteDraft!,
-          );
-          if (mounted) setState(() => phoneNoteDirty = false);
+          final editor = phoneNotes.currentState;
+          if (editor == null) {
+            setState(() => tab = 1);
+            return;
+          }
+          await editor.flush();
         }
         await widget.model.command(widget.id, 'end');
         if (mounted) {
@@ -2056,16 +2153,12 @@ class _MeetingPageState extends State<MeetingPage> {
         ),
       );
     }
-    final speakers = <String, int>{};
+    final speakers = mobileSpeakerPalette(segments);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ...list.map((s) {
           final name = mobileSpeakerName(s['speaker_name'] ?? s['speaker']);
-          final number = speakers.putIfAbsent(
-            (s['speaker'] ?? name).toString(),
-            () => speakers.length + 1,
-          );
           final body = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2127,21 +2220,8 @@ class _MeetingPageState extends State<MeetingPage> {
               children: [
                 Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
-                      child: Text(
-                        '$number',
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
+                  child: MobileSpeakerAvatar(
+                    color: speakers[mobileSpeakerIdentity(s)],
                   ),
                 ),
                 SizedBox(width: 12),
@@ -2177,6 +2257,37 @@ class _MeetingPageState extends State<MeetingPage> {
         'queued',
         'running',
       }.contains(snapshot['task']?['state']);
+      final task = snapshot['task'];
+      if (task is Map &&
+          task['action'] == 'summary' &&
+          task['state'] == 'failed' &&
+          task['id'] != null &&
+          task['id'] != shownSummaryFailure &&
+          RegExp(
+            '模型|model',
+            caseSensitive: false,
+          ).hasMatch('${task['error']}')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              ModalRoute.of(context)?.isCurrent != true ||
+              shownSummaryFailure == task['id']) {
+            return;
+          }
+          shownSummaryFailure = task['id'];
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              content: Text(remoteError(task['error'] ?? '')),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(tr('关闭')),
+                ),
+              ],
+            ),
+          );
+        });
+      }
       final desktop = widget.model.desktop;
       final ownsRecording =
           desktop != null &&
@@ -2209,7 +2320,7 @@ class _MeetingPageState extends State<MeetingPage> {
           m['localOnly'] != true;
       final recordingFocus =
           desktopMicrophone ||
-          (!ended && (m['localOnly'] == true || !live || recordingOverview));
+          (!ended && ((m['localOnly'] == true && tab != 1) || !live));
       final localErrorKind = mobileErrorKind(m['error'] ?? '');
       if (m['error'] == null) dismissedRecoveryError = null;
       if (!ended &&
@@ -2265,7 +2376,6 @@ class _MeetingPageState extends State<MeetingPage> {
           if (!didPop && phoneNoteDirty) {
             setState(() {
               tab = 1;
-              recordingOverview = false;
             });
             ScaffoldMessenger.of(
               context,
@@ -2323,29 +2433,15 @@ class _MeetingPageState extends State<MeetingPage> {
                     ),
                   ),
                 ),
-              if (canReview && recordingOverview) ...[
-                IconButton(
-                  tooltip: tr('转写'),
-                  onPressed: () => setState(() {
-                    recordingOverview = false;
-                    tab = 0;
-                  }),
-                  icon: const BreviaIcon(Icons.article_outlined),
-                ),
+              if (!ended &&
+                  live &&
+                  m['localOnly'] == true &&
+                  !desktopMicrophone &&
+                  RegExp(r'^[a-f0-9-]{36}$').hasMatch(widget.id))
                 IconButton(
                   tooltip: tr('笔记'),
-                  onPressed: () => setState(() {
-                    recordingOverview = false;
-                    tab = 1;
-                  }),
-                  icon: const BreviaIcon(Icons.edit_note),
-                ),
-              ],
-              if (canReview && !recordingOverview)
-                IconButton(
-                  tooltip: tr('返回录音'),
-                  onPressed: () => setState(() => recordingOverview = true),
-                  icon: const BreviaIcon(Icons.mic_none),
+                  onPressed: () => selectTab(tab == 1 ? 0 : 1),
+                  icon: const BreviaIcon(Icons.edit_outlined),
                 ),
               PopupMenuButton<String>(
                 popUpAnimationStyle: AnimationStyle(
@@ -2526,12 +2622,12 @@ class _MeetingPageState extends State<MeetingPage> {
                           ),
                         ),
                       ),
-                      if (!recordingFocus)
+                      if (!recordingFocus && (ended || m['localOnly'] != true))
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                           child: BreviaTabs(
                             entries: [
-                              if (ended || tab == 3 || tab == 4) ...[
+                              if (ended || canReview) ...[
                                 (3, tr('会议纪要')),
                                 (4, tr('鱼骨图')),
                               ],
@@ -2540,21 +2636,43 @@ class _MeetingPageState extends State<MeetingPage> {
                               if (ended) (2, tr('重点')),
                             ],
                             selected: tab,
-                            onSelect: (i) => setState(() {
-                              tab = i;
-                              following = false;
-                            }),
+                            onSelect: selectTab,
                           ),
                         ),
                       if (ended && tab == 0)
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
-                          child: TextField(
-                            onChanged: (v) => setState(() => query = v),
-                            decoration: InputDecoration(
-                              hintText: tr("搜索转写"),
-                              prefixIcon: BreviaIcon(Icons.search),
-                              isDense: true,
+                        AnimatedSize(
+                          duration: BreviaMotion.duration(
+                            context,
+                            BreviaMotion.spatial,
+                          ),
+                          alignment: Alignment.topCenter,
+                          curve: Curves.easeInOutCubic,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              20,
+                              waveformCollapsed ? 0 : 4,
+                              20,
+                              6,
+                            ),
+                            child: TextField(
+                              focusNode: searchFocus,
+                              onChanged: (v) => setState(() => query = v),
+                              style: Theme.of(context).textTheme.bodySmall,
+                              decoration: InputDecoration(
+                                hintText: tr('搜索转写'),
+                                prefixIcon: const BreviaIcon(
+                                  Icons.search,
+                                  size: 16,
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 34,
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: waveformCollapsed ? 5 : 9,
+                                  horizontal: 8,
+                                ),
+                                isDense: true,
+                              ),
                             ),
                           ),
                         ),
@@ -2762,21 +2880,27 @@ class _MeetingPageState extends State<MeetingPage> {
                                     runSpacing: 6,
                                     children: [
                                       OutlinedButton.icon(
-                                        onPressed: canProcess
-                                            ? () => requestPhoneProcessing(
-                                                context,
-                                                widget.model,
-                                                widget.id,
-                                                'summary',
+                                        onPressed:
+                                            processing || requestingSummary
+                                            ? null
+                                            : generateSummary,
+                                        icon: processing || requestingSummary
+                                            ? const SizedBox.square(
+                                                dimension: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
                                               )
-                                            : null,
-                                        icon: const BreviaIcon(
-                                          Icons.auto_awesome,
-                                          size: 16,
-                                        ),
+                                            : const BreviaIcon(
+                                                Icons.auto_awesome,
+                                                size: 16,
+                                              ),
                                         label: Text(
                                           tr(
-                                            markdown.isEmpty
+                                            processing || requestingSummary
+                                                ? '电脑处理中'
+                                                : markdown.isEmpty
                                                 ? '生成会议纪要'
                                                 : '重新生成纪要',
                                           ),
@@ -2799,12 +2923,28 @@ class _MeetingPageState extends State<MeetingPage> {
                                       ),
                                     ],
                                   ),
-                                if (processing)
+                                if (ended &&
+                                    m['finished'] == true &&
+                                    !processing &&
+                                    !requestingSummary)
                                   Text(
-                                    tr('电脑处理中'),
+                                    tr('如使用在线模型，电脑会将会议文字发送给配置的服务商。'),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodySmall,
+                                  ),
+                                if (processing || requestingSummary)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: MeetingTaskProgress(
+                                      task: snapshot['task'] as Map?,
+                                    ),
+                                  )
+                                else if (snapshot['task']?['state'] == 'failed')
+                                  Text(
+                                    remoteError(
+                                      snapshot['task']['error'] ?? '',
+                                    ),
                                   ),
                                 const SizedBox(height: 12),
                                 if (markdown.trim().isNotEmpty)
@@ -2846,28 +2986,20 @@ class _MeetingPageState extends State<MeetingPage> {
                                     r'^[a-f0-9-]{36}$',
                                   ).hasMatch(widget.id))
                                 _PhoneMeetingNotes(
+                                  key: phoneNotes,
                                   id: widget.id,
-                                  draft: phoneNoteDraft,
-                                  onDraft: (text, dirty) => setState(() {
-                                    phoneNoteDraft = text;
-                                    phoneNoteDirty = dirty;
-                                  }),
+                                  model: widget.model,
+                                  onDirty: (dirty) {
+                                    if (mounted && phoneNoteDirty != dirty) {
+                                      setState(() => phoneNoteDirty = dirty);
+                                    }
+                                  },
                                 ),
                               if (!recordingFocus &&
                                   tab == 1 &&
-                                  (snapshot['notes'] as String? ?? '')
-                                      .isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Text(
-                                    tr('电脑笔记'),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ),
-                              if (!recordingFocus &&
-                                  tab == 1 &&
+                                  !RegExp(
+                                    r'^[a-f0-9-]{36}$',
+                                  ).hasMatch(widget.id) &&
                                   ((snapshot['notes'] as String? ?? '')
                                           .isNotEmpty ||
                                       !waitingForComputer(m, widget.model)))
@@ -3119,10 +3251,7 @@ class _MeetingPageState extends State<MeetingPage> {
                                 pending: recordingCommandPending || ending,
                                 onPause: toggleRecording,
                                 onEnd: end,
-                                onMinutes: () => setState(() {
-                                  tab = 3;
-                                  following = false;
-                                }),
+                                compact: true,
                               ),
                       ),
                     ],
@@ -3136,13 +3265,15 @@ class _MeetingPageState extends State<MeetingPage> {
 
 class _PhoneMeetingNotes extends StatefulWidget {
   const _PhoneMeetingNotes({
+    super.key,
     required this.id,
-    required this.draft,
-    required this.onDraft,
+    required this.model,
+    required this.onDirty,
   });
+
   final String id;
-  final String? draft;
-  final void Function(String, bool) onDraft;
+  final AppModel model;
+  final ValueChanged<bool> onDirty;
 
   @override
   State<_PhoneMeetingNotes> createState() => _PhoneMeetingNotesState();
@@ -3151,18 +3282,27 @@ class _PhoneMeetingNotes extends StatefulWidget {
 class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
   final editor = TextEditingController();
   File? file;
-  String saved = '';
-  bool saving = false;
+  String base = '', saved = '';
+  String? revision, computer;
+  Map<String, dynamic>? conflict;
+  Timer? debounce, poll;
+  Future<void> writes = Future.value();
+  bool syncing = false;
+  bool connected = false;
   bool failed = false;
 
   @override
   void initState() {
     super.initState();
+    widget.model.editingPhoneNotes.add(widget.id);
     unawaited(load());
+    poll = Timer.periodic(const Duration(seconds: 2), (_) => sync());
   }
 
   Future<void> load() async {
     try {
+      await widget.model.syncingPhoneNotes[widget.id];
+      if (!mounted) return;
       final root = await recordingsRoot();
       final target = File('${root.path}/${widget.id}/phone-notes.json');
       final data = await target.exists()
@@ -3170,34 +3310,174 @@ class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
           : '';
       if (!mounted) return;
       setState(() {
-        saved = data as String;
-        editor.text = widget.draft ?? saved;
+        saved = data is Map ? data['text'] as String : data as String;
+        if (data == '') {
+          final meeting = widget.model.meeting(widget.id);
+          base = (meeting?['snapshot']?['notes'] as String?) ?? '';
+          saved = base;
+        }
+        if (data is Map) {
+          base = data['base'] as String? ?? '';
+          revision = data['revision'] as String?;
+          computer = data['computer'] as String?;
+        }
+        editor.text = saved;
         file = target;
         failed = false;
       });
+      unawaited(sync());
     } catch (_) {
       if (mounted) setState(() => failed = true);
     }
   }
 
-  Future<void> save() async {
+  Future<void> flush() async {
+    debounce?.cancel();
+    final target = file;
+    if (target == null) return;
     final text = editor.text;
-    setState(() => saving = true);
-    try {
-      await report(context, () async {
-        await writeJson(file!, text);
-        if (mounted) {
-          setState(() => saved = text);
-          widget.onDraft(editor.text, editor.text != saved);
-        }
-      });
-    } finally {
-      if (mounted) setState(() => saving = false);
+    final data = {
+      'text': text,
+      'base': base,
+      'revision': revision,
+      'computer': computer,
+    };
+    writes = writes.catchError((_) {}).then((_) => writeJson(target, data));
+    await writes;
+    if (!mounted) return;
+    setState(() => saved = text);
+    widget.onDirty(editor.text != saved);
+  }
+
+  void change(String text) {
+    setState(() {});
+    widget.onDirty(text != saved);
+    debounce?.cancel();
+    debounce = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
+      await report(context, flush);
+      if (mounted) unawaited(sync());
+    });
+  }
+
+  Future<void> sync() async {
+    final desktop = widget.model.desktop;
+    final meeting = widget.model.meeting(widget.id);
+    if (!mounted ||
+        file == null ||
+        syncing ||
+        conflict != null ||
+        desktop == null ||
+        !widget.model.connected ||
+        meeting?['computer'] != desktop.fingerprint ||
+        (computer != null && computer != desktop.fingerprint)) {
+      if (mounted &&
+          connected &&
+          (desktop == null ||
+              !widget.model.connected ||
+              meeting?['computer'] != desktop.fingerprint)) {
+        setState(() => connected = false);
+      }
+      return;
     }
+    final endpoint = '/desktop-meetings/${widget.id}/notes';
+    syncing = true;
+    try {
+      final remote = Map<String, dynamic>.from(
+        await desktop.call('GET', endpoint),
+      );
+      if (!mounted || widget.model.desktop != desktop) return;
+      final remoteText = remote['notes'] as String;
+      final remoteRevision = remote['revision'] as String;
+      final local = editor.text;
+      if (local != base && remoteText != base && remoteText != local) {
+        setState(() {
+          conflict = remote;
+          connected = true;
+        });
+        return;
+      }
+      if (local == base || local == remoteText) {
+        if (local == base && local != remoteText) editor.text = remoteText;
+        if (base == remoteText && revision == remoteRevision && connected) {
+          return;
+        }
+        base = remoteText;
+        revision = remoteRevision;
+      } else {
+        await flush();
+        if (!mounted ||
+            widget.model.desktop != desktop ||
+            editor.text != local) {
+          return;
+        }
+        final response = Map<String, dynamic>.from(
+          await desktop.call('POST', endpoint, {
+            'base_revision': remoteRevision,
+            'notes': local,
+          }),
+        );
+        if (!mounted || widget.model.desktop != desktop) return;
+        base = response['notes'] as String;
+        revision = response['revision'] as String;
+      }
+      computer = desktop.fingerprint;
+      setState(() => connected = true);
+      await flush();
+    } catch (_) {
+      if (mounted) setState(() => connected = false);
+    } finally {
+      syncing = false;
+    }
+  }
+
+  Future<void> compare() async {
+    final remote = conflict;
+    if (remote == null) return;
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('电脑笔记已更新')),
+        content: SingleChildScrollView(
+          child: SelectableText(remote['notes'] as String),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(tr('取消')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(tr('电脑版本')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(tr('保留手机版本')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    setState(() {
+      computer = widget.model.desktop?.fingerprint;
+      base = remote['notes'] as String;
+      revision = remote['revision'] as String;
+      if (!choice) editor.text = base;
+      conflict = null;
+    });
+    widget.onDirty(editor.text != saved);
+    await report(context, flush);
+    if (mounted) unawaited(sync());
   }
 
   @override
   void dispose() {
+    widget.model.editingPhoneNotes.remove(widget.id);
+    debounce?.cancel();
+    poll?.cancel();
+    if (file != null && editor.text != saved) {
+      unawaited(flush().catchError((_) {}));
+    }
     editor.dispose();
     super.dispose();
   }
@@ -3214,33 +3494,43 @@ class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(tr('手机笔记'), style: theme.textTheme.titleMedium),
-            ),
-            Text(tr('仅保存在手机'), style: theme.textTheme.bodySmall),
+            Expanded(child: Text(tr('笔记'), style: theme.textTheme.titleLarge)),
+            if (conflict != null)
+              TextButton(onPressed: compare, child: Text(tr('查看更新')))
+            else
+              Flexible(
+                child: Text(
+                  tr(
+                    editor.text != saved
+                        ? '正在保存…'
+                        : connected && editor.text == base
+                        ? '已同步'
+                        : widget.model.meeting(widget.id)?['localOnly'] == true
+                        ? '仅保存在手机'
+                        : '已保存 · 待同步',
+                  ),
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.end,
+                ),
+              ),
           ],
         ),
-        const SizedBox(height: 12),
+        const Divider(),
         TextField(
           controller: editor,
-          readOnly: saving,
-          onChanged: (text) => widget.onDraft(text, text != saved),
-          minLines: 6,
-          maxLines: 12,
+          onChanged: change,
+          minLines: 5,
+          maxLines: 14,
+          style: theme.textTheme.bodyLarge?.copyWith(height: 1.65),
           decoration: InputDecoration(
             hintText: tr('写笔记…'),
-            filled: true,
-            fillColor: theme.colorScheme.surfaceContainerLowest,
+            filled: false,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
           ),
         ),
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: FilledButton(
-            onPressed: saving || editor.text == saved ? null : save,
-            child: Text(tr('保存笔记')),
-          ),
-        ),
-        const Divider(),
       ],
     );
   }

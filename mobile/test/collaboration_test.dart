@@ -36,6 +36,7 @@ class Host extends DesktopConnection {
   int imageReads = 0;
   bool failSave = false;
   bool offlineAfterSubmit = false;
+  bool supportsNotes = false;
   @override
   Future<void> save() async {
     if (failSave) throw FileSystemException('disk full');
@@ -59,6 +60,16 @@ class Host extends DesktopConnection {
     if (route.endsWith('/images/abc.jpg')) {
       imageReads++;
       return {'base64': '/9j/AQ=='};
+    }
+    if (route.endsWith('/notes')) {
+      if (!supportsNotes) throw DesktopHttpException(404, 'Not found');
+      final write = data as Map;
+      actions.add(data);
+      if (write['base_revision'] != detail['revision']) {
+        throw DesktopHttpException(409, 'Conflict');
+      }
+      detail.addAll({'notes': write['notes'], 'revision': 'mobile-edit'});
+      return {'notes': detail['notes'], 'revision': detail['revision']};
     }
     actions.add(data);
     if (route.endsWith('/proposals')) {
@@ -457,6 +468,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.text('笔记'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('编辑'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Local draft');
       host.detail.addAll({'revision': '2', 'notes': 'Private changed note'});
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
@@ -472,6 +488,39 @@ void main() {
     },
   );
 
+  testWidgets('shared notes synchronize automatically after reconnect', (
+    tester,
+  ) async {
+    final host = Host()..supportsNotes = true;
+    final model = Phone(MemoryLibrary(host));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DesktopMeetingPage(model: model, id: 'one'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('笔记'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pumpAndSettle();
+    host.offlineAfterSubmit = true;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Queued locally');
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(host.actions, isEmpty);
+    host.offlineAfterSubmit = false;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(host.detail['notes'], 'Queued locally');
+    host.detail.addAll({'notes': 'Desktop edit', 'revision': 'desktop-edit'});
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(find.text('Desktop edit'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    model.dispose();
+  });
+
   testWidgets(
     'a live caption becomes a source-linked note only when sent for desktop review',
     (tester) async {
@@ -485,6 +534,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Ship Friday'), findsOneWidget);
       await tester.tap(find.byTooltip('标记到笔记'));
+      await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
       expect(host.actions, isEmpty);
       await tester.tap(find.text('发送至电脑'));

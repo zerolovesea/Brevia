@@ -370,6 +370,20 @@ void main() {
       ),
     );
     await capture('mobile-review-summary');
+    final reviewSnapshot = model.meetings.first['snapshot'] as Map;
+    reviewSnapshot['task'] = {
+      'id': 'summary-preview',
+      'action': 'summary',
+      'state': 'running',
+      'progress': .42,
+    };
+    model.notifyListeners();
+    await capture('mobile-summary-progress');
+    expect(find.textContaining('42%'), findsOneWidget);
+    reviewSnapshot.remove('task');
+    model.notifyListeners();
+    await tester.pump();
+
     await tester.tap(find.text(tr('鱼骨图')));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile).first);
@@ -455,10 +469,14 @@ void main() {
         'segments': [
           {
             'start_ms': 0,
+            'speaker': 'speaker-1',
+            'speaker_name': 'Lin',
             'text': pick('我们先回顾上周的进展。', 'Let’s review our progress this week.'),
           },
           {
             'start_ms': 12000,
+            'speaker': 'speaker-2',
+            'speaker_name': 'Chen',
             'text': pick(
               '设计稿已经完成，周四交付测试版本。周五前完成验收，下周一小范围发布。',
               'The design is ready. Deliver the test build on Thursday, complete acceptance by Friday, and start a limited rollout next Monday.',
@@ -480,7 +498,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     await capture('mobile-live');
-    await tester.tap(find.text(tr('查看纪要')));
+    await tester.tap(find.text(tr('会议纪要')));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text(tr('暂无会议纪要')), findsOneWidget);
     await capture('mobile-live-minutes');
@@ -500,8 +518,7 @@ void main() {
     );
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 400));
-    await capture('mobile-live-notes');
-    await tester.tap(find.text(tr('保存笔记')));
+    await tester.pump(const Duration(milliseconds: 400));
     final savedNote = File(
       '${notesRoot.path}/recordings/$liveId/phone-notes.json',
     );
@@ -515,6 +532,7 @@ void main() {
       savedNote.readAsStringSync(),
       contains(pick('周四交付测试版。', 'Deliver the test build Thursday.')),
     );
+    await capture('mobile-live-notes');
     await tester.tap(find.text(tr('转写')));
     await tester.pump();
     model.live!['state'] = 'paused';
@@ -528,10 +546,6 @@ void main() {
     model.live!['uploaded'] = 20;
     model.notifyListeners();
     await capture('mobile-reconnected-transcript');
-    await tester.tap(find.byTooltip(tr('返回录音')));
-    await tester.pump(const Duration(milliseconds: 500));
-    await capture('mobile-reconnected');
-
     final liveSnapshot = model.live!['snapshot'];
     model.live!['localOnly'] = true;
     model.live!['snapshot'] = <String, dynamic>{};
@@ -552,7 +566,10 @@ void main() {
     model.live!['snapshot'] = liveSnapshot;
     model.notifyListeners();
     await tester.pump();
-    await tester.tap(find.byTooltip(tr('重点')));
+    await tester.tap(find.byTooltip(tr('会议操作')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, tr('重点')));
     await tester.pump(const Duration(milliseconds: 500));
     await capture('mobile-bookmark');
     Navigator.of(tester.element(find.text(tr('保存重点')))).pop();

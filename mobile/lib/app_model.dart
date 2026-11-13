@@ -502,6 +502,8 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
       }
+      if (!localOnly) await retryPhoneNotes(root, records);
+      if (disposed) return;
       meetings = records;
       if (!serviceRunning && engine == null) live = null;
       // 仅为待补传会议保留发送器，复用恢复清单与重试退避；不遍历历史 PCM。
@@ -558,6 +560,80 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       {...snapshot}
         ..remove('segments')
         ..remove('summary');
+
+  final editingPhoneNotes = <String>{};
+  final syncingPhoneNotes = <String, Future<void>>{};
+
+  Future<void> retryPhoneNotes(
+    Directory root,
+    List<Map<String, dynamic>> records,
+  ) async {
+    final connection = desktop;
+    if (connection == null || !connected) return;
+    for (final record in records) {
+      final id = record['id'] as String;
+      if (editingPhoneNotes.contains(id) ||
+          record['remoteDeleted'] == true ||
+          record['computer'] != connection.fingerprint ||
+          !RegExp(r'^[a-f0-9-]{36}$').hasMatch(id)) {
+        continue;
+      }
+      final pending = _retryPhoneNote(root, id, connection);
+      syncingPhoneNotes[id] = pending;
+      try {
+        await pending;
+      } finally {
+        syncingPhoneNotes.remove(id);
+      }
+    }
+  }
+
+  Future<void> _retryPhoneNote(
+    Directory root,
+    String id,
+    DesktopConnection connection,
+  ) async {
+    final file = File('${root.path}/$id/phone-notes.json');
+    try {
+      if (!await file.exists()) return;
+      final raw = await file.readAsString();
+      final draft = jsonDecode(raw);
+      if (draft is! Map ||
+          draft['text'] == draft['base'] ||
+          (draft['computer'] != null &&
+              draft['computer'] != connection.fingerprint)) {
+        return;
+      }
+      final endpoint = '/desktop-meetings/$id/notes';
+      final remote = await connection.call('GET', endpoint);
+      if (disposed || desktop != connection || editingPhoneNotes.contains(id)) {
+        return;
+      }
+      if (remote['notes'] != draft['base'] &&
+          remote['notes'] != draft['text']) {
+        return;
+      }
+      final accepted = remote['notes'] == draft['text']
+          ? remote
+          : await connection.call('POST', endpoint, {
+              'base_revision': remote['revision'],
+              'notes': draft['text'],
+            });
+      if (disposed ||
+          desktop != connection ||
+          await file.readAsString() != raw) {
+        return;
+      }
+      await writeJson(file, {
+        'base': accepted['notes'],
+        'text': draft['text'],
+        'revision': accepted['revision'],
+        'computer': connection.fingerprint,
+      });
+    } catch (_) {
+      // 保留草稿；重连重试，冲突交给编辑器。
+    }
+  }
 
   Future<void> loadMeetingSnapshot(String id) async {
     final record = meeting(id);

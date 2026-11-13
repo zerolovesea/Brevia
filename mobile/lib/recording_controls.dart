@@ -57,7 +57,8 @@ class RecordingControls extends StatelessWidget {
   final bool paused, pending;
   final bool showLabels;
   final VoidCallback onPause, onEnd;
-  final VoidCallback? onMark, onMinutes;
+  final VoidCallback? onMark;
+  final bool compact;
   const RecordingControls({
     super.key,
     required this.paused,
@@ -65,58 +66,26 @@ class RecordingControls extends StatelessWidget {
     required this.onPause,
     required this.onEnd,
     this.onMark,
-    this.onMinutes,
+    this.compact = false,
     this.showLabels = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    if (onMinutes != null) {
-      return Row(
-        children: [
-          IconButton(
-            tooltip: tr('结束'),
-            onPressed: pending ? null : onEnd,
-            style: IconButton.styleFrom(
-              shape: CircleBorder(
-                side: BorderSide(color: colors.outlineVariant),
-              ),
-            ),
-            icon: Icon(
-              Icons.circle,
-              size: 15,
-              color: pending ? null : colors.error,
-            ),
+    if (compact) {
+      return Center(
+        child: OutlinedButton.icon(
+          onPressed: pending ? null : onEnd,
+          style: OutlinedButton.styleFrom(
+            shape: const StadiumBorder(),
+            side: BorderSide(color: colors.outlineVariant),
+            backgroundColor: colors.surfaceContainerLow,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton(
-              onPressed: onMinutes,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                backgroundColor: colors.surfaceContainerLow,
-                side: BorderSide(color: colors.outlineVariant),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(tr('查看纪要'), textAlign: TextAlign.center),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward, size: 18),
-                ],
-              ),
-            ),
-          ),
-        ],
+          icon: Icon(Icons.circle, size: 11, color: colors.error),
+          label: Tooltip(message: tr('结束'), child: Text(tr('结束'))),
+        ),
       );
     }
     Widget control(
@@ -306,25 +275,44 @@ class _RecordingSignalState extends State<RecordingSignal> {
             );
           },
         ),
-        if (!widget.waveformCollapsed) const SizedBox(height: 12),
-        if (!widget.waveformCollapsed)
-          Semantics(
-            label: tr('输入音量'),
-            value: '${(level * 100).round()}%',
-            child: CustomPaint(
-              size: Size(
-                double.infinity,
-                MediaQuery.sizeOf(context).height < 650 ||
-                        MediaQuery.textScalerOf(context).scale(14) > 20
-                    ? 32
-                    : 64,
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: widget.waveformCollapsed ? 0.0 : 1.0),
+          duration: BreviaMotion.duration(context, BreviaMotion.spatial),
+          curve: Curves.easeInOutCubic,
+          builder: (context, fraction, child) => ClipRect(
+            child: Align(
+              alignment: Alignment.topCenter,
+              heightFactor: fraction,
+              child: Opacity(
+                opacity: fraction,
+                child: ExcludeSemantics(
+                  excluding: widget.waveformCollapsed,
+                  child: child,
+                ),
               ),
-              painter: _Waveform([
-                ...samples.skip(next),
-                ...samples.take(next),
-              ], theme.colorScheme.onSurface),
             ),
           ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Semantics(
+              label: tr('输入音量'),
+              value: '${(level * 100).round()}%',
+              child: CustomPaint(
+                size: Size(
+                  double.infinity,
+                  MediaQuery.sizeOf(context).height < 650 ||
+                          MediaQuery.textScalerOf(context).scale(14) > 20
+                      ? 32
+                      : 64,
+                ),
+                painter: _Waveform([
+                  ...samples.skip(next),
+                  ...samples.take(next),
+                ], theme.colorScheme.onSurface),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

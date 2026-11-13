@@ -93,6 +93,31 @@ class DesktopLibrary {
     _refresh = null;
   });
 
+  final editingNotes = <String>{};
+  final syncingSavedNotes = <String, Future<void>>{};
+
+  Future<void> _retrySavedNotes(String id) async {
+    final saved = SharedNoteDraft.restore(await draft(id));
+    final revision = saved.revision;
+    if (!visible(id) ||
+        editingNotes.contains(id) ||
+        !saved.dirty ||
+        revision == null ||
+        saved.proposalId != null) {
+      return;
+    }
+    final current = await snapshot(id);
+    if (!visible(id) || editingNotes.contains(id)) return;
+    final text = current['notes'];
+    if (text != saved.text && current['revision'] != revision) return;
+    final result = text == saved.text
+        ? current
+        : await syncNotes(id, revision, saved.text);
+    if (!visible(id)) return;
+    saved.resolve(result, keepLocal: false);
+    await saveDraft(id, saved.toJson());
+  }
+
   Future<void> _refreshList() async {
     await _root;
     List<MeetingData> current;
@@ -119,6 +144,15 @@ class DesktopLibrary {
     if (indexKey(previous) != indexKey(current)) await _saveIndex();
     for (final id in _jobs.keys.toList()) {
       if (visible(id)) await snapshot(id);
+    }
+    for (final row in current) {
+      final id = row['id'] as String;
+      if (editingNotes.contains(id) || syncingSavedNotes.containsKey(id)) {
+        continue;
+      }
+      syncingSavedNotes[id] = _retrySavedNotes(id)
+          .catchError((Object _) {})
+          .whenComplete(() => syncingSavedNotes.remove(id));
     }
   }
 
@@ -198,17 +232,28 @@ class DesktopLibrary {
       ),
     );
     if (!visible(id) || result['id'] != id) throw StateError(tr('这场会议已停止共享'));
-    // 只缓存回看结果；会中字幕持续刷新，避免每两秒重复写入全文。
-    if (result['state'] == 'ended') {
-      final file = await _file(id, 'snapshot.json');
-      final digest = sha256.convert(utf8.encode(jsonEncode(result)));
-      if (_cachedDigests[id] != digest) {
-        await _serialize(() async {
-          if (!visible(id)) return;
-          await writeJson(file, result);
-          _cachedDigests[id] = digest;
-        });
-      }
+    // 会中只缓存笔记和版本，断线重开可继续编辑，不重复写入全文字幕。
+    final cached = result['state'] == 'ended'
+        ? result
+        : {
+            for (final key in [
+              'id',
+              'title',
+              'state',
+              'notes',
+              'revision',
+              'proposal',
+            ])
+              if (result.containsKey(key)) key: result[key],
+          };
+    final file = await _file(id, 'snapshot.json');
+    final digest = sha256.convert(utf8.encode(jsonEncode(cached)));
+    if (_cachedDigests[id] != digest) {
+      await _serialize(() async {
+        if (!visible(id)) return;
+        await writeJson(file, cached);
+        _cachedDigests[id] = digest;
+      });
     }
     final task = result['task'];
     // 桌面只保存最新任务。另一端已开始下一项任务时，旧任务也已结束。
@@ -223,8 +268,8 @@ class DesktopLibrary {
     return result;
   }
 
-  Future<void> process(String id, String action, String requestId) async {
-    await connection
+  Future<Map?> process(String id, String action, String requestId) async {
+    final receipt = await connection
         .call('POST', '/desktop-meetings/${Uri.encodeComponent(id)}/action', {
           'action': action,
           'request_id': requestId,
@@ -233,7 +278,22 @@ class DesktopLibrary {
     if (!visible(id)) throw StateError(tr('这场会议已停止共享'));
     _jobs[id] = requestId;
     await _saveIndex();
+    return receipt is Map && receipt['task'] is Map
+        ? receipt['task'] as Map
+        : null;
   }
+
+  Future<MeetingData> syncNotes(
+    String id,
+    String revision,
+    String notes,
+  ) async => Map<String, dynamic>.from(
+    await connection.call(
+      'POST',
+      '/desktop-meetings/${Uri.encodeComponent(id)}/notes',
+      {'base_revision': revision, 'notes': notes},
+    ),
+  );
 
   Future<MeetingData> propose(
     String id,
@@ -380,6 +440,10 @@ class SharedNoteDraft {
       base = current;
       text = current;
       revision = rev;
+      return true;
+    }
+    if (!dirty && proposalId == null && rev != revision) {
+      resolve(data, keepLocal: false);
       return true;
     }
     final proposal = data['proposal'];

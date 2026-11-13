@@ -138,6 +138,115 @@ class _MeetingNoteImageState extends State<MeetingNoteImage> {
   }
 }
 
+String mobileSpeakerIdentity(Map segment) =>
+    (segment['speaker_id'] ??
+            segment['speaker'] ??
+            segment['speaker_name'] ??
+            '')
+        .toString();
+
+Map<String, int> mobileSpeakerPalette(Iterable<dynamic> segments) {
+  final speakers = <String, int>{};
+  for (final segment in segments) {
+    final identity = mobileSpeakerIdentity(segment);
+    if (identity.isEmpty || speakers.containsKey(identity)) continue;
+    var color =
+        identity.runes.fold(
+          0,
+          (hash, code) => (hash * 31 + code) & 0xffffffff,
+        ) %
+        6;
+    if (speakers.length >= 6) {
+      color = speakers.length;
+    } else {
+      while (speakers.containsValue(color)) {
+        color = (color + 1) % 6;
+      }
+    }
+    speakers[identity] = color;
+  }
+  return speakers;
+}
+
+class MobileSpeakerAvatar extends StatelessWidget {
+  const MobileSpeakerAvatar({super.key, required this.color});
+  final int? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = this.color;
+    const inks = [
+      Color(0xff006a9c),
+      Color(0xff883db3),
+      Color(0xff087346),
+      Color(0xff994d00),
+      Color(0xffb03062),
+      Color(0xff414cb6),
+    ];
+    const tints = [
+      Color(0xffcceeff),
+      Color(0xfff1dafa),
+      Color(0xffc9f3da),
+      Color(0xffffe4b8),
+      Color(0xffffdae9),
+      Color(0xffdfe4ff),
+    ];
+    final colors = Theme.of(context).colorScheme;
+    final hue = color == null ? 0.0 : (color * 137.508).round() % 360.0;
+    final ink = color == null
+        ? colors.onSurfaceVariant
+        : color < 6
+        ? inks[color]
+        : HSLColor.fromAHSL(1, hue, .66, .32).toColor();
+    final tint = color == null
+        ? colors.surfaceContainer
+        : color < 6
+        ? tints[color]
+        : HSLColor.fromAHSL(1, hue, .77, .90).toColor();
+    return ExcludeSemantics(
+      child: CircleAvatar(
+        radius: 12,
+        backgroundColor: tint,
+        foregroundColor: ink,
+        child: const BreviaIcon(Icons.person_outline, size: 15),
+      ),
+    );
+  }
+}
+
+class MeetingTaskProgress extends StatelessWidget {
+  const MeetingTaskProgress({super.key, required this.task});
+  final Map? task;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = task?['progress'];
+    final progress = raw is num && raw.isFinite
+        ? raw.toDouble().clamp(0.0, 1.0)
+        : null;
+    final label = tr(task?['state'] == 'queued' ? '等待电脑处理' : '电脑处理中');
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            progress == null ? label : '$label · ${(progress * 100).round()}%',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value:
+                progress ??
+                (MediaQuery.disableAnimationsOf(context) ? 0 : null),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class MeetingEvidenceTree extends StatelessWidget {
   const MeetingEvidenceTree({super.key, required this.snapshot, this.onSeek});
   final Map<String, dynamic> snapshot;
