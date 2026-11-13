@@ -254,8 +254,6 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('结束'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('结束并保存'));
-        await tester.pumpAndSettle();
         expect(model.ends, 1);
         model.saved.complete();
         await tester.pumpAndSettle();
@@ -991,47 +989,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'end confirmation preserves recording and blocks repeated saves',
-    (tester) async {
-      final model = EndModel()
-        ..serviceRunning = true
-        ..live = {
-          'id': 'live',
-          'title': 'Meeting',
-          'state': 'recording',
-          'samples': 16000,
-          'localOnly': true,
-        };
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: breviaTheme(Brightness.light),
-          home: MeetingPage(model: model, id: 'live'),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('结束'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 0);
-      expect(find.byType(BottomSheet), findsOneWidget);
-      await tester.tap(find.text('继续录音'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 0);
-      await tester.tap(find.byTooltip('结束'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('结束并保存'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 1);
-      expect(find.byType(BottomSheet), findsNothing);
-      await tester.tap(find.byTooltip('结束'));
-      expect(model.ends, 1);
-      model.saved.complete();
-      await tester.pumpAndSettle();
-      expect(find.byType(SavedMeetingPage), findsOneWidget);
-      expect(find.text('录音已结束'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('end saves directly and blocks repeated saves', (tester) async {
+    final model = EndModel()
+      ..serviceRunning = true
+      ..live = {
+        'id': 'live',
+        'title': 'Meeting',
+        'state': 'recording',
+        'samples': 16000,
+        'localOnly': true,
+      };
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: MeetingPage(model: model, id: 'live'),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('结束'));
+    await tester.pumpAndSettle();
+    expect(model.ends, 1);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.tap(find.byTooltip('结束'));
+    expect(model.ends, 1);
+    model.saved.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(SavedMeetingPage), findsOneWidget);
+    expect(find.text('录音已结束'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'remote stop stops capture before final upload acknowledgement',
@@ -1210,14 +1196,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('新建录音'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.link_outlined).last);
+      await tester.tap(find.byTooltip(tr('连接电脑')).first);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('输入配对码'));
       await tester.tap(find.text('输入配对码'));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNWidgets(2));
       await tester.enterText(find.byType(TextField).last, '123456');
-      expect(find.text('连接电脑'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '连接电脑'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1366,10 +1352,12 @@ void main() {
     await tester.pumpWidget(BreviaApp(model: model));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     expect(find.text('重新扫码连接'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    Navigator.of(tester.element(find.byType(ConnectionPage))).pop();
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.settings_outlined).last);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

@@ -22,7 +22,7 @@ lane :beta do
     wait_processing_timeout_duration: 2400,
     # 只使用维护者按当前实现复核问卷后的明确声明，不推定豁免。
     uses_non_exempt_encryption: encryption == 'true',
-    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。重新设计录音页，展示实时输入波形，优化转写、笔记与录音控制布局，并修复大字号下计时显示溢出。请验证暂停与继续录音、实时转写和笔记切换，以及与公开版 Brevia 桌面端的配对和字幕同步。" }
+    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。更新会议首页、连接电脑与扫码入口、录音电平和结束操作。新增手机笔记编辑，纪要与鱼骨图分开查看。请验证与公开桌面版配对、字幕同步、结束保存及笔记回读。" }
   )
 end
 

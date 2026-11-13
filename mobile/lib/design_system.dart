@@ -180,7 +180,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
     appBarTheme: AppBarTheme(
       backgroundColor: canvas,
       foregroundColor: ink,
-      centerTitle: true,
+      centerTitle: false,
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
         fontSize: 20,
@@ -237,7 +237,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: canvas,
+      fillColor: scheme.surfaceContainerLow,
       contentPadding: EdgeInsets.all(16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -337,7 +337,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       backgroundColor: canvas,
       height: 64,
       elevation: 0,
-      indicatorColor: scheme.surfaceContainer,
+      indicatorColor: Colors.transparent,
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 24,

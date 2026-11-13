@@ -147,23 +147,14 @@ class MeetingEvidenceTree extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final inks = theme.brightness == Brightness.dark
-        ? const [
-            Color(0xff85bdaf),
-            Color(0xffcaa987),
-            Color(0xffa4acd5),
-            Color(0xffcb9bad),
-          ]
-        : const [
-            Color(0xff447c70),
-            Color(0xff986b45),
-            Color(0xff69729a),
-            Color(0xff965d77),
-          ];
+    final groups = _branches(snapshot);
+    if (groups.isEmpty) {
+      return Text(tr('暂无原因分析'), style: theme.textTheme.bodySmall);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final group in _branches(snapshot).entries)
+        for (final group in groups.entries)
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
             child: Column(
@@ -188,17 +179,17 @@ class MeetingEvidenceTree extends StatelessWidget {
                 for (final (i, claim) in group.value.indexed)
                   CustomPaint(
                     painter: _Fork(
-                      inks[i % inks.length],
+                      colors.onSurfaceVariant,
                       i == group.value.length - 1,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.only(left: 30, top: 8),
                       child: Material(
-                        color: Color.alphaBlend(
-                          inks[i % inks.length].withValues(alpha: .07),
-                          colors.surface,
+                        color: colors.surfaceContainerLowest,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: colors.outlineVariant),
                         ),
-                        borderRadius: BorderRadius.circular(12),
                         clipBehavior: Clip.antiAlias,
                         child: Theme(
                           data: theme.copyWith(

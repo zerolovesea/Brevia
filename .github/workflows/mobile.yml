@@ -139,7 +139,7 @@ jobs:
 
   ios:
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && needs.check.outputs.ios == 'true'
+    if: ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/mobile-testflight-ui' && inputs.channel == 'testflight') || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore')) && needs.check.outputs.ios == 'true'
     runs-on: macos-26
     timeout-minutes: 90
     defaults:

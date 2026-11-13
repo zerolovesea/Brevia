@@ -26,7 +26,7 @@ class DesktopMeetingPage extends StatefulWidget {
   State<DesktopMeetingPage> createState() => _DesktopMeetingPageState();
 }
 
-enum _Section { transcript, notes, summary }
+enum _Section { transcript, notes, summary, evidence }
 
 class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   late final library = widget.model.desktopLibrary!;
@@ -428,7 +428,12 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
     }
     final header = library.meetings.where((m) => m['id'] == id).firstOrNull;
     final shown = ended
-        ? [_Section.summary, _Section.notes, _Section.transcript]
+        ? [
+            _Section.summary,
+            _Section.evidence,
+            _Section.notes,
+            _Section.transcript,
+          ]
         : [_Section.transcript, _Section.notes];
     return Scaffold(
       appBar: AppBar(
@@ -522,6 +527,8 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                               ? '逐字稿'
                               : s == _Section.notes
                               ? '笔记'
+                              : s == _Section.evidence
+                              ? '鱼骨图'
                               : '会议纪要',
                         ),
                       ),
@@ -581,6 +588,15 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                       _Section.notes => _notes(context),
                       _Section.transcript => _transcript(context),
                       _Section.summary => _summary(context),
+                      _Section.evidence => ListView(
+                        padding: const EdgeInsets.all(20),
+                        children: [
+                          MeetingEvidenceTree(
+                            snapshot: snapshot,
+                            onSeek: _seek,
+                          ),
+                        ],
+                      ),
                     },
             ),
             if (ended && snapshot['has_audio'] == true)
@@ -832,7 +848,6 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                 : () => _action(() => _process('summary')),
           ),
         ),
-        MeetingEvidenceTree(snapshot: snapshot, onSeek: _seek),
         if (summary.isNotEmpty) _markdown(summary),
       ],
     );

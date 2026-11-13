@@ -204,6 +204,21 @@ void main() {
     ]);
     await show(BreviaApp(model: model));
     await capture('mobile-library');
+    final previewComputer = DesktopConnection(
+      address: 'https://192.168.1.24:43187',
+      fingerprint: 'preview',
+      name: 'MacBook Pro',
+    );
+    model.desktop = previewComputer;
+    model.desktopOnline = true;
+    model.notifyListeners();
+    await capture('mobile-library-connected');
+    model.desktopOnline = false;
+    model.notifyListeners();
+    await capture('mobile-library-offline');
+    model.desktop = null;
+    model.notifyListeners();
+    await previewComputer.dispose();
     final meetings = [...model.meetings];
     model.meetings = [];
     model.notifyListeners();
@@ -217,7 +232,7 @@ void main() {
     await capture('mobile-prepare');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     await capture('mobile-connection');
     await tester.ensureVisible(find.text(tr('输入配对码')));
@@ -249,6 +264,8 @@ void main() {
     await capture('mobile-connection-help');
     expect(find.byType(ConnectionHelpPage), findsOneWidget);
     await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(ConnectionPage))).pop();
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.settings_outlined).last);
     await tester.pumpAndSettle();
@@ -353,6 +370,8 @@ void main() {
       ),
     );
     await capture('mobile-review-summary');
+    await tester.tap(find.text(tr('鱼骨图')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile).first);
     await tester.pumpAndSettle();
     await capture('mobile-review-evidence');
@@ -407,8 +426,21 @@ void main() {
     model.desktopMicrophoneSelected = false;
     model.desktop = null;
 
+    const liveId = '00000000-0000-4000-8000-000000000001';
+    final notesRoot = Directory.systemTemp.createTempSync('brevia-notes-');
+    Directory(
+      '${notesRoot.path}/recordings/$liveId',
+    ).createSync(recursive: true);
+    const paths = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(paths, (_) async => notesRoot.path);
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(paths, null);
+      notesRoot.deleteSync(recursive: true);
+    });
     model.live = {
-      'id': 'live',
+      'id': liveId,
       'title': pick('产品周会', 'Product sync'),
       'samples': 12096000,
       'state': 'recording',
@@ -440,13 +472,49 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
+    for (var i = 0; i < 29; i++) {
+      model.inputLevel.value = [.08, .32, .12, .7, .22, .46, .04][i % 7];
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await capture('mobile-live');
+    await tester.tap(find.text(tr('查看纪要')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text(tr('暂无会议纪要')), findsOneWidget);
+    await capture('mobile-live-minutes');
     await tester.tap(find.text(tr('笔记')));
-    await tester.pump();
+    for (var i = 0; i < 12 && find.byType(TextField).evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+    }
+    await tester.enterText(
+      find.byType(TextField),
+      pick(
+        '周四交付测试版。\n周五完成验收，确认发布安排。',
+        'Deliver the test build Thursday.\nConfirm release after Friday acceptance.',
+      ),
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump(const Duration(milliseconds: 400));
     await capture('mobile-live-notes');
+    await tester.tap(find.text(tr('保存笔记')));
+    final savedNote = File(
+      '${notesRoot.path}/recordings/$liveId/phone-notes.json',
+    );
+    for (var i = 0; i < 12 && !savedNote.existsSync(); i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+    }
+    expect(
+      savedNote.readAsStringSync(),
+      contains(pick('周四交付测试版。', 'Deliver the test build Thursday.')),
+    );
     await tester.tap(find.text(tr('转写')));
     await tester.pump();
     model.live!['state'] = 'paused';
@@ -464,11 +532,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await capture('mobile-reconnected');
 
-    await tester.tap(find.byTooltip(tr('结束')));
-    await tester.pump(const Duration(milliseconds: 500));
-    await capture('mobile-end-confirmation');
-    await tester.tap(find.text(tr('继续录音')));
-    await tester.pump(const Duration(milliseconds: 500));
     final liveSnapshot = model.live!['snapshot'];
     model.live!['localOnly'] = true;
     model.live!['snapshot'] = <String, dynamic>{};
@@ -498,7 +561,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.dark),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     await capture('mobile-live-dark');
@@ -514,7 +577,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     await capture('mobile-mic-active');
@@ -537,7 +600,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     expect(find.text(tr('导出已有录音')), findsOneWidget);

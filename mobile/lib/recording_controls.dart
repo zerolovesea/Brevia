@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'design_icons.dart';
 
 import 'package:flutter/material.dart';
@@ -56,7 +57,7 @@ class RecordingControls extends StatelessWidget {
   final bool paused, pending;
   final bool showLabels;
   final VoidCallback onPause, onEnd;
-  final VoidCallback? onMark;
+  final VoidCallback? onMark, onMinutes;
   const RecordingControls({
     super.key,
     required this.paused,
@@ -64,12 +65,60 @@ class RecordingControls extends StatelessWidget {
     required this.onPause,
     required this.onEnd,
     this.onMark,
+    this.onMinutes,
     this.showLabels = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    if (onMinutes != null) {
+      return Row(
+        children: [
+          IconButton(
+            tooltip: tr('结束'),
+            onPressed: pending ? null : onEnd,
+            style: IconButton.styleFrom(
+              shape: CircleBorder(
+                side: BorderSide(color: colors.outlineVariant),
+              ),
+            ),
+            icon: Icon(
+              Icons.circle,
+              size: 15,
+              color: pending ? null : colors.error,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: onMinutes,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                backgroundColor: colors.surfaceContainerLow,
+                side: BorderSide(color: colors.outlineVariant),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(tr('查看纪要'), textAlign: TextAlign.center),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     Widget control(
       String label,
       IconData icon,
@@ -137,16 +186,18 @@ class RecordingSignal extends StatefulWidget {
     required this.recording,
     required this.status,
     required this.time,
+    this.waveformCollapsed = false,
   });
   final ValueListenable<double> level;
   final bool recording;
   final String status, time;
+  final bool waveformCollapsed;
   @override
   State<RecordingSignal> createState() => _RecordingSignalState();
 }
 
 class _RecordingSignalState extends State<RecordingSignal> {
-  static const count = 40;
+  static const count = 29;
   final samples = List<double>.filled(count, 0);
   int next = 0;
   Timer? timer;
@@ -208,7 +259,7 @@ class _RecordingSignalState extends State<RecordingSignal> {
             );
             final status = Row(
               children: [
-                BreviaIcon(
+                Icon(
                   widget.recording ? Icons.circle : Icons.pause,
                   size: 9,
                   color: widget.recording
@@ -255,18 +306,25 @@ class _RecordingSignalState extends State<RecordingSignal> {
             );
           },
         ),
-        const SizedBox(height: 12),
-        Semantics(
-          label: tr('输入音量'),
-          value: '${(level * 100).round()}%',
-          child: CustomPaint(
-            size: const Size(double.infinity, 32),
-            painter: _Waveform([
-              ...samples.skip(next),
-              ...samples.take(next),
-            ], theme.colorScheme.onSurface),
+        if (!widget.waveformCollapsed) const SizedBox(height: 12),
+        if (!widget.waveformCollapsed)
+          Semantics(
+            label: tr('输入音量'),
+            value: '${(level * 100).round()}%',
+            child: CustomPaint(
+              size: Size(
+                double.infinity,
+                MediaQuery.sizeOf(context).height < 650 ||
+                        MediaQuery.textScalerOf(context).scale(14) > 20
+                    ? 32
+                    : 64,
+              ),
+              painter: _Waveform([
+                ...samples.skip(next),
+                ...samples.take(next),
+              ], theme.colorScheme.onSurface),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -282,9 +340,9 @@ class _Waveform extends CustomPainter {
     final paint = Paint()
       ..color = color
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = (step * .45).clamp(1, 4);
+      ..strokeWidth = (step * .48).clamp(1, 5);
     for (var i = 0; i < samples.length; i++) {
-      final half = 1 + samples[i] * (size.height / 2 - 3);
+      final half = 3 + math.sqrt(samples[i]) * (size.height / 2 - 6);
       final x = (i + .5) * step;
       canvas.drawLine(
         Offset(x, size.height / 2 - half),

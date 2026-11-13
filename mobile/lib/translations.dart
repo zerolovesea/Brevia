@@ -1,6 +1,15 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "电脑笔记": "Desktop notes",
+    "请先保存笔记": "Save your notes first",
+    "鱼骨图": "Fishbone",
+    "手机笔记": "Phone notes",
+    "保存笔记": "Save notes",
+    "重新加载笔记": "Reload notes",
+    "暂无原因分析": "No causes yet",
+    "查看纪要": "View minutes",
+    "暂无笔记": "No notes yet",
     "电脑笔记已更新，请重新核对。":
         "The notes changed on the computer. Review the latest version.",
     "更换配对电脑？": "Switch paired computer?",
@@ -564,6 +573,15 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "电脑笔记": "Notas del ordenador",
+    "请先保存笔记": "Guarda primero las notas",
+    "鱼骨图": "Diagrama de causas",
+    "手机笔记": "Notas del teléfono",
+    "保存笔记": "Guardar notas",
+    "重新加载笔记": "Recargar notas",
+    "暂无原因分析": "Todavía no hay causas",
+    "查看纪要": "Ver acta",
+    "暂无笔记": "Todavía no hay notas",
     "电脑笔记已更新，请重新核对。":
         "Las notas cambiaron en el ordenador. Revisa la última versión.",
     "更换配对电脑？": "¿Cambiar el ordenador vinculado?",
@@ -1137,6 +1155,15 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "电脑笔记": "デスクトップのメモ",
+    "请先保存笔记": "先にメモを保存してください",
+    "鱼骨图": "特性要因図",
+    "手机笔记": "端末のメモ",
+    "保存笔记": "メモを保存",
+    "重新加载笔记": "メモを再読み込み",
+    "暂无原因分析": "原因分析はまだありません",
+    "查看纪要": "議事録を見る",
+    "暂无笔记": "まだノートはありません",
     "电脑笔记已更新，请重新核对。": "パソコン側のノートが更新されました。最新版を確認してください。",
     "更换配对电脑？": "ペアリングするパソコンを変更しますか？",
     "此手机上原电脑的共享会议和未同步笔记将被移除。手机录音会保留。":
@@ -1644,6 +1671,15 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "电脑笔记": "컴퓨터 메모",
+    "请先保存笔记": "먼저 메모를 저장하세요",
+    "鱼骨图": "원인 분석도",
+    "手机笔记": "휴대전화 메모",
+    "保存笔记": "메모 저장",
+    "重新加载笔记": "메모 다시 불러오기",
+    "暂无原因分析": "원인 분석이 없습니다",
+    "查看纪要": "회의록 보기",
+    "暂无笔记": "아직 메모가 없습니다",
     "电脑笔记已更新，请重新核对。": "컴퓨터에서 노트가 변경되었습니다. 최신 내용을 확인하세요.",
     "更换配对电脑？": "페어링된 컴퓨터를 변경할까요?",
     "此手机上原电脑的共享会议和未同步笔记将被移除。手机录音会保留。":
@@ -2149,6 +2185,15 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "电脑笔记": "Notes de l’ordinateur",
+    "请先保存笔记": "Enregistrez d’abord les notes",
+    "鱼骨图": "Diagramme des causes",
+    "手机笔记": "Notes du téléphone",
+    "保存笔记": "Enregistrer les notes",
+    "重新加载笔记": "Recharger les notes",
+    "暂无原因分析": "Aucune cause pour le moment",
+    "查看纪要": "Voir le compte rendu",
+    "暂无笔记": "Aucune note pour le moment",
     "电脑笔记已更新，请重新核对。":
         "Les notes ont changé sur l’ordinateur. Vérifiez la dernière version.",
     "更换配对电脑？": "Changer d’ordinateur jumelé ?",
@@ -2733,6 +2778,15 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "电脑笔记": "Computernotizen",
+    "请先保存笔记": "Speichere zuerst die Notizen",
+    "鱼骨图": "Ursachendiagramm",
+    "手机笔记": "Telefonnotizen",
+    "保存笔记": "Notizen speichern",
+    "重新加载笔记": "Notizen neu laden",
+    "暂无原因分析": "Noch keine Ursachen",
+    "查看纪要": "Protokoll ansehen",
+    "暂无笔记": "Noch keine Notizen",
     "电脑笔记已更新，请重新核对。":
         "Die Notizen auf dem Computer wurden geändert. Prüfe die aktuelle Fassung.",
     "更换配对电脑？": "Gekoppelten Computer wechseln?",
@@ -3315,6 +3369,15 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "电脑笔记": "Заметки компьютера",
+    "请先保存笔记": "Сначала сохраните заметки",
+    "鱼骨图": "Диаграмма причин",
+    "手机笔记": "Заметки телефона",
+    "保存笔记": "Сохранить заметки",
+    "重新加载笔记": "Перезагрузить заметки",
+    "暂无原因分析": "Пока нет причин",
+    "查看纪要": "Открыть протокол",
+    "暂无笔记": "Заметок пока нет",
     "电脑笔记已更新，请重新核对。":
         "Заметки на компьютере изменились. Проверьте последнюю версию.",
     "更换配对电脑？": "Сменить сопряжённый компьютер?",

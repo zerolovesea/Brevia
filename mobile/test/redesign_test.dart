@@ -93,7 +93,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('电脑已选择此手机为声源'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     expect(find.text('等待电脑开始录音'), findsOneWidget);
     expect(find.text('尚未开始录音'), findsOneWidget);
