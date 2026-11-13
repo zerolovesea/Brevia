@@ -53,6 +53,42 @@ class BreviaIcon extends Icon {
 Path? _iconPath(IconData? icon) {
   final p = Path();
   switch (icon) {
+    case Icons.note_outlined:
+      p.moveTo(4, 3);
+      p.lineTo(20, 3);
+      p.lineTo(20, 15);
+      p.lineTo(14, 21);
+      p.lineTo(4, 21);
+      p.close();
+      p.moveTo(14, 21);
+      p.lineTo(14, 15);
+      p.lineTo(20, 15);
+      p.moveTo(8, 8);
+      p.lineTo(16, 8);
+      p.moveTo(8, 12);
+      p.lineTo(12, 12);
+    case Icons.refresh:
+      p.moveTo(20, 4);
+      p.lineTo(20, 10);
+      p.lineTo(14, 10);
+      p.moveTo(20, 10);
+      p.cubicTo(18, 1, 4, 2, 3, 11);
+      p.cubicTo(2, 20, 15, 25, 20, 17);
+    case Icons.tune:
+      for (final y in [6.0, 12.0, 18.0]) {
+        final x = y == 12 ? 15.0 : 9.0;
+        p.moveTo(3, y);
+        p.lineTo(x - 2, y);
+        p.moveTo(x + 2, y);
+        p.lineTo(21, y);
+        p.addOval(Rect.fromCircle(center: Offset(x, y), radius: 2));
+      }
+    case Icons.visibility_outlined:
+      p.moveTo(2, 12);
+      p.cubicTo(7, 3, 17, 3, 22, 12);
+      p.cubicTo(17, 21, 7, 21, 2, 12);
+      p.close();
+      p.addOval(const Rect.fromLTWH(9, 9, 6, 6));
     case Icons.article_outlined || Icons.description_outlined || Icons.article:
       p.moveTo(14, 2);
       p.lineTo(6, 2);

@@ -1,6 +1,12 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "更多": "More",
+    "加粗": "Bold",
+    "列表": "List",
+    "待办": "To-do",
+    "扫码连接": "Scan to connect",
+
     "请先在电脑配置纪要模型": "Configure a minutes model on the computer first.",
     "请先在电脑配置纪要模型和在线服务密钥":
         "Configure the minutes model and the online service key on the computer first.",
@@ -580,6 +586,12 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "更多": "Más",
+    "加粗": "Negrita",
+    "列表": "Lista",
+    "待办": "Tarea",
+    "扫码连接": "Escanear",
+
     "请先在电脑配置纪要模型": "Configura un modelo de actas en el ordenador.",
     "请先在电脑配置纪要模型和在线服务密钥":
         "Configura el modelo de actas y la clave del servicio en línea en el ordenador.",
@@ -1169,6 +1181,12 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "更多": "その他",
+    "加粗": "太字",
+    "列表": "リスト",
+    "待办": "タスク",
+    "扫码连接": "スキャンして接続",
+
     "请先在电脑配置纪要模型": "先にパソコンで議事録モデルを設定してください。",
     "请先在电脑配置纪要模型和在线服务密钥": "先にパソコンで議事録モデルとオンラインサービスのキーを設定してください。",
     "等待电脑处理": "パソコンの処理待ち",
@@ -1691,6 +1709,12 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "更多": "더 보기",
+    "加粗": "굵게",
+    "列表": "목록",
+    "待办": "할 일",
+    "扫码连接": "스캔하여 연결",
+
     "请先在电脑配置纪要模型": "컴퓨터에서 회의록 모델을 먼저 설정하세요.",
     "请先在电脑配置纪要模型和在线服务密钥": "컴퓨터에서 회의록 모델과 온라인 서비스 키를 먼저 설정하세요.",
     "等待电脑处理": "컴퓨터 처리 대기 중",
@@ -2211,6 +2235,12 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "更多": "Plus",
+    "加粗": "Gras",
+    "列表": "Liste",
+    "待办": "Tâche",
+    "扫码连接": "Scanner",
+
     "请先在电脑配置纪要模型":
         "Configurez d’abord un modèle de compte rendu sur l’ordinateur.",
     "请先在电脑配置纪要模型和在线服务密钥":
@@ -2812,6 +2842,12 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "更多": "Mehr",
+    "加粗": "Fett",
+    "列表": "Liste",
+    "待办": "Aufgabe",
+    "扫码连接": "Scannen",
+
     "请先在电脑配置纪要模型": "Richte zuerst ein Protokollmodell auf dem Computer ein.",
     "请先在电脑配置纪要模型和在线服务密钥":
         "Richte zuerst das Protokollmodell und den Onlinedienstschlüssel auf dem Computer ein.",
@@ -3410,6 +3446,12 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "更多": "Ещё",
+    "加粗": "Жирный",
+    "列表": "Список",
+    "待办": "Задача",
+    "扫码连接": "Сканировать",
+
     "请先在电脑配置纪要模型": "Сначала настройте модель протокола на компьютере.",
     "请先在电脑配置纪要模型和在线服务密钥":
         "Сначала настройте модель протокола и ключ онлайн-сервиса на компьютере.",

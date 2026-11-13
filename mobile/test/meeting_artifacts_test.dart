@@ -4,6 +4,63 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('note formatting preserves surrounding text and selection', () {
+    final editor = TextEditingController(text: '前文选中文字后文')
+      ..selection = const TextSelection(baseOffset: 2, extentOffset: 6);
+    insertNoteFormat(editor, '**', '**');
+    expect(editor.text, '前文**选中文字**后文');
+    expect(editor.selection.baseOffset, 8);
+    editor.selection = const TextSelection.collapsed(offset: -1);
+    insertNoteFormat(editor, '\n- [ ] ');
+    expect(editor.text, '前文**选中文字**后文\n- [ ] ');
+    editor.dispose();
+  });
+
+  testWidgets(
+    'minutes menu fits large translated text and blocks busy actions',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 740);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      uiLanguage = 'de';
+      addTearDown(() => uiLanguage = 'system');
+      var calls = 0;
+      Future<void> show(bool busy) => tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              body: MeetingArtifactActions(
+                hasSummary: true,
+                busy: busy,
+                onGenerate: () => calls++,
+                onRefine: () => calls++,
+              ),
+            ),
+          ),
+        ),
+      );
+      await show(false);
+      await tester.tap(find.byTooltip(tr('更多')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text(tr('重新生成纪要')));
+      await tester.pumpAndSettle();
+      expect(calls, 1);
+      await show(true);
+      expect(
+        tester
+            .widget<PopupMenuButton<String>>(
+              find.byType(PopupMenuButton<String>),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   final meeting = {
     'id': 'review',
     'title': '发布评审',

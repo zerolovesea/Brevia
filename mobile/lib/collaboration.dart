@@ -844,6 +844,11 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
           ],
         ),
       ),
+      if (editing)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          child: NoteFormatBar(editor: editor, onChanged: _change),
+        ),
       Expanded(
         child: editing
             ? Padding(
@@ -905,9 +910,9 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: TextButton.icon(
-                icon: const BreviaIcon(Icons.tune, size: 17),
-                label: Text(tr('会后精修')),
+              child: IconButton(
+                tooltip: tr('会后精修'),
+                icon: const BreviaIcon(Icons.tune, size: 20),
                 onPressed: processing || busy || !online
                     ? null
                     : () => _action(() => _process('refine')),
@@ -1034,20 +1039,13 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            icon: busy || processing
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const BreviaIcon(Icons.auto_awesome, size: 17),
-            label: Text(tr(summary.isEmpty ? '生成会议纪要' : '重新生成纪要')),
-            onPressed: busy || processing
-                ? null
-                : () => _action(() => _process('summary')),
-          ),
+        MeetingArtifactActions(
+          hasSummary: summary.isNotEmpty,
+          busy: busy || processing,
+          onGenerate: () => _action(() => _process('summary')),
+          onRefine: ended && online
+              ? () => _action(() => _process('refine'))
+              : null,
         ),
         if (busy || processing)
           Padding(

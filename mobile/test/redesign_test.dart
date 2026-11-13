@@ -17,6 +17,33 @@ void main() {
   });
   tearDown(() => uiLanguage = 'system');
 
+  testWidgets('notes navigation opens the selected meeting notes directly', (
+    tester,
+  ) async {
+    final model = AppModel();
+    addTearDown(model.dispose);
+    model.meetings = [
+      {
+        'id': 'fixture-notes',
+        'title': '笔记入口',
+        'state': 'ended',
+        'finished': true,
+        'samples': 16000,
+        'snapshot': {
+          'notes': '保留原有笔记',
+          'summary': {'markdown': '会议结论'},
+        },
+      },
+    ];
+    await tester.pumpWidget(BreviaApp(model: model));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.note_outlined).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('笔记入口'));
+    await tester.pumpAndSettle();
+    expect(find.text('保留原有笔记'), findsOneWidget);
+    expect(find.text('会议结论'), findsNothing);
+  });
   testWidgets(
     'first run prioritizes desktop download and requires approved pairing',
     (tester) async {

@@ -4,6 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('ambient background settles and respects reduced motion', (
+    tester,
+  ) async {
+    Future<void> show(bool reduced) => tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: reduced),
+          child: const BreviaAmbientSurface(
+            child: SizedBox(width: 320, height: 100),
+          ),
+        ),
+      ),
+    );
+    await show(false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    await show(true);
+    await tester.pump();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
   testWidgets(
     'page handoff retains visible content without exposing old controls',
     (tester) async {

@@ -270,6 +270,17 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined).last);
     await tester.pumpAndSettle();
     await capture('mobile-settings');
+    model.appearance = 'dark';
+    model.notifyListeners();
+    await tester.pumpAndSettle();
+    await capture('mobile-settings-dark');
+    tester.view.physicalSize = const Size(320, 740);
+    await tester.pumpAndSettle();
+    await capture('mobile-settings-narrow');
+    tester.view.physicalSize = const Size(390, 844);
+    model.appearance = 'light';
+    model.notifyListeners();
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text(tr('界面语言')),
       120,
@@ -370,6 +381,11 @@ void main() {
       ),
     );
     await capture('mobile-review-summary');
+    await tester.tap(find.byTooltip(tr('更多')).last);
+    await tester.pumpAndSettle();
+    await capture('mobile-minutes-actions');
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
     final reviewSnapshot = model.meetings.first['snapshot'] as Map;
     reviewSnapshot['task'] = {
       'id': 'summary-preview',

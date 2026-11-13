@@ -337,11 +337,14 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       backgroundColor: canvas,
       height: 64,
       elevation: 0,
-      indicatorColor: Colors.transparent,
+      indicatorColor: scheme.onSurface,
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 24,
-          color: states.contains(WidgetState.selected) ? ink : muted,
+          color: states.contains(WidgetState.selected) ? canvas : muted,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
@@ -451,10 +454,7 @@ class BreviaPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     );
@@ -510,7 +510,12 @@ class BreviaTabs extends StatelessWidget {
                       horizontal: 14,
                       vertical: 8,
                     ),
-                    shape: const RoundedRectangleBorder(),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: selected == value
+                        ? scheme.surfaceContainerHighest
+                        : Colors.transparent,
                     foregroundColor: selected == value
                         ? scheme.onSurface
                         : scheme.onSurfaceVariant,
@@ -522,22 +527,7 @@ class BreviaTabs extends StatelessWidget {
                     ),
                   ),
                   onPressed: () => onSelect(value),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: selected == value
-                              ? scheme.onSurface
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(label),
-                    ),
-                  ),
+                  child: Text(label),
                 ),
               ),
           ],
@@ -545,4 +535,47 @@ class BreviaTabs extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 入场点阵只播放一轮，随后静止，不常驻消耗录音电量。
+class BreviaAmbientSurface extends StatelessWidget {
+  const BreviaAmbientSurface({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: BreviaMotion.duration(
+      context,
+      const Duration(milliseconds: 2600),
+    ),
+    curve: Curves.easeOutCubic,
+    child: child,
+    builder: (context, phase, child) => CustomPaint(
+      painter: _AmbientDots(Theme.of(context).colorScheme.onSurface, phase),
+      child: child,
+    ),
+  );
+}
+
+class _AmbientDots extends CustomPainter {
+  const _AmbientDots(this.ink, this.phase);
+  final Color ink;
+  final double phase;
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 点阵在右侧留白区渐隐，正文始终保持纯净背景。
+    final paint = Paint();
+    for (var x = size.width * .55; x < size.width; x += 9) {
+      for (var y = 8.0; y < size.height; y += 9) {
+        final distance = ((x / size.width) - phase).abs();
+        final strength = (1 - distance * 3).clamp(0.0, 1.0);
+        paint.color = ink.withValues(alpha: .025 + strength * .065);
+        canvas.drawCircle(Offset(x, y), .6 + strength * .45, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AmbientDots old) => old.phase != phase || old.ink != ink;
 }

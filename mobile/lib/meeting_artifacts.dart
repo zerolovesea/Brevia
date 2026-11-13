@@ -749,3 +749,134 @@ class _MeetingExportButtonState extends State<MeetingExportButton> {
     );
   }
 }
+
+/// 纪要正文常驻少量操作；重生成和精修在同一菜单中保留完整名称。
+class MeetingArtifactActions extends StatelessWidget {
+  const MeetingArtifactActions({
+    super.key,
+    required this.hasSummary,
+    required this.busy,
+    required this.onGenerate,
+    this.onRefine,
+  });
+  final bool hasSummary, busy;
+  final VoidCallback onGenerate;
+  final VoidCallback? onRefine;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(tr('会议纪要'), style: Theme.of(context).textTheme.titleMedium),
+      ),
+      if (busy)
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Semantics(
+            label: tr('电脑处理中'),
+            liveRegion: true,
+            child: const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      if (!hasSummary && !busy)
+        IconButton.filledTonal(
+          tooltip: tr('生成会议纪要'),
+          onPressed: onGenerate,
+          icon: const BreviaIcon(Icons.auto_awesome, size: 21),
+        ),
+      if (hasSummary || onRefine != null)
+        PopupMenuButton<String>(
+          tooltip: tr('更多'),
+          elevation: 0,
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          enabled: !busy,
+          icon: const BreviaIcon(Icons.more_horiz),
+          onSelected: (value) =>
+              value == 'summary' ? onGenerate() : onRefine?.call(),
+          itemBuilder: (_) => [
+            if (hasSummary)
+              PopupMenuItem(
+                value: 'summary',
+                child: Row(
+                  children: [
+                    const BreviaIcon(Icons.refresh, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(tr('重新生成纪要'))),
+                  ],
+                ),
+              ),
+            if (onRefine != null)
+              PopupMenuItem(
+                value: 'refine',
+                child: Row(
+                  children: [
+                    const BreviaIcon(Icons.tune, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(tr('重新精修'))),
+                  ],
+                ),
+              ),
+          ],
+        ),
+    ],
+  );
+}
+
+/// 保持 Markdown 文本格式和原有草稿保存流程，只修改当前选择。
+void insertNoteFormat(
+  TextEditingController editor,
+  String before, [
+  String after = '',
+]) {
+  final selection = editor.selection;
+  final start = selection.isValid ? selection.start : editor.text.length;
+  final end = selection.isValid ? selection.end : start;
+  final selected = editor.text.substring(start, end);
+  editor.value = TextEditingValue(
+    text: editor.text.replaceRange(start, end, '$before$selected$after'),
+    selection: TextSelection.collapsed(
+      offset: start + before.length + selected.length,
+    ),
+  );
+}
+
+class NoteFormatBar extends StatelessWidget {
+  const NoteFormatBar({
+    super.key,
+    required this.editor,
+    required this.onChanged,
+  });
+  final TextEditingController editor;
+  final ValueChanged<String> onChanged;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    borderRadius: BorderRadius.circular(12),
+    child: Row(
+      children: [
+        for (final item in [
+          (Icons.format_bold, '加粗', '**', '**'),
+          (Icons.format_list_bulleted, '列表', '\n- ', ''),
+          (Icons.check_box_outlined, '待办', '\n- [ ] ', ''),
+        ])
+          IconButton(
+            tooltip: tr(item.$2),
+            icon: BreviaIcon(item.$1, size: 20),
+            onPressed: () {
+              insertNoteFormat(editor, item.$3, item.$4);
+              onChanged(editor.text);
+            },
+          ),
+      ],
+    ),
+  );
+}
