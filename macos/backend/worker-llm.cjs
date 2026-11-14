@@ -241,7 +241,10 @@ function createLLMHandlers(worker) {
         const localWindow = transcriptCost + 6144 > 16384 ? 32768 : 16384;
         const preference = worker.prompts?.apply('summary', '') || '';
         const selectEvidence =
-          (local(payload) || deepseek) && meeting.language === language && !preference;
+          (local(payload) || deepseek) &&
+          meeting.language === language &&
+          /^(zh|en)(?:-|$)/i.test(language) &&
+          !preference;
         const context =
           payload.context_size ??
           (local(payload)

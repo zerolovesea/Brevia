@@ -67,8 +67,11 @@ function renderSelection(text, segments, headings, allowed) {
     const start = bodies[2].length;
     for (const key of sections.slice(2)) add(key, topic[key]);
     if (bodies[2].length > start) {
-      const title = topic.title.replace(/[\r\n#[\]<>]/g, ' ').trim();
-      bodies[2].splice(start, 0, '### ' + title);
+      const title = topic.title
+        .slice(0, 160)
+        .replace(/[\r\n#[\]<>]/g, ' ')
+        .trim();
+      bodies[2].splice(start, 0, '### ' + safe(title));
       const selected = topic.discussion
         .map((id) => Number(String(id).replace(/^S/, '')))
         .filter((id) => allowed.has(id));

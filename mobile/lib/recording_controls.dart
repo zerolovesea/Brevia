@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'design_icons.dart';
 
 import 'package:flutter/material.dart';
@@ -159,16 +160,65 @@ class RecordingControls extends StatelessWidget {
 }
 
 /// 最近的麦克风电平；仅音频输入变化时重绘波形。
-class RecordingSignal extends StatelessWidget {
+class RecordingSignal extends StatefulWidget {
   const RecordingSignal({
     super.key,
+    required this.level,
+    this.compactStatus = false,
     required this.recording,
     required this.status,
     required this.time,
-    this.compactStatus = false,
   });
+  final ValueListenable<double> level;
   final bool recording, compactStatus;
   final String status, time;
+  @override
+  State<RecordingSignal> createState() => _RecordingSignalState();
+}
+
+class _RecordingSignalState extends State<RecordingSignal> {
+  static const count = 40;
+  final samples = List<double>.filled(count, 0);
+  int next = 0;
+  Timer? timer;
+  double get level => widget.recording ? widget.level.value.clamp(0.0, 1.0) : 0;
+  void startSampling() {
+    timer?.cancel();
+    samples.fillRange(0, count, 0);
+    next = 0;
+    if (!widget.recording) return;
+    samples[next++] = level;
+    timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      final value = level;
+      if (samples.every((sample) => sample == value)) return;
+      setState(() {
+        samples[next] = value;
+        next = (next + 1) % count;
+      });
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    startSampling();
+  }
+
+  @override
+  void didUpdateWidget(RecordingSignal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.recording != widget.recording ||
+        oldWidget.level != widget.level) {
+      startSampling();
+    }
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -181,32 +231,32 @@ class RecordingSignal extends StatelessWidget {
               fit: BoxFit.scaleDown,
               alignment: AlignmentDirectional.centerEnd,
               child: Text(
-                time,
-                style: theme.textTheme.headlineLarge?.copyWith(
+                widget.time,
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             );
-            final statusRow = Row(
+            final status = Row(
               children: [
-                Icon(
-                  recording ? Icons.circle : Icons.pause,
+                BreviaIcon(
+                  widget.recording ? Icons.circle : Icons.pause,
                   size: 9,
-                  color: recording
+                  color: widget.recording
                       ? const Color(0xffdb3039)
                       : theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: compactStatus
+                  child: widget.compactStatus
                       ? Text(
-                          status,
+                          widget.status,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall,
                         )
                       : StableStatusText(
-                          status,
+                          widget.status,
                           states: [
                             for (final text in [
                               '录音中',
@@ -222,18 +272,69 @@ class RecordingSignal extends StatelessWidget {
                 ),
               ],
             );
+            if (MediaQuery.textScalerOf(context).scale(14) > 21 ||
+                box.maxWidth < 245) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [status, clock],
+              );
+            }
             return Row(
               children: [
-                Expanded(child: statusRow),
-                const SizedBox(width: 12),
-                Flexible(child: clock),
+                Expanded(child: status),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: clock,
+                  ),
+                ),
               ],
             );
           },
         ),
+        const SizedBox(height: 12),
+        Semantics(
+          label: tr('输入音量'),
+          value: '${(level * 100).round()}%',
+          child: CustomPaint(
+            size: const Size(double.infinity, 32),
+            painter: _Waveform([
+              ...samples.skip(next),
+              ...samples.take(next),
+            ], theme.colorScheme.onSurface),
+          ),
+        ),
       ],
     );
   }
+}
+
+class _Waveform extends CustomPainter {
+  const _Waveform(this.samples, this.color);
+  final List<double> samples;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final step = size.width / samples.length;
+    final paint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = (step * .45).clamp(1, 4);
+    for (var i = 0; i < samples.length; i++) {
+      final half = 1 + samples[i] * (size.height / 2 - 3);
+      final x = (i + .5) * step;
+      canvas.drawLine(
+        Offset(x, size.height / 2 - half),
+        Offset(x, size.height / 2 + half),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Waveform old) =>
+      color != old.color || !listEquals(samples, old.samples);
 }
 
 class MicrophoneLevel extends StatefulWidget {
@@ -652,6 +753,7 @@ class RecordingFocus extends StatelessWidget {
               children: [
                 RecordingSignal(
                   compactStatus: true,
+                  level: level,
 
                   recording: recording,
                   status: status,

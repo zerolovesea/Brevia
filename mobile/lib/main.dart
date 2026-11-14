@@ -3049,6 +3049,7 @@ class _MeetingPageState extends State<MeetingPage> {
                                         )
                                       else if (!ended)
                                         RecordingSignal(
+                                          level: widget.model.inputLevel,
                                           status: label,
                                           time: durationText(m['samples'] ?? 0),
                                           recording:
