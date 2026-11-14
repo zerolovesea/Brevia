@@ -100,9 +100,7 @@ pub async fn run(app: &AppHandle, method: &str) -> Result<Value, String> {
                     format!(
                         "https://github.com/zerolovesea/Brevia/releases/latest/download/{feed}"
                     ),
-                    format!(
-                        "https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/{feed}"
-                    ),
+                    format!("{MIRROR}{feed}"),
                 ]
                 .iter()
                 .map(|url| url.parse().unwrap())
