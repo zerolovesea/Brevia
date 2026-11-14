@@ -62,16 +62,26 @@ int main(int argc, char **argv) {
       "<meta http-equiv='Content-Security-Policy' content=\"default-src "
       "'none'; style-src 'unsafe-inline'; img-src data:; font-src data:\">",
       source, NULL);
+  g_free(source);
   g_signal_connect(view, "load-changed", G_CALLBACK(load_changed), NULL);
   webkit_web_view_load_html(view, html, NULL);
+  g_free(html);
   g_timeout_add_seconds(60, timeout, NULL);
   gtk_main();
-  gchar *bytes = NULL;
-  gsize length = 0;
-  gboolean ok = finished &&
-                g_file_get_contents(filename, &bytes, &length, NULL) &&
-                length >= 5 && !memcmp(bytes, "%PDF-", 5) &&
-                fwrite(bytes, 1, length, pdf) == length && fclose(pdf) == 0;
+  FILE *input = finished ? fopen(filename, "rb") : NULL;
+  char buffer[65536];
+  size_t count = input ? fread(buffer, 1, sizeof(buffer), input) : 0;
+  gboolean ok = count >= 5 && !memcmp(buffer, "%PDF-", 5);
+  while (ok && count > 0) {
+    ok = fwrite(buffer, 1, count, pdf) == count;
+    count = fread(buffer, 1, sizeof(buffer), input);
+  }
+  if (input) {
+    ok = ok && !ferror(input);
+    fclose(input);
+  }
+  if (fclose(pdf) != 0)
+    ok = FALSE;
   g_remove(filename);
   g_rmdir(directory);
   return ok ? 0 : 1;
