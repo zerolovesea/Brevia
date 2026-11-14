@@ -347,3 +347,29 @@ test('cache archive excludes the host binary even when tar recursively includes 
     fs.rmSync(scratch, { recursive: true, force: true });
   }
 });
+
+test('native feeds bind a signed artifact to its platform, filename and release date', (t) => {
+  const { writeNativeFeed } = require('./native-update-feed.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-feed-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const artifact = path.join(directory, 'Brevia-cuda.deb');
+  const feed = path.join(directory, 'latest-linux-cuda.json');
+  const key = Buffer.from('comment\n' + Buffer.alloc(42, 9).toString('base64')).toString('base64');
+  const previous = process.env.BREVIA_NATIVE_UPDATE_PUBKEY;
+  t.after(() => {
+    if (previous === undefined) delete process.env.BREVIA_NATIVE_UPDATE_PUBKEY;
+    else process.env.BREVIA_NATIVE_UPDATE_PUBKEY = previous;
+  });
+  process.env.BREVIA_NATIVE_UPDATE_PUBKEY = key;
+  fs.writeFileSync(artifact, 'installer');
+  fs.writeFileSync(artifact + '.sig', key);
+  writeNativeFeed(artifact, feed, 'linux-x86_64');
+  const result = JSON.parse(fs.readFileSync(feed));
+  assert.ok(Date.parse(result.pub_date));
+  assert.deepEqual(result.platforms['linux-x86_64'], {
+    signature: key,
+    url: `https://github.com/zerolovesea/Brevia/releases/download/v${result.version}/Brevia-cuda.deb`,
+  });
+  fs.writeFileSync(artifact + '.sig', 'invalid');
+  assert.throws(() => writeNativeFeed(artifact, feed, 'linux-x86_64'), /Invalid/);
+});

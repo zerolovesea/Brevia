@@ -49,7 +49,12 @@ async function main() {
   run('npm', ['run', 'build']);
   const cargoTarget = process.env.CARGO_TARGET_DIR || path.join(out, 'cargo');
   run('cargo', ['build', '--locked', '--release', '--manifest-path', 'macos/host/Cargo.toml'], {
-    env: { ...process.env, CARGO_TARGET_DIR: cargoTarget },
+    env: {
+      ...process.env,
+      BREVIA_BUILD_BACKEND: backend,
+      TAURI_CONFIG: JSON.stringify({ version }),
+      CARGO_TARGET_DIR: cargoTarget,
+    },
   });
   const host = path.join(cargoTarget, 'release/brevia-host');
   fs.mkdirSync(out, { recursive: true });
@@ -67,7 +72,16 @@ async function main() {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, text);
     };
-    copy(host, path.join(stage, 'usr/bin/brevia-desktop'));
+    const binary = path.join(stage, 'usr/bin/brevia-desktop');
+    copy(host, binary);
+    // Tauri normally sets the package type while bundling so its updater can invoke dpkg.
+    const bytes = fs.readFileSync(binary);
+    const marker = '__TAURI_BUNDLE_TYPE_VAR_UNK';
+    const offset = bytes.indexOf(marker);
+    if (offset < 0 || bytes.lastIndexOf(marker) !== offset)
+      throw new Error('Missing or ambiguous Tauri bundle type');
+    bytes.write('__TAURI_BUNDLE_TYPE_VAR_DEB', offset);
+    fs.writeFileSync(binary, bytes);
     run('strip', ['--strip-debug', path.join(stage, 'usr/bin/brevia-desktop')]);
     copy(path.join(native, 'brevia-audio'), path.join(control, 'brevia-audio'));
     const webkit = run('pkg-config', ['--cflags', '--libs', 'webkit2gtk-4.1'], {

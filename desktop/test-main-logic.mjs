@@ -665,6 +665,7 @@ const asyncFn = (name) => {
 
 {
   let downloads = 0,
+    discards = 0,
     installs = 0,
     idle = true,
     enabled = true,
@@ -675,6 +676,7 @@ const asyncFn = (name) => {
   const app = {
     isPackaged: true,
     async nativeUpdate(operation) {
+      if (operation === 'discard') discards++;
       if (operation === 'download') {
         downloads++;
         afterDownload();
@@ -743,6 +745,7 @@ const asyncFn = (name) => {
   await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
   assert.deepEqual(stopped, []);
   assert.equal(installs, 0);
+  assert.equal(discards, 1);
   context.worker.active = null;
   afterDownload = () => {};
   installError = Error('signature rejected');
@@ -759,6 +762,11 @@ const asyncFn = (name) => {
   stopped.length = 0;
   assert.equal(await context.installUpdate(), true);
   assert.deepEqual(stopped, ['live', 'refinement']);
+  context.process.platform = 'linux';
+  enabled = true;
+  stopped.length = 0;
+  assert.equal(await context.installUpdate(), true);
+  assert.deepEqual(stopped, []);
   context.process.platform = 'darwin';
   app.preparingUpdate = false;
   context.installingUpdate = false;

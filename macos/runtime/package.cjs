@@ -203,27 +203,7 @@ async function updater(app) {
     env: { ...process.env, COPYFILE_DISABLE: '1' },
   });
   run('cargo', ['tauri', 'signer', 'sign', '--app-version', version, archive]);
-  const signature = fs.readFileSync(archive + '.sig', 'utf8').trim();
-  const keyId = (text) =>
-    Buffer.from(Buffer.from(text, 'base64').toString().split('\n')[1], 'base64').subarray(2, 10);
-  if (!keyId(signature).equals(keyId(publicKey)))
-    throw new Error('Updater public key and signature differ');
-  fs.writeFileSync(
-    feed,
-    JSON.stringify(
-      {
-        version,
-        platforms: {
-          'darwin-aarch64': {
-            signature,
-            url: `https://github.com/zerolovesea/Brevia/releases/download/v${version}/${filename}`,
-          },
-        },
-      },
-      null,
-      2,
-    ) + '\n',
-  );
+  require('../../scripts/native-update-feed.cjs').writeNativeFeed(archive, feed, 'darwin-aarch64');
 }
 async function main() {
   if (process.platform !== 'darwin' || process.arch !== 'arm64')

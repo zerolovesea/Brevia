@@ -12,7 +12,10 @@ const out = path.join(root, 'dist/native-win');
 const version = require('../package.json').version;
 const nodeVersion = '22.23.1';
 async function main() {
-  const native = await buildNative();
+  const variant = process.env.BREVIA_BUILD_BACKEND || 'cpu';
+  if (!['cpu', 'cuda'].includes(variant)) throw new Error('Invalid Windows backend');
+  const cuda = variant === 'cuda';
+  const native = await buildNative(cuda);
   run(process.execPath, [
     process.env.npm_execpath ||
       path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
@@ -162,39 +165,14 @@ async function main() {
     .readdirSync(bundles)
     .find((n) => n.endsWith('-setup.exe') && n.includes(version));
   if (!filename) throw new Error('Windows installer was not produced');
-  const name = `Brevia-${version}-x64-setup.exe`,
+  const name = `Brevia-${version}-x64${cuda ? '-cuda' : ''}-setup.exe`,
     installer = path.join(out, name);
   fs.copyFileSync(path.join(bundles, filename), installer);
+  const feed = path.join(out, cuda ? 'latest-windows-cuda.json' : 'latest-windows.json');
   if (signed) {
-    const signature = fs.readFileSync(path.join(bundles, filename + '.sig'), 'utf8').trim();
-    const keyId = (text) => {
-      const record = Buffer.from(
-        Buffer.from(text, 'base64').toString().split('\n')[1] || '',
-        'base64',
-      );
-      if (record.length < 10) throw new Error('Invalid native update key or signature');
-      return record.subarray(2, 10);
-    };
-    if (!keyId(signature).equals(keyId(publicKey)))
-      throw new Error('Updater public key and signature differ');
-    fs.writeFileSync(installer + '.sig', signature + '\n');
-    fs.writeFileSync(
-      path.join(out, 'latest-windows.json'),
-      JSON.stringify(
-        {
-          version,
-          platforms: {
-            'windows-x86_64': {
-              signature,
-              url: `https://github.com/zerolovesea/Brevia/releases/download/v${version}/${name}`,
-            },
-          },
-        },
-        null,
-        2,
-      ) + '\n',
-    );
-  } else fs.rmSync(path.join(out, 'latest-windows.json'), { force: true });
+    fs.copyFileSync(path.join(bundles, filename + '.sig'), installer + '.sig');
+    require('../scripts/native-update-feed.cjs').writeNativeFeed(installer, feed, 'windows-x86_64');
+  } else fs.rmSync(feed, { force: true });
   console.log(
     `${installer}: ${fs.statSync(installer).size} bytes, SHA256 ${await digest(installer)}`,
   );

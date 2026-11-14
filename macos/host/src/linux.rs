@@ -97,6 +97,7 @@ pub fn dispatch(method: &str, args: &Value) -> Result<Value, Box<dyn Error>> {
         ));
     }
     if method == "shell.copyText" {
+        let text = args["text"].as_str().ok_or("Missing text")?;
         let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
         let mut command = Command::new(if wayland { "wl-copy" } else { "xclip" });
         if !wayland {
@@ -106,12 +107,14 @@ pub fn dispatch(method: &str, args: &Value) -> Result<Value, Box<dyn Error>> {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .spawn()?;
-        child
+        let write_result = child
             .stdin
             .take()
             .ok_or("Missing clipboard input")?
-            .write_all(args["text"].as_str().ok_or("Missing text")?.as_bytes())?;
-        if !child.wait()?.success() {
+            .write_all(text.as_bytes());
+        let status = child.wait()?;
+        write_result?;
+        if !status.success() {
             return Err("Clipboard write failed".into());
         }
         return Ok(json!(true));

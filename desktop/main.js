@@ -2533,7 +2533,7 @@ function checkForUpdate() {
 }
 
 async function installUpdate() {
-  if (!['darwin', 'win32'].includes(process.platform) || !app.isPackaged) return false;
+  if (!['darwin', 'win32', 'linux'].includes(process.platform) || !app.isPackaged) return false;
 
   const requireIdle = async () => {
     const modelsIdle = await worker.request('models.can-relocate');
@@ -2559,8 +2559,10 @@ async function installUpdate() {
   };
   await requireIdle();
   let disabledWindow;
+  let downloaded = false;
   try {
     await app.nativeUpdate('download');
+    downloaded = true;
     await requireIdle();
     // 下载期间仍可开始会议或编辑笔记；进入系统安装阶段前需确认存盘及空闲状态。
     const window = desktop.mainWindow;
@@ -2584,6 +2586,7 @@ async function installUpdate() {
     app.quit();
     return true;
   } catch (error) {
+    if (downloaded) await app.nativeUpdate('discard').catch(console.error);
     app.preparingUpdate = false;
     installingUpdate = false;
     if (disabledWindow && !disabledWindow.isDestroyed()) disabledWindow.setEnabled(true);

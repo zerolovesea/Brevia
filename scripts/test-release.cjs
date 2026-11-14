@@ -90,6 +90,11 @@ test('release links migrate Electron filenames and keep formatting through later
         path.join(scratch, 'dist', `Brevia-${version}-x64-setup.exe`),
         Buffer.alloc(200000),
       );
+      for (const suffix of ['x64-cuda-setup.exe', 'amd64-cpu.deb', 'amd64-cuda.deb'])
+        fs.writeFileSync(
+          path.join(scratch, 'dist', `Brevia-${version}-${suffix}`),
+          Buffer.alloc(300000),
+        );
       const result = spawnSync(
         process.execPath,
         [path.join(root, 'scripts/update-release-links.mjs')],
@@ -111,6 +116,14 @@ test('release links migrate Electron filenames and keep formatting through later
         else {
           assert.ok(content.includes('data-size="macos">0.1 MB'), file);
           assert.ok(content.includes('data-size="windows">0.2 MB'), file);
+          for (const [variant, suffix] of [
+            ['windows-cuda', 'x64-cuda-setup.exe'],
+            ['linux-cpu', 'amd64-cpu.deb'],
+            ['linux-cuda', 'amd64-cuda.deb'],
+          ]) {
+            assert.ok(content.includes(`Brevia-${version}-${suffix}"`), file);
+            assert.ok(content.includes(`data-size="${variant}">0.3 MB`), file);
+          }
         }
       }
     }

@@ -48,8 +48,10 @@ jobs:
               dist/native-win/Brevia-*-x64-setup.exe.sig
               dist/native-win/latest.yml
               dist/native-win/latest-windows.json
+              dist/native-win/latest-windows-cuda.json
+              dist/native-win/Brevia-*-x64-cuda-setup.exe*
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
@@ -198,6 +200,18 @@ jobs:
       - name: Verify real Windows inference before release
         if: runner.os == 'Windows'
         run: node macos/inference/smoke.cjs dist/native-smoke-models dist/native-win/app/resources/engines
+      - name: Package and verify signed Windows CUDA installer
+        shell: pwsh
+        if: runner.os == 'Windows'
+        env:
+          BREVIA_BUILD_BACKEND: cuda
+          BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          npm run dist:win
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/native-win/latest-windows-cuda.json)) { throw 'CUDA update signature missing' }
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS'
         shell: bash
@@ -239,6 +253,12 @@ jobs:
 
   linux:
     uses: ./.github/workflows/native-linux-mlx.yml
+    with:
+      signed: true
+    secrets:
+      BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')

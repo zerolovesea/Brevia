@@ -1,6 +1,17 @@
 name: Native Linux validation
 on:
   workflow_call:
+    inputs:
+      signed:
+        type: boolean
+        default: false
+    secrets:
+      BREVIA_NATIVE_UPDATE_PUBKEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
   pull_request:
     paths: &linux-paths
@@ -43,7 +54,9 @@ jobs:
         with:
           node-version: 22.23.1
           cache: npm
-      - run: |
+      - env:
+          BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+        run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libssl-dev libblas-dev liblapack-dev libopenblas0-pthread libarchive-tools patchelf pulseaudio xvfb jq
           npm ci
@@ -51,8 +64,23 @@ jobs:
       - run: |
           sudo apt-get install -y ./dist/native-linux/*.deb
           dbus-run-session -- xvfb-run -a linux/smoke.sh ${{ matrix.backend }}
+      - name: Sign verified Debian update
+        if: inputs.signed
+        env:
+          BREVIA_NATIVE_UPDATE_PUBKEY: ${{ secrets.BREVIA_NATIVE_UPDATE_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          cargo install tauri-cli --version 2.12.2 --locked
+          deb=(dist/native-linux/*-amd64-${{ matrix.backend }}.deb)
+          cargo tauri signer sign --app-version "$(node -p 'require("./package.json").version')" "${deb[0]}"
+          node -e "require('./scripts/native-update-feed.cjs').writeNativeFeed(process.argv[1],process.argv[2],'linux-x86_64')" "${deb[0]}" dist/native-linux/latest-linux-${{ matrix.backend }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: Brevia-linux-x64-${{ matrix.backend }}
-          path: dist/native-linux/*-amd64-${{ matrix.backend }}.deb
+          path: |
+            dist/native-linux/*-amd64-${{ matrix.backend }}.deb
+            dist/native-linux/*.deb.sig
+            dist/native-linux/latest-linux-*.json
           if-no-files-found: error
