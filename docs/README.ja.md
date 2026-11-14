@@ -18,7 +18,8 @@
 | プラットフォーム | ダウンロード                                                                                         | 動作環境                     |
 | ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac              | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows          | [Windows][download-windows]                                                                          | Windows 10 / 11 · x64 · AVX2 |
+| Windows          | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
+| Linux            | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone           | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android          | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 インストーラーは Mac 版が約 43 MiB（45.5 MB）、Windows 版が約 38 MB です。言語モデルは別途ダウンロードします。
 
-> 現在のバージョンでは、macOS は推論バックエンドに MLX、Windows は sherpa-onnx を使用しています。現時点では macOS 版のほうが処理性能と消費電力の面で優れており、Windows 版は引き続き最適化を進めています。ロードマップでは、汎用推論エンジンの設計と CUDA による推論の高速化を計画しています。 音声認識モデルのライブラリには、macOS では MLX、Windows では ONNX のモデルを元のモデル名で表示します。
+> Windows と Linux では CPU 版と NVIDIA CUDA 版を選択できます。文字起こしには macOS と Linux で MLX、Windows で sherpa-onnx を使用します。
 
 ## できること
 

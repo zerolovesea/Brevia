@@ -104,11 +104,11 @@ npm run dist:linux -- cuda
 
 ### 独立推理引擎构建
 
-Windows x64 可用 `node windows/build.cjs --cuda` 构建 sherpa-onnx CUDA 引擎，输出到 `dist/native-win/cuda/engines`。运行 CUDA 推理需安装兼容的 NVIDIA 驱动、CUDA 12.x、cuDNN 9.x 和 x64 Visual C++ 运行库，并让进程可找到其 DLL。转写、声纹和说话人分段请求 CUDA，语音活动检测仍用 CPU。CUDA 初始化失败时 sherpa-onnx 可能回退 CPU，验收时需核对设备日志。现有 Windows 安装包继续使用 CPU 引擎。
+Windows x64 可用 `node windows/build.cjs --cuda` 构建 sherpa-onnx CUDA 引擎，输出到 `dist/native-win/cuda/engines`。运行 CUDA 推理需安装兼容的 NVIDIA 驱动、CUDA 12.x、cuDNN 9.x 和 x64 Visual C++ 运行库，并让进程可找到其 DLL。转写、声纹和说话人分段请求 CUDA，语音活动检测仍用 CPU。CUDA 初始化失败时 sherpa-onnx 可能回退 CPU，验收时需核对设备日志。Windows 安装包默认使用 CPU；在 PowerShell 设置 `$env:BREVIA_BUILD_BACKEND="cuda"` 后执行 `npm run dist:win` 可生成 CUDA 安装包。
 
 Ubuntu 24.04 x86-64 安装 CMake、C++ 编译器、Rust、`libarchive-tools`、`patchelf` 和 `libopenblas0-pthread` 后，可分别执行 `node scripts/build-linux-mlx.cjs cpu` 和 `node scripts/build-linux-mlx.cjs cuda`。两者从同一套 C++ 转写源码编译，复用现有 MLX Safetensors 模型，输出到 `dist/native-linux-mlx/cpu` 和 `dist/native-linux-mlx/cuda`。CUDA 版需要 CUDA 12.9 对应的 NVIDIA 驱动和用户态库（cuBLAS、cuFFT、cuSOLVER、NVRTC、cuDNN 9、NCCL），由运行机器提供。MLX 的部分 CUDA 内核在首次转写时由 NVRTC 编译，需要 CUDA 12.9 Toolkit 的运行时头文件及 CCCL 头文件（包括 `cuda/std/tuple`）。多版本共存时，将 `CUDA_HOME` 指向匹配的 Toolkit 根目录。
 
-Windows 原生工作流上传 sherpa CUDA 引擎，Linux 工作流分别构建 CPU 和 CUDA 桌面安装包，安装后执行冒烟测试。CPU 构建运行 MLX 计算自检，CUDA 构建检查链接产物，实际 CUDA 推理需要配有 NVIDIA GPU 的 Linux 机器。
+Windows 原生检查上传 sherpa CUDA 引擎，正式发布为 Windows 和 Linux 分别生成 CPU 和 CUDA 安装包。Linux 工作流构建两个 Debian 包，安装后执行冒烟测试。CPU 构建运行 MLX 计算自检，CUDA 构建检查链接产物，实际 CUDA 推理需要配有 NVIDIA GPU 的 Linux 机器。
 
 ### 手机导入与实时说话人
 

@@ -18,7 +18,8 @@
 | Платформа | Скачать                                                                                              | Требования                   |
 | --------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac       | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows   | [Windows][download-windows]                                                                          | Windows 10 / 11 · x64 · AVX2 |
+| Windows   | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
+| Linux     | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 Установщик для Mac занимает около 43 МиБ (45,5 МБ), для Windows — 38 МБ. Языковые модели загружаются отдельно.
 
-> Текущая версия использует MLX в качестве движка инференса на macOS и sherpa-onnx на Windows. Версия для macOS сейчас обеспечивает более высокую производительность и меньшее энергопотребление, а версия для Windows продолжает оптимизироваться. В планах — разработка универсального движка инференса с ускорением CUDA. Библиотека распознавания речи показывает модели MLX в macOS и ONNX в Windows под исходными названиями.
+> Для Windows и Linux доступны пакеты для CPU и NVIDIA CUDA. Для распознавания речи в macOS и Linux используется MLX, а в Windows — sherpa-onnx.
 
 ## Возможности
 

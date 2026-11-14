@@ -18,7 +18,8 @@
 | 设备    | 下载                                                                                                 | 系统要求                     |
 | ------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac     | [macOS 版][download-mac]                                                                             | Apple Silicon · macOS 14+    |
-| Windows | [Windows 版][download-windows]                                                                       | Windows 10 / 11 · x64 · AVX2 |
+| Windows | [Windows 版][download-windows] · [CUDA](https://brevia.work)                                         | Windows 10 / 11 · x64 · AVX2 |
+| Linux   | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次使用时，按需要下载语言模型。
 
-> 当前版本 macOS 使用 MLX 作为推理后端，Windows 使用 sherpa-onnx。macOS 版目前在性能和功耗表现上更好，Windows 版持续优化中。路线图计划设计通用推理引擎，并为 CUDA 提供加速推理。 语音识别模型库按系统提供模型：macOS 仅显示 MLX，Windows 仅显示 ONNX；模型使用原名称显示。
+> Windows 和 Linux 各提供 CPU 和 NVIDIA CUDA 两种安装包。macOS 与 Linux 使用 MLX 转写，Windows 使用 sherpa-onnx。
 
 ## 从录音到会议纪要
 

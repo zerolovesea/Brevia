@@ -18,7 +18,8 @@
 | Platform | Download                                                                                             | Requirements                 |
 | -------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac      | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows  | [Windows][download-windows]                                                                          | Windows 10 / 11 · x64 · AVX2 |
+| Windows  | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
+| Linux    | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone   | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android  | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **38 MB**. Download the language models you need on first use.
 
-> The current version uses MLX as the inference backend on macOS and sherpa-onnx on Windows. The macOS version currently offers better performance and lower power consumption, while the Windows version continues to be optimized. The roadmap includes a general-purpose inference engine with CUDA acceleration. The speech recognition library shows MLX models on macOS and ONNX models on Windows, using their original model names.
+> Windows and Linux offer CPU and NVIDIA CUDA installers. Transcription uses MLX on macOS and Linux, and sherpa-onnx on Windows.
 
 ## From conversation to minutes
 

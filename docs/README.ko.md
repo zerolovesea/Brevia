@@ -18,7 +18,8 @@
 | 플랫폼  | 다운로드                                                                                             | 요구 사항                    |
 | ------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac     | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows | [Windows][download-windows]                                                                          | Windows 10 / 11 · x64 · AVX2 |
+| Windows | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
+| Linux   | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 설치 파일은 Mac용 약 43 MiB(45.5 MB), Windows용 약 38 MB입니다. 언어 모델은 별도로 다운로드합니다.
 
-> 현재 버전은 macOS에서 MLX를, Windows에서 sherpa-onnx를 추론 백엔드로 사용합니다. 현재 macOS 버전이 성능과 전력 소비 면에서 더 우수하며, Windows 버전은 지속적으로 최적화하고 있습니다. 로드맵에는 범용 추론 엔진 설계와 CUDA 기반 추론 가속이 포함되어 있습니다. 음성 인식 모델 라이브러리는 macOS에서 MLX 모델을, Windows에서 ONNX 모델을 원래 모델 이름으로 표시합니다.
+> Windows와 Linux는 CPU 및 NVIDIA CUDA 설치 패키지를 제공합니다. 녹취에는 macOS와 Linux에서 MLX를, Windows에서 sherpa-onnx를 사용합니다.
 
 ## 주요 기능
 

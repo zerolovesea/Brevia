@@ -18,7 +18,8 @@
 | Plattform | Download                                                                                             | Voraussetzungen              |
 | --------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac       | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows   | [Windows][download-windows]                                                                          | Windows 10 / 11 · x64 · AVX2 |
+| Windows   | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
+| Linux     | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
@@ -29,7 +30,7 @@
 
 Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat heruntergeladen.
 
-> Die aktuelle Version nutzt MLX als Inferenz-Backend unter macOS und sherpa-onnx unter Windows. Die macOS-Version bietet derzeit eine höhere Leistung bei geringerem Stromverbrauch, während die Windows-Version weiter optimiert wird. Die Roadmap sieht die Entwicklung einer universellen Inferenz-Engine mit CUDA-Beschleunigung vor. Die Spracherkennungsbibliothek zeigt MLX-Modelle unter macOS und ONNX-Modelle unter Windows mit ihren ursprünglichen Modellnamen an.
+> Für Windows und Linux stehen Installationspakete für CPU und NVIDIA CUDA bereit. Zur Transkription dient MLX unter macOS und Linux, unter Windows sherpa-onnx.
 
 ## Funktionen
 

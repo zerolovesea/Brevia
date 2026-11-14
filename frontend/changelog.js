@@ -2,9 +2,62 @@
 (() => {
   const releases = [
     {
+      'version': '2.0.4',
+      'date': '2026-11-14',
+      'current': true,
+      'previousVersion': '2.0.3',
+      'contributors': [],
+      'zh': {
+        'summary': '新增限时会议分享，改进长会议纪要，Windows 和 Linux 提供 CPU 与 CUDA 安装包。',
+        'what': [
+          {
+            'text':
+              '桌面端可分享只读会议快照，选择有效期、设置密码，让读者按说话人查看原文和已保存的译文。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+        'improved': [
+          {
+            'text': '长会议纪要可引用逐字稿原话，并复用已完成的分段结果。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+        'fixed': [
+          {
+            'text': '修复 macOS 在蓝牙与内置麦克风之间切换后，双轨录音可能收不到麦克风音频的问题。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Share expiring meeting snapshots, generate improved long meeting minutes, and choose CPU or CUDA installers for Windows and Linux.',
+        'what': [
+          {
+            'text':
+              'Share a read-only meeting snapshot with an expiry date and optional password. Readers can filter by speaker and view saved translations.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'Long meeting minutes can cite original transcript excerpts and reuse completed sections.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Fixed missing microphone audio in dual-track recordings after switching between Bluetooth and built-in microphones on macOS.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+        ],
+      },
+    },
+    {
       'version': '2.0.3',
       'date': '2026-11-10',
-      'current': true,
       'previousVersion': '2.0.2',
       'contributors': [],
       'zh': {
