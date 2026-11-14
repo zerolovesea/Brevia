@@ -12,6 +12,11 @@
         'what': [
           {
             'text':
+              'Windows 和 Linux 首次安装时可按设备选择 CPU 或 NVIDIA CUDA 版。应用内更新沿用已安装的版本，并在安装前校验签名。',
+            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+          },
+          {
+            'text':
               '桌面端可分享只读会议快照，选择有效期、设置密码，让读者按说话人查看原文和已保存的译文。',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
@@ -33,6 +38,11 @@
         'summary':
           'Share expiring meeting snapshots, generate improved long meeting minutes, and choose CPU or CUDA installers for Windows and Linux.',
         'what': [
+          {
+            'text':
+              'Choose CPU or NVIDIA CUDA when installing Brevia on Windows or Linux. In-app updates keep the installed variant and verify the package signature before installation.',
+            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+          },
           {
             'text':
               'Share a read-only meeting snapshot with an expiry date and optional password. Readers can filter by speaker and view saved translations.',
