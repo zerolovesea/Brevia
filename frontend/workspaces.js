@@ -411,33 +411,30 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
   if (!meeting) return;
 
   const menu = document.createElement('div');
-  menu.className = 'meeting-workspace-menu';
+  menu.className = 'meeting-workspace-menu ui-menu';
   menu.dataset.meetingIndex = meetingIndex;
   menu.innerHTML = `
-    <h3>${escapeHtml(t('移至工作区'))}</h3><div class="menu-section">
+    <h3 class="ui-menu-caption">${escapeHtml(t('移至工作区'))}</h3><div class="menu-section">
       ${[{ id: '', name: t('公开工作区') }, ...workspaces]
         .map(
           (workspace) => `
         <button type="button"
                 data-assign-workspace="${escapeHtml(workspace.id)}"
                 data-meeting-index="${meetingIndex}"
-                class="menu-item ${meeting.workspaceId === workspace.id ? 'active' : ''}">
-          <span class="workspace-icon">${interfaceIcon('folder')}</span>
-          <span>${escapeHtml(workspace.name)}</span>
-          ${meeting.workspaceId === workspace.id ? `<span class="check">${checkIconSvg}</span>` : ''}
+                ${meeting.workspaceId === workspace.id ? 'class="active" aria-current="true"' : ''}>
+          ${interfaceIcon('folder')}
+          <span title="${escapeHtml(workspace.name)}">${escapeHtml(workspace.name)}</span>
+          ${meeting.workspaceId === workspace.id ? checkIconSvg : ''}
         </button>
       `,
         )
         .join('')}
     </div>
     <div class="menu-separator"></div>
-    <button type="button" data-new-workspace-assign data-meeting-index="${meetingIndex}" class="menu-item">
-      ${interfaceIcon('plus')} ${t('新建工作区')}
+    <button type="button" data-new-workspace-assign data-meeting-index="${meetingIndex}">
+      ${interfaceIcon('plus')}<span>${escapeHtml(t('新建工作区'))}</span>
     </button>
   `;
-
-  // 定位菜单
-  menu.style.position = 'fixed';
 
   document.querySelectorAll('.meeting-workspace-menu').forEach((node) => node.remove());
   document.body.appendChild(menu);

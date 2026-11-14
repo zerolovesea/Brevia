@@ -111,6 +111,7 @@ class MobileServer {
     this.queue = Promise.resolve();
     this.sessions = new Map();
     this.desktopTasks = {};
+    this.taskProgress = new Map();
     this.fileStreams = new Map();
     this.pairing = null;
     this.pairBusy = false;
@@ -659,6 +660,10 @@ class MobileServer {
     if (filename && operation !== 'images') throw fail(404, '未找到接口');
     if (req.method === 'GET') {
       const meeting = await this.sharedMeeting(owner, id);
+      if (operation === 'notes') {
+        const notes = meeting.notes || '';
+        return { notes, revision: hash(notes) };
+      }
       const playback = meeting.audio?.playback;
       const audioPath = playback?.mix || playback?.mic || playback?.system;
       if (operation === 'audio' && audioPath && this.meetingState(meeting) === 'ended') {
@@ -711,7 +716,7 @@ class MobileServer {
           : null,
         accepted_claims: meeting.accepted_claims || [],
         has_audio: Boolean(audioPath) && this.meetingState(meeting) === 'ended',
-        task: this.sessions.get(id)?.task || this.desktopTasks[id] || null,
+        task: this.taskSnapshot(id, this.sessions.get(id)?.task || this.desktopTasks[id]),
         proposal,
       };
     }
@@ -721,12 +726,37 @@ class MobileServer {
     const limit =
       operation === 'images'
         ? Math.ceil(maxImageBytes / 3) * 4 + 256
-        : operation === 'proposals'
+        : operation === 'proposals' || operation === 'notes'
           ? maxNotesBytes + 512
           : 60000;
     const value = await body(req, limit);
     return this.serial(async () => {
       const meeting = await this.sharedMeeting(owner, id);
+      if (operation === 'notes') {
+        const v = z
+          .object({
+            base_revision: z.string().regex(/^[a-f0-9]{64}$/),
+            notes: z.string().max(maxNotesBytes),
+          })
+          .parse(value);
+        const previous = meeting.notes || '';
+        if (previous === v.notes) return { notes: previous, revision: hash(previous) };
+        if (hash(previous) !== v.base_revision) throw fail(409, '电脑笔记已更新，请重新核对。');
+        try {
+          const saved = await this.request('meeting.update', {
+            meeting_id: id,
+            expected_notes: previous,
+            updates: { notes: v.notes },
+          });
+          const notes = saved.notes || '';
+          this.changed({ meeting_id: id, notes });
+          return { notes, revision: hash(notes) };
+        } catch (error) {
+          if (error.message.includes('电脑笔记已更新'))
+            throw fail(409, '电脑笔记已更新，请重新核对。');
+          throw error;
+        }
+      }
       if (operation === 'proposals') {
         const v = z
           .object({
@@ -775,7 +805,23 @@ class MobileServer {
       throw fail(404, '未找到接口');
     });
   }
+  updateSummaryProgress({ meeting_id: id, completed, total } = {}) {
+    const task = this.sessions.get(id)?.task || this.desktopTasks[id];
+    if (task?.action !== 'summary' || task.state !== 'running') return;
+    if (!Number.isFinite(completed) || !Number.isFinite(total) || total <= 0) return;
+    const previous = this.taskProgress.get(id) || 0;
+    this.taskProgress.set(id, Math.max(previous, Math.min(1, completed / total)));
+  }
+
+  taskSnapshot(id, task) {
+    const progress = this.taskProgress.get(id);
+    return task?.state === 'running' && task.action === 'summary' && progress != null
+      ? { ...task, progress }
+      : task || null;
+  }
+
   async saveTask(id, task) {
+    this.taskProgress.delete(id);
     const s = this.sessions.get(id);
     if (s && !s.deleted) {
       await this.save({ ...s, task });
@@ -869,7 +915,7 @@ class MobileServer {
     const owner = this.owner(req);
     if (req.url === '/desktop-meetings' && req.method === 'GET') return this.desktopMeetings(owner);
     const shared =
-      /^\/desktop-meetings\/([a-f0-9-]+)\/(snapshot|action|proposals|images|audio)(?:\/([a-f0-9.-]+))?$/.exec(
+      /^\/desktop-meetings\/([a-f0-9-]+)\/(snapshot|action|proposals|notes|images|audio)(?:\/([a-f0-9.-]+))?$/.exec(
         req.url,
       );
     if (shared) return this.sharedRoute(req, owner, uuid.parse(shared[1]), shared[2], shared[3]);
@@ -991,7 +1037,7 @@ class MobileServer {
         desktopCapture: s.desktopCapture === true,
         desiredState: s.desiredState,
         controlVersion: s.controlVersion,
-        task: s.task || null,
+        task: this.taskSnapshot(s.id, s.task),
         workspace_id: (meeting ? meeting.workspace_id : s.workspace_id) ?? null,
         error: s.error || s.captureError || s.processingWarning || null,
         marks: s.marks,

@@ -4434,19 +4434,6 @@ body.modal-open {
   height: auto;
   overflow: visible;
 }
-.startup-splash .startup-credit {
-  position: fixed;
-  right: 28px;
-  bottom: 24px;
-  color: #666666;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-.startup-credit,
-.app-credit {
-  display: none !important;
-}
 .startup-splash-leave {
   opacity: 0;
   pointer-events: none;

@@ -61,6 +61,7 @@ function attachRecording(worker) {
       const info = await recognizer.request('asr.load', {
         path: worker.models.path(model.id),
         kind: model.kind,
+        ...(model.runtime === 'mlx-audio' && worker.models.recognitionDevice()),
         files: model.files,
         language: meeting.language,
         hotwords: worker.store.asrTermOptions(meeting).hotwords || [],

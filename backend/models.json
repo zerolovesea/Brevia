@@ -138,8 +138,7 @@
     "disk_size_bytes": 987033600,
     "memory_floor_bytes": 2321547264,
     "platforms": [
-      "windows",
-      "linux"
+      "windows"
     ]
   },
   {
@@ -208,8 +207,7 @@
     "disk_size_bytes": 674263040,
     "memory_floor_bytes": 1991245824,
     "platforms": [
-      "windows",
-      "linux"
+      "windows"
     ]
   },
   {
@@ -271,8 +269,7 @@
     "disk_size_bytes": 1798291456,
     "memory_floor_bytes": 4482662400,
     "platforms": [
-      "windows",
-      "linux"
+      "windows"
     ]
   },
   {
@@ -316,8 +313,7 @@
     "disk_size_bytes": 1018757120,
     "memory_floor_bytes": 2301624320,
     "platforms": [
-      "windows",
-      "linux"
+      "windows"
     ]
   },
   {
@@ -534,7 +530,8 @@
     "runtime": "mlx-audio",
     "revision": "f3212eacfa49b851130b97c63653c8e06ee09bdb",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"
@@ -596,7 +593,8 @@
     "runtime": "mlx-audio",
     "revision": "89e96d92ba34aca20b3e29fb10cc284097d1219f",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"
@@ -759,7 +757,8 @@
     "runtime": "mlx-audio",
     "revision": "ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"
@@ -897,7 +896,8 @@
     "runtime": "mlx-audio",
     "revision": "a7bc96fceaafce39ed6748e0c0fa9a9508b67f86",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"
@@ -1029,7 +1029,8 @@
     "runtime": "mlx-audio",
     "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"
@@ -1189,7 +1190,8 @@
     "runtime": "mlx-audio",
     "revision": "624c19c9af5603fa73b83bce14d4aeea96156d18",
     "platforms": [
-      "darwin"
+      "darwin",
+      "linux"
     ],
     "stages": [
       "refined"

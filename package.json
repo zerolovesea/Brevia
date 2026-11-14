@@ -7,7 +7,7 @@
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
     "start": "node scripts/start.cjs",
     "start:fresh": "node scripts/start.cjs --reset-onboarding",
-    "test": "npm run test:dead && npm run test:desktop && npm run test:ui && npm run test:e2e && npm run test:backend && npm run test:release",
+    "test": "npm run test:dead && npm run test:desktop && npm run test:ui && npm run test:e2e && npm run test:backend && npm run test:release && npm run test:share",
     "test:dead": "node scripts/check_dead_code.mjs",
     "test:ui": "cd frontend && node ./test-ui.mjs && node ../scripts/test-motion.mjs && node ../scripts/test-capsule.cjs && node ../scripts/test-desktop-mobile-preview.mjs",
     "test:backend": "node scripts/test-backend.cjs",
@@ -15,14 +15,15 @@
     "package:mac": "npm run package:mac:webkit",
     "package:win": "node windows/package.cjs",
     "dist:mac": "npm run dist:mac:webkit",
+    "dist:linux": "node linux/package.cjs",
     "dist:win": "npm run package:win",
     "release:offline": "node scripts/release-offline.cjs",
     "test:e2e": "node desktop/test-e2e.mjs",
     "css:fingerprint": "node scripts/verify-css-tokens.mjs",
     "clean": "node scripts/clean-build.mjs",
     "clean:dist": "node scripts/clean-build.mjs dist",
-    "format": "prettier --write \"{desktop,frontend,website,scripts,windows}/**/*.{js,mjs,cjs,css,html}\" \"macos/{*.{js,cjs},*/*.cjs}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
-    "format:check": "prettier --check \"{desktop,frontend,website,scripts,windows}/**/*.{js,mjs,cjs,css,html}\" \"macos/{*.{js,cjs},*/*.cjs}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
+    "format": "prettier --write \"{desktop,frontend,website,scripts,windows,linux,cloudflare}/**/*.{js,mjs,cjs,css,html}\" \"macos/{*.{js,cjs},*/*.cjs}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
+    "format:check": "prettier --check \"{desktop,frontend,website,scripts,windows,linux,cloudflare}/**/*.{js,mjs,cjs,css,html}\" \"macos/{*.{js,cjs},*/*.cjs}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
     "format:python": "python -m ruff format .",
     "lint:python": "python -m ruff check . && python -m ruff format --check .",
     "dist:mac:webkit": "node macos/runtime/package.cjs",
@@ -32,7 +33,11 @@
     "test:agent": "node --test desktop/test-agent*.cjs macos/backend/test-agent*.cjs",
     "test:release": "node --test scripts/test-release.cjs windows/test-build.cjs",
     "test:windows:native": "node windows/test-packaged.cjs dist/native-win/app",
-    "test:desktop": "node desktop/test-main-logic.mjs && node desktop/test-desktop-controller.cjs && node desktop/test-mobile-server.cjs && node --test macos/test-control-handshake.cjs desktop/test-agent*.cjs"
+    "test:desktop": "node desktop/test-main-logic.mjs && node desktop/test-desktop-controller.cjs && node desktop/test-mobile-server.cjs && node --test macos/test-control-handshake.cjs desktop/test-agent*.cjs",
+    "build:share": "npm run build && node cloudflare/share/build.mjs",
+    "test:share": "node --test cloudflare/share/test-share.mjs",
+    "dev:share": "npm run build:share && wrangler dev --config cloudflare/share/wrangler.jsonc",
+    "deploy:share": "npm run build:share && wrangler deploy --config cloudflare/share/wrangler.jsonc"
   },
   "keywords": [],
   "author": "",
@@ -40,10 +45,13 @@
   "description": "Private, local-first meeting memory.",
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
+    "dompurify": "3.4.17",
     "esbuild": "0.25.12",
+    "marked": "18.2.0",
     "playwright": "1.65.0",
     "prettier": "3.6.2",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "wrangler": "^4.159.0"
   },
   "overrides": {
     "@tailwindcss/cli": {

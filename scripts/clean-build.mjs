@@ -19,7 +19,12 @@ const TARGETS = {
     'dist/native/inference-sources/opus-build',
     'dist/native/inference-sources/opusfile-build',
     'dist/native/inference-sources/llama-native-build',
+    'dist/native/inference-sources/llama-native-build-v1.0.0',
     'dist/native-win/build',
+    'dist/native-win/cuda/build',
+    'dist/native-linux/build',
+    'dist/native-linux/cargo',
+    'dist/native-linux-mlx/build',
   ],
   dist: ['dist'],
 };

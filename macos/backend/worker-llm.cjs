@@ -12,6 +12,7 @@ const {
   emptySummaryLine,
 } = require('./summary-facts.cjs');
 const evidence = require('./meeting-evidence.cjs');
+const { evidencePrompt, renderSelection } = require('./summary-extract.cjs');
 
 const languages = {
   zh: 'Chinese',
@@ -90,6 +91,7 @@ function createLLMHandlers(worker) {
             top_p: payload.top_p ?? 0.95,
             stop_tokens: payload.stop_tokens,
             require_complete: payload.require_complete,
+            enable_thinking: false,
           },
           { signal },
         );
@@ -147,8 +149,7 @@ function createLLMHandlers(worker) {
   };
 
   async function response(payload, prompt, signal) {
-    let request = prompt + '\n\nPut every Markdown heading and list item on its own line.';
-    request += payload.summaryPreference;
+    const request = prompt + payload.summaryPreference;
     const result =
       clean(await generate(payload, request, { signal })) ||
       clean(await generate(payload, request, { signal }));
@@ -169,19 +170,28 @@ function createLLMHandlers(worker) {
         signal,
       );
       const sections = [...result.matchAll(/^##[ \t]+(.+)$/gm)];
-      if (
-        sections.length === headings.length &&
-        sections.every(
-          (match, i) =>
-            match[1].trim().replace(/^\*\*(.+)\*\*$/, '$1') === headings[i] &&
-            /(?:[\p{L}\p{N}]|^\s*—\s*$)/u.test(
-              result
-                .slice(match.index + match[0].length, sections[i + 1]?.index)
-                .replace(/^#{1,6}\s+.*$|\[\[[^\]\n]*\]\]/gm, ''),
-            ),
+      const bodies = new Map();
+      for (const [i, match] of sections.entries()) {
+        const title = match[1].trim().replace(/^\*\*(.+)\*\*$/, '$1');
+        const raw = result.slice(match.index + match[0].length, sections[i + 1]?.index).trim();
+        const body = !raw || emptySummaryLine.test(raw) ? '—' : raw;
+        if (!headings.includes(title) || bodies.has(title)) break;
+        if (
+          !/(?:[\p{L}\p{N}]|^\s*—\s*$)/u.test(body.replace(/^#{1,6}\s+.*$|\[\[[^\]\n]*\]\]/gm, ''))
         )
-      )
-        return result;
+          break;
+        bodies.set(title, body);
+      }
+      // 重排完整章节；缺章时无法确认是空章还是漏写。
+      if (
+        bodies.size === sections.length &&
+        bodies.size === headings.length &&
+        [...bodies.values()].some((body) => body !== '—')
+      ) {
+        const preamble = result.slice(0, sections[0].index).trim();
+        const chapters = headings.map((title) => '## ' + title + '\n' + bodies.get(title));
+        return [preamble, ...chapters].filter(Boolean).join('\n\n');
+      }
       signal.throwIfAborted();
     }
     throw new Error('The model returned incomplete structured meeting minutes');
@@ -190,8 +200,9 @@ function createLLMHandlers(worker) {
     worker.emit('summary.progress', { meeting_id: id, completed, total: 100, stage });
   return {
     'summary.save': (payload) => worker.store.editSummary(payload.meeting_id, payload),
-    'summary.generate': (payload) =>
-      worker.tasks.running('summary.generate', payload.meeting_id, async (control) => {
+    'summary.generate': (payload) => {
+      let started = false;
+      const task = worker.tasks.running('summary.generate', payload.meeting_id, async (control) => {
         if (worker.active)
           throw failure('error.summary.live_meeting', '实时会议中，结束后再生成会议纪要。');
         if (!payload.consent)
@@ -215,6 +226,7 @@ function createLLMHandlers(worker) {
             'error.summary.no_transcript',
             '当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。',
           );
+        started = true;
         worker.emit('summary.started', {
           meeting_id: meeting.id,
           completed: 10,
@@ -224,15 +236,29 @@ function createLLMHandlers(worker) {
         const catalogContext = worker.models.catalog.get(
           payload.model_id || payload.model,
         )?.context_size;
+        const deepseek = /^deepseek-v4-(?:pro|flash)$/i.test(payload.model);
+        const transcriptCost = estimatedTokens(transcript);
+        const localWindow = transcriptCost + 6144 > 16384 ? 32768 : 16384;
+        const preference = worker.prompts?.apply('summary', '') || '';
+        const selectEvidence =
+          (local(payload) || deepseek) && meeting.language === language && !preference;
         const context =
           payload.context_size ??
-          (local(payload) ? Math.min(16384, catalogContext || 16384) : 8192);
+          (local(payload)
+            ? Math.min(localWindow, catalogContext || 16384)
+            : deepseek
+              ? 65536
+              : 8192);
         const options = {
           ...payload,
           context_size: context,
           require_complete: true,
-          summaryPreference: worker.prompts?.apply('summary', '') || '',
-          max_tokens: Math.min(payload.max_tokens ?? 3072, Math.floor(context / 3)),
+          disable_thinking: deepseek,
+          summaryPreference: preference,
+          max_tokens: Math.min(
+            payload.max_tokens ?? (local(payload) && context >= 32768 ? 4608 : 3072),
+            Math.floor(context / 3),
+          ),
         };
         const headings = evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en;
         const instructions = prompts[language] || prompts.en;
@@ -241,11 +267,9 @@ function createLLMHandlers(worker) {
           meeting.title,
         );
         const overhead = options.summaryPreference;
-        const rulesCost = Math.max(
-          ...Object.keys(evidence.TEMPLATES).map((id) =>
-            estimatedTokens(evidence.evidenceInstructions(id, language)),
-          ),
-        );
+        const rulesCost = estimatedTokens(rules);
+        const factOverhead = estimatedTokens(prompts.chunk[language] || prompts.chunk.en) + 384;
+        const factBudget = context - Math.min(options.max_tokens, 1536) - factOverhead;
         const budget =
           context -
           options.max_tokens -
@@ -289,23 +313,41 @@ function createLLMHandlers(worker) {
             if (failure) throw failure;
             return results;
           };
-          if (estimatedTokens(transcript) <= budget) {
+          if (transcriptCost <= budget) {
             try {
-              markdown = await structuredMinutes(
-                options,
-                `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
-                language,
-                control.signal,
-              );
+              if (selectEvidence && transcriptCost > 1500) {
+                const ids = new Set(segments.map((_, i) => i + 1));
+                const prompt = evidencePrompt(
+                  language,
+                  template,
+                  options.summaryPreference,
+                  transcript,
+                );
+                const result = await generate({ ...options, temperature: 0 }, prompt, {
+                  signal: control.signal,
+                });
+                try {
+                  markdown = renderSelection(result, segments, headings, ids);
+                } catch (error) {
+                  if (control.signal.aborted) throw error;
+                }
+              }
+              if (!markdown)
+                markdown = await structuredMinutes(
+                  options,
+                  `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
+                  language,
+                  control.signal,
+                );
             } catch (error) {
               if (control.signal.aborted || !summaryLimit(error)) throw error;
             }
           }
           if (!markdown) {
             const chunkBudget =
-              estimatedTokens(transcript) <= budget
-                ? Math.max(128, Math.ceil(estimatedTokens(transcript) / 2))
-                : budget;
+              transcriptCost <= budget
+                ? Math.max(128, Math.ceil(transcriptCost / 2))
+                : Math.min(factBudget, budget + estimatedTokens(overhead));
             const chunks = splitByBudget(transcript, chunkBudget);
             worker.store.run?.(
               'DELETE FROM summary_chunks WHERE meeting_id=? AND position>=?',
@@ -318,12 +360,14 @@ function createLLMHandlers(worker) {
               const previous = index ? chunks[index - 1].split('\n').at(-1) : '';
               const contextLine = previous && estimatedTokens(previous) <= 120 ? previous : '';
               const factPrompt = (part, previousLine) =>
-                `${prompts.chunk[language] || prompts.chunk.en}\nExtract a compact list of facts, including every decision, action, date and figure, explicit cause and open question. Use verbatim wording for decisions, tasks and quantities where possible. Preserve numbers exactly. End each factual bullet with its source marker [[action:S1]], [[decision:S2]], [[conclusion:S3]] or [[cause:S4]]. Use only IDs from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
-              const prompt = factPrompt(chunk, contextLine);
+                `${prompts.chunk[language] || prompts.chunk.en}\nEnd each fact with [[kind:source]], replacing kind with action, decision, conclusion or cause, and source with the actual segment ID from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
+              const prompt = selectEvidence
+                ? evidencePrompt(language, template, '', chunk)
+                : factPrompt(chunk, contextLine);
               const fingerprint = createHash('sha256')
                 .update(
                   JSON.stringify([
-                    2,
+                    3,
                     language,
                     options.provider,
                     options.endpoint,
@@ -335,7 +379,6 @@ function createLLMHandlers(worker) {
                     options.temperature,
                     options.top_k,
                     options.top_p,
-                    overhead,
                     prompt,
                   ]),
                 )
@@ -351,9 +394,28 @@ function createLLMHandlers(worker) {
                   await control.wait();
                   const visible = new Set([...part.matchAll(/^(S[1-9]\d*) \[/gm)].map((m) => m[1]));
                   try {
+                    if (selectEvidence) {
+                      const selected = await generate(
+                        { ...options, temperature: 0 },
+                        evidencePrompt(language, template, '', part),
+                        { signal: control.signal },
+                      );
+                      try {
+                        const selectedIds = new Set(
+                          [...visible].map((value) => Number(value.slice(1))),
+                        );
+                        return renderSelection(selected, segments, headings, selectedIds);
+                      } catch (error) {
+                        if (control.signal.aborted) throw error;
+                      }
+                    }
                     return evidence.restrictSources(
                       await response(
-                        { ...options, max_tokens: Math.min(1536, options.max_tokens) },
+                        {
+                          ...options,
+                          summaryPreference: '',
+                          max_tokens: Math.min(1536, options.max_tokens),
+                        },
                         factPrompt(part, previousLine),
                         control.signal,
                       ),
@@ -385,89 +447,97 @@ function createLLMHandlers(worker) {
               progress(meeting.id, 60 + Math.floor((30 * ++completed) / chunks.length));
               return summary;
             });
-            let blocks = summaries.join('\n\n---\n\n');
-            const writeMinutes = async (facts) =>
-              evidence.restrictSources(
-                await structuredMinutes(
-                  options,
-                  `${merge}\n\n${rules}\n\n<partial summaries>\n${facts}\n</partial summaries>`,
-                  language,
-                  control.signal,
-                ),
-                summaryReferences(facts),
-              );
-            if (estimatedTokens(blocks) > budget) {
-              try {
-                const reduced = await mapChunks(
-                  splitByBudget(blocks, budget, true),
-                  async (chunk) =>
-                    evidence.restrictSources(
-                      await response(
-                        { ...options, max_tokens: Math.min(1536, options.max_tokens) },
-                        `${rules}\nCompress these partial summaries into a shorter fact list, not a finished document. Preserve source markers for decisions, actions, causes and figures:\n${chunk}`,
-                        control.signal,
-                      ),
-                      summaryReferences(chunk),
-                    ),
-                );
-                const candidate = reduced.join('\n\n---\n\n');
-                const retained = summaryReferences(candidate);
-                if (
-                  estimatedTokens(candidate) <= budget &&
-                  [...summaryReferences(blocks)].every((id) => retained.has(id))
-                )
-                  blocks = candidate;
-              } catch (error) {
-                if (control.signal.aborted || !summaryLimit(error)) throw error;
-              }
-            }
-            if (estimatedTokens(blocks) <= budget) {
-              try {
-                markdown = await writeMinutes(blocks);
-              } catch (error) {
-                if (control.signal.aborted || !summaryLimit(error)) throw error;
-              }
-            }
-            if (!markdown) {
-              // 成稿过长或压缩没有缩小时，按组写七章再拼接，不截去末尾的事实。
-              const parts = splitByBudget(
-                blocks,
-                Math.min(budget, Math.max(128, Math.ceil(estimatedTokens(blocks) / 2))),
-                true,
-              );
-              const writePart = async (part, depth = 0) => {
-                try {
-                  await control.wait();
-                  return [await writeMinutes(part)];
-                } catch (error) {
-                  if (control.signal.aborted || !summaryLimit(error) || depth >= 3) throw error;
-                  const smaller = splitByBudget(
-                    part,
-                    Math.max(128, Math.ceil(estimatedTokens(part) / 2)),
-                    true,
-                  );
-                  if (smaller.length < 2) throw error;
-                  const written = [];
-                  for (const piece of smaller) written.push(...(await writePart(piece, depth + 1)));
-                  return written;
+            if (
+              selectEvidence &&
+              summaries.every((item) => item.startsWith('## ' + headings[0] + '\n'))
+            ) {
+              const bodies = headings.map(() => []);
+              for (const summary of summaries) {
+                let chapter = -1;
+                for (const line of summary.split('\n')) {
+                  if (line.startsWith('## ')) chapter = headings.indexOf(line.slice(3));
+                  else if (chapter >= 0 && line.trim() && line !== '—') bodies[chapter].push(line);
                 }
-              };
-              const drafts = (await mapChunks(parts, (part) => writePart(part))).flat();
-              const bodies = headings.map(() => new Set());
-              for (const draft of drafts) {
-                const sections = [...draft.matchAll(/^##[ \t]+.+$/gm)];
-                sections.forEach((match, i) => {
-                  const body = draft
-                    .slice(match.index + match[0].length, sections[i + 1]?.index)
-                    .trim();
-                  if (body && !emptySummaryLine.test(body)) bodies[i].add(body);
-                });
               }
               markdown = headings
-                .map((heading, i) => '## ' + heading + '\n' + ([...bodies[i]].join('\n\n') || '—'))
+                .map((h, i) => '## ' + h + '\n' + (bodies[i].join('\n') || '—'))
                 .join('\n\n');
+            } else {
+              let blocks = summaries.join('\n\n---\n\n');
+              const writeMinutes = async (facts) =>
+                evidence.restrictSources(
+                  await structuredMinutes(
+                    options,
+                    `${merge}\n\n${rules}\n\n<partial summaries>\n${facts}\n</partial summaries>`,
+                    language,
+                    control.signal,
+                  ),
+                  summaryReferences(facts),
+                );
+              if (estimatedTokens(blocks) > budget) {
+                try {
+                  const reduced = await mapChunks(
+                    splitByBudget(blocks, budget, true),
+                    async (chunk) =>
+                      evidence.restrictSources(
+                        await response(
+                          { ...options, max_tokens: Math.min(1536, options.max_tokens) },
+                          `${rules}\nCompress these partial summaries into a shorter fact list, not a finished document. Preserve source markers for decisions, actions, causes and figures:\n${chunk}`,
+                          control.signal,
+                        ),
+                        summaryReferences(chunk),
+                      ),
+                  );
+                  const candidate = reduced.join('\n\n---\n\n');
+                  const retained = summaryReferences(candidate);
+                  if (
+                    estimatedTokens(candidate) <= budget &&
+                    [...summaryReferences(blocks)].every((id) => retained.has(id))
+                  )
+                    blocks = candidate;
+                } catch (error) {
+                  if (control.signal.aborted || !summaryLimit(error)) throw error;
+                }
+              }
+              if (estimatedTokens(blocks) <= budget) {
+                try {
+                  markdown = await writeMinutes(blocks);
+                } catch (error) {
+                  if (control.signal.aborted || !summaryLimit(error)) throw error;
+                }
+              }
+              if (!markdown) {
+                // 小窗口无法容纳完整成稿时直接呈现已提取的事实，保留每一块的内容和来源。
+                const bodies = headings.map(() => new Set());
+                for (const summary of summaries) {
+                  let section = 2;
+                  let first = true;
+                  for (const line of summary.split('\n')) {
+                    if (!line.trim()) continue;
+                    const kind = /\[\[(decision|action|cause|conclusion):/.exec(line)?.[1];
+                    if (/^#/.test(line)) section = 2;
+                    if (kind) {
+                      section =
+                        kind === 'decision'
+                          ? 3
+                          : kind === 'action'
+                            ? 4
+                            : kind === 'conclusion'
+                              ? 1
+                              : 2;
+                      if (kind === 'conclusion' && /\d/.test(line.split('[[')[0])) section = 6;
+                      if (first) bodies[0].add(line);
+                      first = false;
+                    }
+                    bodies[section].add(line.replace(/^#{1,6}\s+/, '### '));
+                  }
+                }
+                markdown = headings
+                  .map((heading, i) => '## ' + heading + '\n' + ([...bodies[i]].join('\n') || '—'))
+                  .join('\n\n');
+              }
+              markdown = coverFacts(markdown, summaries, headings, segments);
             }
-            markdown = coverFacts(markdown, summaries, headings, segments);
           }
           await control.wait();
           if (!markdown)
@@ -510,10 +580,19 @@ function createLLMHandlers(worker) {
         )
           return { cancelled: true };
         progress(meeting.id, 100, 'summary.saving');
-        const saved = worker.store.getMeeting(meeting.id, { compact: true }).summary.data;
-        worker.emit('summary.ready', { meeting_id: meeting.id, summary: saved });
+        const current = worker.store.getMeeting(meeting.id, { compact: true });
+        const saved = current.summary.data;
+        worker.emit('summary.ready', {
+          meeting_id: meeting.id,
+          summary: saved,
+          summary_stale: Boolean(current.correction?.summary_stale),
+        });
         return saved;
-      }),
+      });
+      return task.finally(() => {
+        if (started) worker.emit('summary.finished', { meeting_id: payload.meeting_id });
+      });
+    },
     'translation.generate': (payload) =>
       worker.tasks.running(
         'translation.generate',

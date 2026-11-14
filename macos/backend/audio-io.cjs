@@ -14,6 +14,37 @@ async function convertToPCM(
   engine = null,
   { signal } = {},
 ) {
+  if (process.platform === 'linux') {
+    await run(
+      '/usr/bin/ffmpeg',
+      [
+        '-nostdin',
+        '-v',
+        'error',
+        '-xerror',
+        '-protocol_whitelist',
+        'file',
+        '-format_whitelist',
+        'wav,mp3,mov,aac,flac,ogg,matroska,webm',
+        '-i',
+        source,
+        '-map',
+        '0:a:0',
+        '-ac',
+        String(channels),
+        '-ar',
+        String(sampleRate),
+        '-c:a',
+        'pcm_s16le',
+        '-f',
+        'wav',
+        '-y',
+        destination,
+      ],
+      { timeout: 3600000, maxBuffer: 1024 * 1024, signal },
+    );
+    return { path: destination };
+  }
   try {
     if (process.platform !== 'darwin') throw new Error('Use the native audio decoder');
     await run(

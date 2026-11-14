@@ -236,6 +236,53 @@ test('Evidence references, fenced code, headings and dates preserve original beh
   );
   assert.equal(claims[0].status, 'changed');
 });
+test('Structured causes require both sides of a stated relation in the cited speech', () => {
+  const headings = evidence.SUMMARY_HEADINGS.zh;
+  const parse = (speech, row) =>
+    evidence.parseClaims(
+      '## ' + headings[2] + '\n### 延期\n- ' + row,
+      [{ id: 'sample', text: speech, start_ms: 0 }],
+      true,
+      headings,
+    )[1][0];
+  assert.equal(
+    parse('资源不足导致项目延期。', '资源不足导致项目延期 [[conclusion:S1]]').section,
+    '项目延期',
+  );
+  for (const [speech, row] of [
+    ['接口故障导致项目延期。', '资源不足导致项目延期 [[cause:S1]]'],
+    ['资源不足导致项目延期。', '项目延期导致资源不足 [[conclusion:S1]]'],
+    ['可能是资源不足导致项目延期。', '资源不足导致项目延期 [[cause:S1]]'],
+    ['资源不足没有导致项目延期。', '资源不足导致项目延期 [[cause:S1]]'],
+    ['资源不足导致项目延期吗？', '资源不足导致项目延期 [[cause:S1]]'],
+    ['资源不足导致项目延期。', '资源不足导致项目延期 [[cause:S2]]'],
+  ])
+    assert.equal(parse(speech, row).kind, 'conclusion');
+});
+test('Recover a cited cause only for a unique matching discussion, preserving uncertainty', () => {
+  const headings = evidence.SUMMARY_HEADINGS.zh;
+  const source = { id: 's', text: '资源可能不足，导致交付延期。', start_ms: 0 };
+  const topic = '- 可用资源不足，交付延期。';
+  const generate = (discussion) =>
+    evidence
+      .parseClaims(
+        '## ' +
+          headings[1] +
+          '\n- 交付状态 [[conclusion:S1]]\n## ' +
+          headings[2] +
+          '\n' +
+          discussion,
+        [source],
+        true,
+        headings,
+      )[1]
+      .filter((claim) => claim.kind === 'cause');
+  const first = '### 交付进度\n' + topic;
+  const [claim] = generate(first);
+  assert.match(claim.text, /可能不足/);
+  assert.equal(claim.section, '交付延期');
+  assert.deepEqual(generate(first + '\n### 其他进度\n' + topic), []);
+});
 test('Audio checkpoints survive reopening, silence gaps and rolled chunks preserve PCM', async (t) => {
   const { root, store } = setup(t);
   store.settings = { ...store.settings, audio: { ...store.settings.audio, chunk_seconds: 1 } };
@@ -291,7 +338,9 @@ test('Exports create interoperable DOCX and ZIP64, and reject foreign paths', as
     );
   const docx = await handlers['meeting.export']({ meeting_id: 'export', format: 'docx' });
   assert.match(readArchive(docx.path).files['word/document.xml'], /&lt;script&gt;/);
+  const read = t.mock.method(store, 'getMeeting');
   const bundle = await handlers['meeting.bundle']({ meeting_id: 'export' });
+  assert.equal(read.mock.callCount(), 1);
   assert.equal(bundle.recording_included, false);
   assert.match(Object.values(readArchive(bundle.path).files).join('\n'), /测试/);
   const html = await handlers['meeting.export']({ meeting_id: 'export', format: 'pdf' });

@@ -1,5 +1,9 @@
 const { utcNow } = require('./store-base.cjs');
-const { latestSegments, normalizeSummaryMarkdown } = require('./meeting-evidence.cjs');
+const {
+  claimLineIndex,
+  latestSegments,
+  normalizeSummaryMarkdown,
+} = require('./meeting-evidence.cjs');
 const conflict = () =>
   Object.assign(new Error('部分内容已变化，请更新预览'), { code: 'error.transcript_conflict' });
 const segmentValues = (p) => [
@@ -284,16 +288,12 @@ module.exports = {
       if ('claim_id' in payload) {
         const claim = data.claims?.find((c) => c.id === payload.claim_id),
           lines = (data.markdown || '').split(/\r?\n/);
-        if (
-          !claim ||
-          claim.text !== payload.expected_text ||
-          lines.filter((l) => l === claim.line).length !== 1
-        )
+        const index = claim ? claimLineIndex(lines, claim, data.claims) : -1;
+        if (index < 0 || claim.text !== payload.expected_text)
           throw new Error('Conclusion changed; reopen it to edit');
         const text = String(payload.text || '').trim();
         if (!text || [...text].length > 10000 || /[\r\n]/.test(text))
           throw new Error('Expected a single conclusion');
-        const index = lines.indexOf(claim.line);
         lines[index] = claim.prefix + text + claim.suffix;
         Object.assign(claim, { text, line: lines[index], edited: text !== claim.original_text });
         data.markdown = lines.join('\n');

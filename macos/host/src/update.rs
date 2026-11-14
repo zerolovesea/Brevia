@@ -10,13 +10,15 @@ const FEED: &str =
 #[cfg(windows)]
 const FEED: &str =
     "https://github.com/zerolovesea/Brevia/releases/latest/download/latest-windows.json";
+#[cfg(target_os = "linux")]
+const FEED: &str = "";
 const PUBLIC_KEY: Option<&str> = option_env!("BREVIA_NATIVE_UPDATE_PUBKEY");
 
 #[derive(Default)]
 pub struct State(Mutex<Option<(Update, Option<Vec<u8>>)>>);
 
 pub async fn run(app: &AppHandle, method: &str) -> Result<Value, String> {
-    let Some(key) = PUBLIC_KEY.filter(|s| !s.trim().is_empty()) else {
+    let Some(key) = PUBLIC_KEY.filter(|s| !s.trim().is_empty() && !FEED.is_empty()) else {
         return if method == "update.check" {
             Ok(json!({"status":"unsupported"}))
         } else {

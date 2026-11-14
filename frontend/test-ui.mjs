@@ -74,7 +74,7 @@ const [desktopMain, preload, packageManifest, modelManifest] = await Promise.all
 // 前端是 16 个 classic script 共享一个全局作用域，没有 bundler、也没有 DOM 测试环境，
 // 所以断言分三层，各有明确边界：
 //   1. **行为断言** — 纯逻辑/纯函数在 vm 或宿主 realm 里真跑一遍（model-selection、
-//      app-utils、escapeHtml、cleanSummaryMarkdown、app-actions 注册表）。凡是「输入→输出」
+//      app-utils、escapeHtml、cleanSummaryMarkdown）。凡是「输入→输出」
 //      能说清的东西，都必须在这里验证，而不是断言源码里出现过某个函数名。
 //   2. **契约门禁** — 加载顺序、全局符号重复声明、动作接缝、令牌成对、暗色覆盖、对比度。
 //      这些是"机制级不变量"：它们约束的是源码结构本身，因此只能读源码。
@@ -523,26 +523,11 @@ assert.match(
 // 在调用时解析，只要函数在全部脚本加载后才会被调用就没问题，把它们一并算进来会产生
 // 大量误报。花括号深度用于跳过函数体（顶层代码深度为 0）。
 //
-// 依赖图现在是单向的：state → actions → utils → data → i18n-runtime → views → app。
-// 拆环分两步：① app-state.js / app-utils.js 承载共享状态与纯工具；② i18n-runtime.js 前移
-// t()（视图模块调用最频繁的符号，125 处），app-actions.js 把 27 处「视图回调进 app.js」
-// 变成 appActions 显式登记。在 t 前移之前，任何 ESM 化都无法给视图模块定序。
-// 下面的顺序门禁 + 动作接缝门禁共同保证这两条不变量不会被改回去。
 const scriptOrder = [...text(html).matchAll(/<script src="\.\/([\w.-]+)"><\/script>/g)].map(
   (match) => match[1],
 );
 assert.ok(scriptOrder.length >= 10, 'index.html 应显式列出脚本顺序');
 assert.ok(scriptOrder.includes('model-selection.js'), '纯逻辑模块必须被加载');
-const appActionsSource = (await readFile('app-actions.js')).toString();
-const actionListBody = appActionsSource.match(/const APP_ACTION_NAMES = \[([\s\S]*?)\];/);
-assert.ok(actionListBody, 'app-actions.js 必须声明 APP_ACTION_NAMES 清单');
-const APP_ACTION_NAMES_FOR_TEST = [...actionListBody[1].matchAll(/'([A-Za-z_$][\w$]*)'/g)].map(
-  (match) => match[1],
-);
-assert.ok(
-  APP_ACTION_NAMES_FOR_TEST.length >= 10,
-  `动作清单过短：${APP_ACTION_NAMES_FOR_TEST.length}`,
-);
 const declaredBy = new Map();
 const scriptSources = new Map(
   await Promise.all(scriptOrder.map(async (file) => [file, (await readFile(file)).toString()])),
@@ -573,34 +558,6 @@ for (const file of scriptOrder) {
 }
 assert.deepEqual(declaredTwice, [], `全局符号不得重复声明：\n${declaredTwice.join('\n')}`);
 
-// 动作接缝门禁：视图模块不得直接调用定义在 app.js 里的应用动作——必须经过 appActions。
-// 这既是 ESM 定序的前提，也让「视图模块能请求哪些应用动作」保持显式。
-const viewModules = [
-  'ui-components.js',
-  'workspaces.js',
-  'app-meetings.js',
-  'app-meeting-detail.js',
-];
-const directActionCalls = [];
-for (const file of viewModules) {
-  const body = scriptSources.get(file);
-  assert.ok(body, `${file} 必须由 index.html 加载`);
-  for (const name of APP_ACTION_NAMES_FOR_TEST) {
-    const direct = new RegExp(`(^|[^\\w.$])${name}\\s*\\(`, 'm');
-    if (direct.test(body)) directActionCalls.push(`${file} 直接调用了 ${name}`);
-  }
-}
-assert.deepEqual(
-  directActionCalls,
-  [],
-  `视图模块必须通过 appActions 回调应用层：\n${directActionCalls.join('\n')}`,
-);
-// 反向：app.js 必须把清单里的每个动作都登记为 appActions 实现，否则调用时会抛「尚未注册」。
-const appRegister = text(app).match(/registerAppActions\('app\.js',\s*\{([\s\S]*?)\}\);/);
-assert.ok(appRegister, 'app.js 必须调用 registerAppActions');
-for (const name of APP_ACTION_NAMES_FOR_TEST) {
-  assert.match(appRegister[1], new RegExp(`\\b${name}\\b`), `app.js 未登记应用动作 ${name}`);
-}
 // i18n 运行时必须在第一个视图模块之前加载，否则视图模块顶层的 t() 会 ReferenceError。
 assert.ok(
   scriptOrder.indexOf('i18n-runtime.js') < scriptOrder.indexOf('ui-components.js'),
@@ -1610,10 +1567,6 @@ for (const id of [
 assert.match(text(html), /Content-Security-Policy/);
 assert.match(text(html), /frame-src 'none'/);
 assert.doesNotMatch(text(preload), /secret\.get/);
-assert.match(
-  text(desktopMain),
-  /printToPDF\(\{\s*printBackground: true,\s*displayHeaderFooter: true,/,
-);
 assert.match(text(css), /prefers-reduced-motion:\s*reduce/);
 assert.match(text(css), /\.window-bar\{[^}]*-webkit-app-region:drag/);
 assert.match(text(css), /\.window-bar\{[^}]*position:sticky/);
@@ -2092,10 +2045,7 @@ assert.match(
 );
 assert.match(text(desktopMain), /type: 'startup\.ready'/);
 assert.match(text(html), /id="startup-splash"/);
-assert.match(
-  text(js),
-  /querySelectorAll\('\.startup-credit, \.app-credit'\)\.forEach\(\(credit\) => credit\.remove\(\)\)/,
-);
+assert.doesNotMatch(text(html), /class="(?:startup-credit|app-credit)"/);
 assert.match(text(html), /id="app-version">v—/);
 assert.match(
   text(html),
@@ -2707,8 +2657,6 @@ for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   );
 }
 
-assert.match(text(desktopMain), /setWindowOpenHandler/);
-assert.match(text(desktopMain), /will-navigate/);
 assert.match(text(desktopMain), /process\.on\('unhandledRejection'/);
 assert.match(text(desktopMain), /process\.on\('uncaughtException'/);
 assert.match(text(desktopMain), /workerMessage\.parse\(JSON\.parse\(line\)\)/);
@@ -2866,26 +2814,6 @@ assert.deepEqual(
   '同一字幕后的不同录音时刻分别保存',
 );
 
-// 动作接缝真跑一遍：注册前调用要抛出可诊断的错误，重复/越界/非函数注册要立刻失败。
-// 这些是视图模块与 app.js 之间唯一的契约，光断言源码里出现过 appActions 说明不了行为。
-const actionsContext = {};
-// const/let 是脚本级词法绑定，不会挂到 vm 的 context 对象上；这里显式导出再取回。
-runInNewContext(
-  `${text(await readFile('app-actions.js'))}\n;globalThis.__actions = { appActions, registerAppActions };`,
-  actionsContext,
-);
-const { appActions, registerAppActions } = actionsContext.__actions;
-for (const name of ['showToast', 'renderMeetingList', 'transitionPage']) {
-  assert.throws(() => appActions[name](), /尚未注册/, `${name} 未注册时应抛出明确错误`);
-}
-assert.equal(appActions.notAnAction, undefined, '清单外的属性应为 undefined，不参与代理拦截');
-assert.throws(() => registerAppActions('test', { typoName: () => {} }), /不在 APP_ACTION_NAMES/);
-assert.throws(() => registerAppActions('test', { showToast: 'not a function' }), /不是函数/);
-const recorded = [];
-registerAppActions('test', { showToast: (value) => recorded.push(value) });
-appActions.showToast('hello');
-assert.deepEqual(recorded, ['hello']);
-assert.throws(() => registerAppActions('test2', { showToast: () => {} }), /重复注册/);
 assert.match(text(js), /showRefinementComplete/);
 assert.doesNotMatch(text(js), /function missingModelIds/);
 assert.doesNotMatch(text(js), /function openModelLibraryAt/);
@@ -3715,11 +3643,11 @@ for (const platform of ['darwin', 'windows', 'linux']) {
   );
   assert.equal(
     MS.declaredDefaultModelId(available, 'zh'),
-    platform === 'darwin' ? 'funasr-nano-mlx' : 'funasr-nano-int8',
+    platform !== 'windows' ? 'funasr-nano-mlx' : 'funasr-nano-int8',
   );
   assert.equal(
     MS.declaredDefaultModelId(available, 'en'),
-    platform === 'darwin' ? 'parakeet-tdt-0.6b-v3-mlx' : 'parakeet-tdt-0.6b-v3-int8',
+    platform !== 'windows' ? 'parakeet-tdt-0.6b-v3-mlx' : 'parakeet-tdt-0.6b-v3-int8',
   );
 }
 assert.match(
@@ -4558,7 +4486,12 @@ assert.match(
   text(html),
   /class="detail-actions"[\s\S]*data-export-detail[\s\S]*class="detail-head"/,
 );
-assert.doesNotMatch(text(html), /data-share-detail/);
+assert.match(text(html), /data-share-detail[\s\S]*aria-haspopup="dialog"/);
+assert.match(text(app), /function renderCloudShareModal\(/);
+assert.doesNotMatch(
+  text(app).split('function renderCloudShareModal()')[1].split('function clearCloudShareResult')[0],
+  /<select/,
+);
 assert.match(
   text(js),
   /if \(floatingCaptionMode === 'playback'\) \{[\s\S]{0,300}floatingCaption\?\.close/,
@@ -6458,6 +6391,18 @@ assert.doesNotMatch(
   summaryContext.renderMeetingSummary({ generating: true }),
   /data-generate-summary/,
 );
+const partialSummary = summaryContext.renderMeetingSummary({
+  generating: true,
+  progress: {
+    stage: 'summary.extracting',
+    parts_done: 1,
+    parts_total: 3,
+    preview: ['<script>alert(1)</script>'],
+  },
+});
+assert.match(partialSummary, /1\/3/);
+assert.match(partialSummary, /&lt;script&gt;/);
+assert.doesNotMatch(partialSummary, /<script>|data-copy-summary|data-open-summary-edit/);
 for (const markdown of ['', '# 已有纪要']) {
   detailTabbarContext.detailActiveTab = 'summary';
   detailTabbarContext.uiData.detail.summary = { markdown, generating: true };
@@ -6669,6 +6614,7 @@ const namedProviders = [
   'mistral',
   'groq',
   'openrouter',
+  'opencode-go',
 ];
 const providerIds = ['built-in', ...namedProviders, 'custom-openai', 'custom-claude'];
 assert.deepEqual(Array.from(runInNewContext('summaryProviders', summaryContext)), providerIds);
@@ -6912,21 +6858,39 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
 }
 // 树的主题来自原小节，只连接该节明确标记的原因；决定、已采纳笔记和缺少原因的会议独立展示。
 {
-  const { renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook } =
-    runInNewContext(
-      (await readFile('meeting-evidence.js', 'utf8')) +
-        '\n({ renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook })',
-      {
-        document: { addEventListener() {} },
-        t: (s) => s,
-        escapeHtml: (s) => String(s).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
-        interfaceIcon: () => '<svg></svg>',
-        formatMeetingTime: (ms) => String(ms),
-        formatSpeakerName: (speaker) => speaker,
-        summaryDocumentSections: summaryContext.summaryDocumentSections,
-        renderSummaryDocument: summaryContext.renderSummaryDocument,
-      },
-    );
+  const {
+    transcriptEvidenceLinks,
+    renderClaimGroups,
+    causeChapterGroups,
+    renderDetailCauseRail,
+    renderEvidenceNotebook,
+  } = runInNewContext(
+    (await readFile('meeting-evidence.js', 'utf8')) +
+      '\n({ transcriptEvidenceLinks, renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook })',
+    {
+      document: { addEventListener() {} },
+      t: (s) => s,
+      escapeHtml: (s) => String(s).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+      interfaceIcon: () => '<svg></svg>',
+      formatMeetingTime: (ms) => String(ms),
+      formatSpeakerName: (speaker) => speaker,
+      summaryDocumentSections: summaryContext.summaryDocumentSections,
+      renderSummaryDocument: summaryContext.renderSummaryDocument,
+    },
+  );
+  const repeated = {
+    id: 'first',
+    kind: 'conclusion',
+    text: '相同结论',
+    sources: [{ current_segment_id: 's1' }],
+  };
+  const backlinks = transcriptEvidenceLinks(
+    [repeated, { ...repeated, id: 'second' }, { ...repeated, id: 'third', text: '不同结论' }],
+    [repeated],
+  );
+  assert.equal((backlinks.get('s1').match(/class="evidence-backlink"/g) || []).length, 3);
+  assert.match(backlinks.get('s1'), /data-evidence-back="first"/);
+  assert.doesNotMatch(backlinks.get('s1'), /data-evidence-back="second"/);
   const cause = {
     id: 'cause-1',
     kind: 'cause',
@@ -6971,6 +6935,10 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
     { ...cause, id: 'detached', line: '- 已完成设计', detached: true },
   ];
   const chapters = causeChapterGroups(linked, markdown);
+  assert.equal(
+    causeChapterGroups([linked[0], { ...linked[0], id: 'same' }], markdown)[0].items.length,
+    1,
+  );
   assert.equal(chapters.length, 4);
   assert.deepEqual(
     Array.from(chapters, (group) => group.section),
@@ -7005,6 +6973,29 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
   assert.match(renderDetailCauseRail([decision], markdown, 'm'), /detail-cause-empty/);
   assert.match(renderDetailCauseRail([cause], '', 'm'), /detail-cause-empty/);
   assert.match(renderDetailCauseRail([cause], '  \n\t', 'm'), /detail-cause-empty/);
+  const citedBranch = {
+    ...cause,
+    section: '上线延期',
+    text: '本周讨论测试安排。人员不足导致上线延期；后续安排另议。',
+  };
+  assert.match(renderDetailCauseRail([citedBranch], markdown, 'm'), /<strong>人员不足<\/strong>/);
+  const sameReason = ['结果一', '结果二'].map((section, index) => ({
+    ...cause,
+    section,
+    id: 'different-effect-' + index,
+    line: '- 同一个原因',
+  }));
+  const byEffect = causeChapterGroups(
+    sameReason,
+    '### 结果一\n- 同一个原因\n### 结果二\n- 同一个原因',
+  );
+  assert.deepEqual(
+    Array.from(byEffect, (group) => group.section),
+    ['0', '1'],
+  );
+  const sameReasonBacklinks = [...transcriptEvidenceLinks(sameReason, []).values()].join('');
+  assert.match(sameReasonBacklinks, /data-evidence-back="different-effect-0"/);
+  assert.match(sameReasonBacklinks, /data-evidence-back="different-effect-1"/);
   const rail = renderDetailCauseRail(linked, markdown, 'm');
   assert.equal((rail.match(/<brevia-cause-tree>/g) || []).length, 1);
   assert.equal((rail.match(/data-summary-section-link=/g) || []).length, 3);
@@ -7989,7 +7980,7 @@ assert.doesNotMatch(
       liveCacheContext.latestLiveSegmentId = null;
     },
     renderSegmentData: (segment) => segment,
-    liveNotesEditor: { setMarkdown() {} },
+    liveNotesEditor: { setMarkdown() {}, getMarkdown: () => 'Keep these notes' },
   });
   liveCacheContext.transcript.children = restoredNodes;
   liveCacheContext.document.querySelector = (selector) =>
@@ -8855,18 +8846,35 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
     events = new Map(),
     messages = [];
   let nextTimer = 0,
-    rejectPlay = false;
+    rejectPlay = false,
+    pauseCalls = 0,
+    playCalls = 0,
+    pendingSeek = null,
+    delayedSeek = false,
+    time = 0;
   const playerAudio = {
     src: 'meeting-a.wav',
     duration: 60,
-    currentTime: 0,
+    get currentTime() {
+      return time;
+    },
+    set currentTime(value) {
+      if (delayedSeek) {
+        this.seeking = true;
+        pendingSeek = value;
+      } else time = value;
+    },
+    seeking: false,
+    readyState: 4,
     paused: true,
     playbackRate: 1,
     getAttribute: () => playerAudio.src,
     pause() {
+      pauseCalls++;
       this.paused = true;
     },
     async play() {
+      playCalls++;
       if (rejectPlay) throw new Error('play failed');
       this.paused = false;
     },
@@ -8874,6 +8882,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   };
   const context = {
     playerAudio,
+    HTMLMediaElement: { HAVE_NOTHING: 0, HAVE_FUTURE_DATA: 3 },
     progress: {},
     segmentPlayback: undefined,
     segmentPlaybackTimer: undefined,
@@ -8927,7 +8936,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   playerAudio.currentTime = 3.04;
   events.get('timeupdate')();
   assert.equal(playerAudio.paused, true);
-  assert.equal(playerAudio.currentTime, 3);
+  assert.equal(playerAudio.currentTime, 3.04);
   assert.equal(context.segmentPlayback, undefined);
   assert.equal(timers.size, 0);
   await context.playTranscriptSegment('a', 'first');
@@ -8935,13 +8944,26 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   events.get('pause')(); // 前一个片段的 pause 事件延后到达时，新片段已经在播放。
   assert.equal(context.segmentPlayback.segmentId, 'second');
   assert.equal(playerAudio.currentTime, 5);
+  const beforeSwitch = [pauseCalls, playCalls];
+  delayedSeek = true;
+  await context.playTranscriptSegment('a', 'first');
+  assert.equal(pendingSeek, 1);
+  events.get('seeking')();
+  events.get('timeupdate')();
+  assert.equal(playerAudio.currentTime, 5);
+  assert.equal(context.segmentPlayback.segmentId, 'first');
+  assert.deepEqual([pauseCalls, playCalls], beforeSwitch, '切段时不暂停或重新启动已经播放的音频');
+  delayedSeek = false;
+  playerAudio.seeking = false;
+  playerAudio.currentTime = pendingSeek;
+  events.get('seeked')();
+  assert.equal(timers.size, 1);
+  await context.playTranscriptSegment('a', 'second');
   await context.playTranscriptSegment('a', 'second');
   assert.equal(playerAudio.paused, true);
   assert.equal(context.segmentPlayback, undefined);
   await context.playTranscriptSegment('a', 'first');
-  events.get('seeking')();
-  assert.ok(context.segmentPlayback, '片段自身的首次定位仍保留边界');
-  events.get('seeked')();
+  assert.ok(context.segmentPlayback);
   playerAudio.currentTime = 10;
   events.get('seeking')();
   assert.equal(context.segmentPlayback, undefined, '手动跳转后不再按旧片段停止');
@@ -8956,6 +8978,7 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   assert.equal(playerAudio.paused, false, '旧片段检查不能暂停新会议播放');
   await context.playTranscriptSegment('a', 'first');
   assert.equal(context.segmentPlayback, undefined, '过期会议操作不会改动当前播放');
+  playerAudio.pause();
   rejectPlay = true;
   await context.playTranscriptSegment('b', 'first');
   assert.equal(context.segmentPlayback, undefined);

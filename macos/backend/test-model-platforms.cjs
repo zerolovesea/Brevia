@@ -6,16 +6,22 @@ const { test } = require('node:test');
 const { ModelManager } = require('./models.cjs');
 const { attachRecording } = require('./worker-session.cjs');
 
-for (const platform of ['darwin', 'win32']) {
+for (const platform of ['darwin', 'win32', 'linux']) {
   test(`${platform}: ASR catalog, downloads and legacy recording use the platform engine`, async (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-platform-models-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const models = new ModelManager(root, () => {}, { platform });
+    if (platform === 'linux') {
+      const cuda = new ModelManager(root, () => {}, { platform, linuxBackend: 'cuda' });
+      assert.deepEqual(models.recognitionDevice(), { device: 'cpu' });
+      assert.deepEqual(cuda.recognitionDevice(), { device: 'gpu' });
+      assert.equal(cuda.device().asr_backend, 'mlx-cuda');
+    }
     const asr = models.list().filter((model) => model.capabilities.transcription && !model.retired);
     assert.ok(asr.length);
     assert.ok(
       asr.every((model) =>
-        platform === 'darwin'
+        platform !== 'win32'
           ? model.runtime === 'mlx-audio'
           : model.runtime.startsWith('sherpa-onnx'),
       ),
@@ -30,7 +36,7 @@ for (const platform of ['darwin', 'win32']) {
       assert.equal(matches[0].name, name);
     }
     assert.ok(models.get('silero-vad').runtime.startsWith('sherpa-onnx'));
-    const foreign = platform === 'darwin' ? 'funasr-nano-int8' : 'funasr-nano-mlx';
+    const foreign = platform !== 'win32' ? 'funasr-nano-int8' : 'funasr-nano-mlx';
     assert.equal(models.isKnown(foreign), false);
     await assert.rejects(models.install(foreign), /Unknown model/);
     const worker = { models };
@@ -38,14 +44,14 @@ for (const platform of ['darwin', 'win32']) {
     const value = worker.sentencePayload({ language: 'zh', refined_model_id: foreign });
     assert.equal(
       value.refined_model_id,
-      platform === 'darwin' ? 'funasr-nano-mlx' : 'funasr-nano-int8',
+      platform !== 'win32' ? 'funasr-nano-mlx' : 'funasr-nano-int8',
     );
     assert.throws(
       () => worker.sentencePayload({ refined_model_id: 'unknown-model' }),
       /Unknown model/,
     );
-    const source = platform === 'darwin' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
-    const target = platform === 'darwin' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
+    const source = platform !== 'win32' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
+    const target = platform !== 'win32' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
     assert.equal(
       worker.sentencePayload({ language: 'zh', refined_model_id: source }).refined_model_id,
       target,

@@ -25,6 +25,8 @@
 [download-mac]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-WebKit-2.0.2-arm64.dmg
 [download-windows]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.0.2-x64-setup.exe
 
+Ubuntu 24.04 x86-64 桌面版提供 CPU 和 NVIDIA CUDA 两种 deb 构建，见 [Linux 安装与打包说明](DEVELOPMENT.md#linux-桌面开发与打包)。
+
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
 
 Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次使用时，按需要下载语言模型。

@@ -5,6 +5,7 @@ function evidenceDisplayText(claim) {
 function transcriptEvidenceLinks(claims, accepted, historicalRows) {
   const history = historicalRows && new Map(historicalRows.map((row) => [row.segmentId, row]));
   const links = new Map();
+  const seen = new Set();
   for (const [group, entries] of [
     ['summary', claims],
     ['notes', accepted],
@@ -27,6 +28,15 @@ function transcriptEvidenceLinks(claims, accepted, historicalRows) {
           segments.add(src.segment_id);
       }
       for (const id of segments) {
+        const key = JSON.stringify([
+          group,
+          id,
+          claim.kind,
+          claim.kind === 'cause' ? claim.section : '',
+          evidenceDisplayText(claim).normalize('NFKC').replace(/\s+/g, '').trim(),
+        ]);
+        if (seen.has(key)) continue;
+        seen.add(key);
         const link = `<button type="button" class="evidence-backlink" data-evidence-back="${escapeHtml(claim.id)}" data-evidence-document="${group}" title="${escapeHtml(evidenceDisplayText(claim))}">${interfaceIcon('notebook')}<span>${escapeHtml(evidenceDisplayText(claim))}</span>${interfaceIcon('chevron-right')}</button>`;
         links.set(id, (links.get(id) || '') + link);
       }
@@ -35,7 +45,7 @@ function transcriptEvidenceLinks(claims, accepted, historicalRows) {
   return links;
 }
 const claimKindLabels = { decision: '决定', action: '待办', cause: '原因分析', conclusion: '结论' };
-function renderEvidenceClaim(claim, accepted, branch = null, inline = false) {
+function renderEvidenceClaim(claim, accepted, branch = null, inline = false, readOnly = false) {
   const sourceLabel = { changed: '原文已变化', thin: '依据较少', missing: '缺少原文依据' }[
     claim.status
   ];
@@ -47,12 +57,13 @@ function renderEvidenceClaim(claim, accepted, branch = null, inline = false) {
   const quoteRows = claim.sources
     .map((source, index) => {
       const time =
-        source.seekable === false
+        readOnly || source.seekable === false
           ? ''
           : `<button type="button" data-play-evidence="${index}" aria-label="${escapeHtml(t('播放此段') + ' ' + formatMeetingTime(source.start_ms))}">${interfaceIcon('play')}${formatMeetingTime(source.start_ms)}</button>`;
-      const locate = source.current_segment_id
-        ? `<button class="evidence-locate" type="button" data-locate-evidence="${index}">${escapeHtml(t('逐字稿'))}${interfaceIcon('chevron-right')}</button>`
-        : '';
+      const locate =
+        !readOnly && source.current_segment_id
+          ? `<button class="evidence-locate" type="button" data-locate-evidence="${index}">${escapeHtml(t('逐字稿'))}${interfaceIcon('chevron-right')}</button>`
+          : '';
       return `<blockquote><div>${time}<span>${escapeHtml(formatSpeakerName(source.speaker))}</span>${locate}</div><p>${escapeHtml(source.text)}</p></blockquote>`;
     })
     .join('');
@@ -61,14 +72,31 @@ function renderEvidenceClaim(claim, accepted, branch = null, inline = false) {
       ? `<p class="evidence-original"><b>${escapeHtml(t('生成时的结论'))}</b>${escapeHtml(claim.original_text)}</p>`
       : '';
   const edit =
-    !accepted && !claim.detached
+    !readOnly && !accepted && !claim.detached
       ? `<button type="button" class="edit-evidence" data-edit-evidence>${interfaceIcon('edit')}${escapeHtml(t('编辑'))}</button>`
       : '';
   const layout = branch
     ? ` name="cause-${escapeHtml(branch.group)}" data-ink="${branch.index % 4}"`
     : '';
+  let label = evidenceDisplayText(claim);
+  if (branch && claim.section) {
+    const index = label.indexOf(claim.section);
+    if (index >= 0) {
+      const before = label.slice(0, index);
+      const after = label.slice(index + claim.section.length);
+      const follows = after.match(
+        /^[，, ]*(?:因为|原因是|缘于|because(?: of)?|due to)\s*([^。，,；;.!?]+)/iu,
+      );
+      const precedes = before.match(
+        /([^，,。；;：:.!?]+?)[，, ]*(?:导致|造成|致使|因此|从而|所以(?:嗯)?(?:导致)?|led to|resulted in|caused)[，, ]*$/iu,
+      );
+      const clause = before.match(/([^，,。；;：:.!?]+?)[，,]\s*$/u);
+      const reason = follows?.[1] || precedes?.[1] || clause?.[1];
+      if (reason) label = readableCauseLabel(reason);
+    }
+  }
   const stem = branch || inline ? '' : '<span class="claim-stem" aria-hidden="true"></span>';
-  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}" data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(evidenceDisplayText(claim))}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
+  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}"${readOnly ? ' data-evidence-readonly' : ''} data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(label)}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
 }
 
 // 使用实际排版后的端点。长段落换行、展开引文和窗口缩放都可能改变相邻分支的位置。
@@ -97,13 +125,16 @@ if (typeof customElements !== 'undefined') {
         let index = 0;
         this.querySelectorAll('.cause-tree-topic').forEach((topic) => {
           const subject = topic.querySelector('h4').getBoundingClientRect();
-          topic.querySelectorAll('details > summary').forEach((summary) => {
+          topic.querySelectorAll('.evidence-claim > summary').forEach((summary) => {
+            const curve = curves[index++];
             const card = summary.getBoundingClientRect();
+            const hidden = summary.closest('.cause-tree-more:not([open])');
+            curve.style.display = hidden ? 'none' : '';
+            if (hidden) return;
             const endX = card.left - bounds.left;
             const endY = card.top + card.height / 2 - bounds.top;
             const y = Math.max(subject.bottom - bounds.top + 8, endY - 32);
             const midX = (x + endX) / 2;
-            const curve = curves[index++];
             curve
               .querySelector('path')
               .setAttribute('d', `M ${x} ${y} C ${x} ${y + 16}, ${midX} ${endY}, ${endX} ${endY}`);
@@ -118,17 +149,35 @@ if (typeof customElements !== 'undefined') {
   );
 }
 
-function renderCauseTree(groups) {
+function readableCauseLabel(text) {
+  return (
+    text
+      .replace(/^(?:所以|然后|其实|目前就是)\s*/u, '')
+      .replace(/可以看出来是|[嗯呃]+/gu, '')
+      .replace(/是比较/gu, '较')
+      .replace(/会比较/gu, '会较')
+      .replace(/(\p{Script=Han}{2,4})较\1较/gu, '$1较')
+      .replace(/(明显|大|小|低|高|差|好)的$/u, '$1')
+      .trim() || text
+  );
+}
+function renderCauseTree(groups, readOnly = false) {
   const topics = groups
     .map(({ label, items, section, chapter }, index) => {
-      const branches = items
-        .map((claim) => renderEvidenceClaim(claim, false, { group: items[0].id, index }))
-        .join('');
+      const branches = items.map((claim) =>
+        renderEvidenceClaim(claim, false, { group: items[0].id, index }, false, readOnly),
+      );
+      const visible = branches.slice(0, 3).join('');
+      const more =
+        branches.length > 3
+          ? `<details class="cause-tree-more" data-cause-more="more-${escapeHtml(items[0].id)}"><summary>${escapeHtml(t('更多'))} · ${branches.length - 3}</summary><div class="cause-tree-branches">${branches.slice(3).join('')}</div></details>`
+          : '';
+      const title = escapeHtml(readableCauseLabel(label));
       const heading =
         section === undefined
-          ? escapeHtml(label)
-          : `<button type="button" data-summary-section-link="${section}" title="${escapeHtml(t('会议纪要') + ' · ' + chapter)}">${escapeHtml(label)}${interfaceIcon('chevron-right')}</button>`;
-      return `<section class="cause-tree-topic" data-ink="${index % 4}"${section === undefined ? '' : ` data-cause-section="${section}"`}><h4>${heading}</h4><div class="cause-tree-branches">${branches}</div></section>`;
+          ? title
+          : `<button type="button" data-summary-section-link="${section}" title="${escapeHtml(t('会议纪要') + ' · ' + chapter)}">${title}${interfaceIcon('chevron-right')}</button>`;
+      return `<section class="cause-tree-topic" data-ink="${index % 4}"${section === undefined ? '' : ` data-cause-section="${section}"`}><h4>${heading}</h4><div class="cause-tree-branches">${visible}${more}</div></section>`;
     })
     .join('');
   const curves = groups
@@ -139,21 +188,37 @@ function renderCauseTree(groups) {
   return `<section class="evidence-group evidence-cause-tree" aria-label="${escapeHtml(t('原因分析'))}"><brevia-cause-tree><svg class="cause-tree-links" aria-hidden="true"><path class="cause-tree-spine"/>${curves}</svg><h3>${escapeHtml(t('原因分析'))}</h3>${topics}</brevia-cause-tree></section>`;
 }
 function causeChapterGroups(claims, markdown) {
-  const sections = summaryDocumentSections(markdown);
+  const chaptersByLine = new Map();
+  const chaptersByCause = new Map();
+  for (const section of summaryDocumentSections(markdown)) {
+    const label = section.title.replace(/^[* ]+|[* ]+$/g, '');
+    for (const line of section.lines) {
+      const key = JSON.stringify([label, line]);
+      chaptersByLine.set(line, chaptersByLine.has(line) ? null : section);
+      chaptersByCause.set(key, chaptersByCause.has(key) ? null : section);
+    }
+  }
   const groups = new Map();
   for (const claim of claims.filter((item) => item.kind === 'cause' && !item.detached)) {
-    // 只接受当前正文中唯一的原始结论行，章节名或旧段落序号不能证明关联。
-    const matches = claim.line
-      ? sections.flatMap((section) =>
-          section.lines.filter((line) => line === claim.line).map(() => section),
-        )
-      : [];
-    const chapter = matches.length === 1 ? matches[0] : null;
+    // 相同原因行分属不同结果时，用结果标题定位对应小节。
+    const chapter = claim.line
+      ? (chaptersByLine.get(claim.line) ??
+        chaptersByCause.get(JSON.stringify([claim.section, claim.line])))
+      : null;
     const label = claim.section || t('原因分析');
     const key = JSON.stringify([chapter?.id, label]);
     if (!groups.has(key))
       groups.set(key, { label, section: chapter?.id, chapter: chapter?.title, items: [] });
-    groups.get(key).items.push(claim);
+    const items = groups.get(key).items;
+    if (
+      !items.some(
+        (item) =>
+          item.text === claim.text &&
+          item.line === claim.line &&
+          JSON.stringify(item.sources) === JSON.stringify(claim.sources),
+      )
+    )
+      items.push(claim);
   }
   return [...groups.values()].sort(
     (a, b) => Number(a.section ?? Infinity) - Number(b.section ?? Infinity) || 0,
@@ -266,6 +331,7 @@ function seekEvidence(source, play = false) {
     return;
   const start = source.start_ms / 1000;
   if (start < 0 || (Number.isFinite(playerAudio.duration) && start > playerAudio.duration)) return;
+  clearSegmentPlayback();
   playerAudio.currentTime = start;
   progress.value = start;
   renderPlayerTime();
@@ -340,8 +406,8 @@ document.addEventListener('click', (event) => {
     )
       return;
     if (card) {
-      const document = card.closest('.evidence-document');
-      if (document) document.open = true;
+      const disclosure = card.closest('.evidence-document, .cause-tree-more');
+      if (disclosure) disclosure.open = true;
       card.open = true;
       card.scrollIntoView({ block: 'center' });
       card.querySelector('summary').focus({ preventScroll: true });
@@ -349,7 +415,7 @@ document.addEventListener('click', (event) => {
     return;
   }
   const card = event.target.closest('[data-evidence-id]');
-  if (!card) return;
+  if (!card || card.hasAttribute('data-evidence-readonly')) return;
   const claims =
     card.dataset.evidenceDocument === 'notes'
       ? uiData.detail.acceptedClaims

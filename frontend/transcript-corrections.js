@@ -980,6 +980,7 @@ correctionPanel.addEventListener('click', (event) => {
         refreshCorrectionHighlights();
       }
     } else if (activeView === 'detail') {
+      clearSegmentPlayback();
       playerAudio.currentTime = segment.start_ms / 1000;
       renderPlayerTime();
     }

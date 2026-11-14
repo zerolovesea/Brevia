@@ -42,6 +42,11 @@ const summaryProviderPresets = {
     'https://openrouter.ai/api/v1/chat/completions',
     'openai/gpt-5-mini',
   ),
+  'opencode-go': onlineProvider(
+    'OpenCode Go',
+    'https://opencode.ai/inference/go/openai/v1/chat/completions',
+    'glm-5.3-flash',
+  ),
   'custom-openai': {
     format: 'openai',
     endpoint: '',

@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { writeZip } = require('./export-zip.cjs');
-const { clock, latestSegments } = require('./meeting-evidence.cjs');
+const { clock } = require('./meeting-evidence.cjs');
 const { resolveExisting } = require('./store-base.cjs');
 
 const CAUSE_LABELS = {
@@ -259,9 +259,8 @@ function srtTime(milliseconds) {
 }
 function createExportHandlers(worker) {
   const store = worker.store;
-  async function exportMeeting(payload, control) {
-    const meeting = store.getMeeting(payload.meeting_id),
-      format = String(payload.format).toLowerCase(),
+  async function exportMeeting(payload, control, meeting = store.getMeeting(payload.meeting_id)) {
+    const format = String(payload.format).toLowerCase(),
       contentType = payload.content || 'transcript',
       directory = path.join(store.meetingDir(meeting.id), 'exports');
     const title = safeTitle(meeting.title).trim() || meeting.id,
@@ -304,7 +303,7 @@ function createExportHandlers(worker) {
     if (!['md', 'txt', 'json', 'srt', 'docx', 'pdf'].includes(format))
       throw new Error('Unsupported text export format');
     const stale = new Set(meeting.correction?.stale_translations || []),
-      segments = latestSegments(meeting.segments).map((item) =>
+      segments = meeting.current_segments.map((item) =>
         stale.has(item.id) ? { ...item, translation: null } : item,
       );
     let content;
@@ -353,7 +352,8 @@ function createExportHandlers(worker) {
     };
   }
   async function bundleFiles(payload, control) {
-    store.getMeeting(payload.meeting_id, true);
+    if (!store.one('SELECT 1 FROM meetings WHERE id=?', payload.meeting_id))
+      throw new Error('Meeting not found');
     const folder = fs.realpathSync(store.meetingDir(payload.meeting_id)),
       directory = path.join(folder, 'exports'),
       files = payload.files;
@@ -394,7 +394,7 @@ function createExportHandlers(worker) {
       temporary = [];
     try {
       for (const format of ['md', 'txt'])
-        temporary.push((await exportMeeting({ meeting_id: meeting.id, format }, control)).path);
+        temporary.push((await exportMeeting({ format }, control, meeting)).path);
       const files = [
         ...(audio ? [{ path: audio, name: title + '.wav' }] : []),
         ...temporary.map((source) => ({ path: source, name: title + path.extname(source) })),

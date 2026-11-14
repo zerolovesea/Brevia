@@ -20,7 +20,9 @@ if (process.platform === 'darwin') {
 } else if (process.platform === 'win32') {
   run(process.execPath, ['windows/package.cjs', 'app']);
   run(path.join(root, 'dist/native-win/app/Brevia.exe'), process.argv.slice(2));
+} else if (process.platform === 'linux') {
+  run('brevia-desktop', process.argv.slice(2));
 } else {
-  console.error('Brevia desktop supports macOS and Windows.');
+  console.error('Brevia desktop supports macOS, Windows and Linux x86-64.');
   process.exitCode = 1;
 }

@@ -15,6 +15,7 @@ on:
       - 'macos/inference/*.cjs'
       - 'backend/**'
       - 'desktop/**'
+      - 'cloudflare/share/schema.cjs'
       - 'frontend/**'
       - 'skills/brevia/**'
       - 'scripts/**'
@@ -48,6 +49,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sherpa-cuda:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+      - name: Build sherpa-onnx CUDA inference engine
+        run: node windows/build.cjs --cuda
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Brevia-windows-x64-sherpa-cuda
+          path: dist/native-win/cuda/engines/
+          if-no-files-found: error
   checks:
     runs-on: windows-latest
     timeout-minutes: 20

@@ -8,7 +8,6 @@ const { pipeline } = require('node:stream/promises');
 const { setTimeout: delay } = require('node:timers/promises');
 const root = path.resolve(__dirname, '..');
 const out = path.join(root, 'dist/native-win');
-const sources = path.join(out, 'sources');
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options });
   if (result.error) throw result.error;
@@ -120,9 +119,9 @@ const pins = [
     '118d8601c12dd6a44f52423e68ca9083cc9f2bfe72da7a8c1acb22a80ae3550b',
   ],
   [
-    'https://codeload.github.com/ggml-org/llama.cpp/tar.gz/e3546c7948e3af463d0b401e6421d5a4c2faf565',
+    'https://codeload.github.com/ggml-org/llama.cpp/tar.gz/b1b770d90d94cad9e9ea5b993bdbc383a522fb28',
     'llama-native.tar.gz',
-    'f53842f1e5c1dd7a92776576cc4add2e381d0c1b345793e89459489019b9f61a',
+    'ae8556670b17c25931cd39eb7c95617650eaf6091bbcff206750583ddde1acb4',
   ],
   [
     'https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v2.0.1/sherpa-onnx/c-api/c-api.h',
@@ -130,23 +129,20 @@ const pins = [
     '5698f38ba09ad2bdf085c56a6cbbd7741acf15e25f4ce5c7097b9702cadf437f',
   ],
 ];
-const sherpa = 'sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts-lib';
-async function buildNative() {
-  if (process.platform !== 'win32' || process.arch !== 'x64')
-    throw new Error('Build on Windows x64 with Visual Studio C++');
+async function prepareSources(sources, sherpa, sha, asset) {
   fs.mkdirSync(sources, { recursive: true });
   for (const [url, name, sha] of pins) await download(url, path.join(sources, name), sha);
   await download(
     `https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/${sherpa}.tar.bz2`,
     path.join(sources, 'sherpa.tar.bz2'),
-    '21da6a8b92d63ca02ad41dbfc120012343aaaec2e5e02b14819c6b4f38004509',
-    'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/assets/678775274',
+    sha,
+    asset && `https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/assets/${asset}`,
   );
   for (const [archive, directory] of [
     ['libogg-1.3.6.tar.xz', 'libogg-1.3.6'],
     ['opus-1.6.1.tar.gz', 'opus-1.6.1'],
     ['opusfile-0.12.tar.gz', 'opusfile-0.12'],
-    ['llama-native.tar.gz', 'llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565'],
+    ['llama-native.tar.gz', 'llama.cpp-b1b770d90d94cad9e9ea5b993bdbc383a522fb28'],
     ['sherpa.tar.bz2', sherpa],
   ])
     if (!fs.existsSync(path.join(sources, directory)))
@@ -163,40 +159,13 @@ async function buildNative() {
     '--directory=' + path.join(sources, 'extras/decoders/libopus'),
     path.join(root, 'macos/inference/opus-stereo.patch'),
   ]);
-  const build = path.join(out, 'build');
-  run('cmake', [
-    '-S',
-    'windows',
-    '-B',
-    build,
-    '-A',
-    'x64',
-    '-DSOURCES=' + sources.replaceAll('\\', '/'),
-    '-DSHERPA=' + path.join(sources, sherpa).replaceAll('\\', '/'),
-  ]);
-  run('cmake', ['--build', build, '--config', 'Release', '--parallel', '4']);
-  run(path.join(build, 'Release/native-helpers-test.exe'), []);
-  run(path.join(build, 'Release/audio-test.exe'), []);
-  run(path.join(build, 'Release/decode-test.exe'), []);
-  const engines = path.join(out, 'engines');
-  fs.mkdirSync(engines, { recursive: true });
-  fs.copyFileSync(
-    path.join(root, 'windows/funasr-cpu.conf'),
-    path.join(engines, 'funasr-cpu.conf'),
-  );
-  fs.copyFileSync(
-    path.join(build, 'Release/brevia-inference.exe'),
-    path.join(engines, 'brevia-inference.exe'),
-  );
-  const dlls = fs.readdirSync(path.join(sources, sherpa, 'lib')).filter((n) => n.endsWith('.dll'));
-  for (const name of dlls)
-    fs.copyFileSync(path.join(sources, sherpa, 'lib', name), path.join(engines, name));
-  run(path.join(engines, 'brevia-inference.exe'), [], { input: '', stdio: 'pipe', timeout: 30000 });
+}
+async function copyLicenses(sources, engines) {
   const licenses = path.join(engines, 'licenses');
   fs.mkdirSync(licenses, { recursive: true });
   for (const [file, name] of [
-    ['llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565/LICENSE', 'llama.cpp-LICENSE'],
-    ['llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565/common/base64.hpp', 'base64-LICENSE'],
+    ['llama.cpp-b1b770d90d94cad9e9ea5b993bdbc383a522fb28/LICENSE', 'llama.cpp-LICENSE'],
+    ['llama.cpp-b1b770d90d94cad9e9ea5b993bdbc383a522fb28/common/base64.hpp', 'base64-LICENSE'],
     ['libogg-1.3.6/COPYING', 'libogg-LICENSE'],
     ['opus-1.6.1/COPYING', 'opus-LICENSE'],
     ['opusfile-0.12/COPYING', 'opusfile-LICENSE'],
@@ -226,11 +195,64 @@ async function buildNative() {
     if (index < 0) throw new Error('License missing: ' + name);
     fs.writeFileSync(path.join(licenses, name + '-LICENSE'), text.slice(index));
   }
-  return { out, engines, audio: path.join(build, 'Release/brevia-audio.exe') };
+}
+async function buildNative(cuda = false) {
+  if (process.platform !== 'win32' || process.arch !== 'x64')
+    throw new Error('Build on Windows x64 with Visual Studio C++');
+  const [sherpa, sha, asset] = cuda
+    ? [
+        'sherpa-onnx-v2.0.1-cuda-12.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda',
+        'cd983fa95431a8a08555b15005e1effd0b771f161d30f7f3bd52d518da48f6b6',
+        '678821853',
+      ]
+    : [
+        'sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts-lib',
+        '21da6a8b92d63ca02ad41dbfc120012343aaaec2e5e02b14819c6b4f38004509',
+        '678775274',
+      ];
+  const output = cuda ? path.join(out, 'cuda') : out;
+  const sources = path.join(output, 'sources');
+  await prepareSources(sources, sherpa, sha, asset);
+  const build = path.join(output, 'build');
+  run('cmake', [
+    '-S',
+    'windows',
+    '-B',
+    build,
+    '-A',
+    'x64',
+    '-DSOURCES=' + sources.replaceAll('\\', '/'),
+    '-DSHERPA=' + path.join(sources, sherpa).replaceAll('\\', '/'),
+    '-DBREVIA_SHERPA_CUDA=' + (cuda ? 'ON' : 'OFF'),
+  ]);
+  run('cmake', ['--build', build, '--config', 'Release', '--parallel', '4']);
+  run(path.join(build, 'Release/native-helpers-test.exe'), []);
+  run(path.join(build, 'Release/audio-test.exe'), []);
+  run(path.join(build, 'Release/decode-test.exe'), []);
+  const engines = path.join(output, 'engines');
+  fs.mkdirSync(engines, { recursive: true });
+  fs.copyFileSync(
+    path.join(root, 'windows/funasr-cpu.conf'),
+    path.join(engines, 'funasr-cpu.conf'),
+  );
+  fs.copyFileSync(
+    path.join(build, 'Release/brevia-inference.exe'),
+    path.join(engines, 'brevia-inference.exe'),
+  );
+  const dlls = fs.readdirSync(path.join(sources, sherpa, 'lib')).filter((n) => n.endsWith('.dll'));
+  if (cuda) {
+    for (const name of ['onnxruntime_providers_cuda.dll', 'onnxruntime_providers_shared.dll'])
+      if (!dlls.includes(name)) throw new Error('Missing CUDA runtime library: ' + name);
+  }
+  for (const name of dlls)
+    fs.copyFileSync(path.join(sources, sherpa, 'lib', name), path.join(engines, name));
+  run(path.join(engines, 'brevia-inference.exe'), [], { input: '', stdio: 'pipe', timeout: 30000 });
+  await copyLicenses(sources, engines);
+  return { out: output, engines, audio: path.join(build, 'Release/brevia-audio.exe') };
 }
 if (require.main === module)
-  buildNative().catch((e) => {
+  buildNative(process.argv.includes('--cuda')).catch((e) => {
     console.error(e);
     process.exitCode = 1;
   });
-module.exports = { buildNative, run, download, digest };
+module.exports = { buildNative, prepareSources, copyLicenses, run, download, digest };

@@ -606,16 +606,6 @@ assert.match(
 assert.doesNotMatch(mainSource, /'tts'/, 'removed TTS data is not migrated');
 assert.match(
   mainSource,
-  /displayHeaderFooter: true/,
-  'PDF export uses Chromium header space for its brand',
-);
-assert.match(
-  mainSource,
-  /headerTemplate:\s+'<div\s+style="width:100%;text-align:center;opacity:\.72"><svg\s+width="98"\s+height="28"/,
-  'PDF header uses a crisp, visible vector brand',
-);
-assert.match(
-  mainSource,
   /value\.task === 'meeting\.refine' \? refinementWorker : worker/,
   'refinement task controls target the isolated worker',
 );
@@ -925,6 +915,22 @@ await Promise.all([failedLong, failedFollowing]);
 assert.equal(requests.pending.size, 0);
 assert.equal(requests.outbox.length, 0);
 assert.equal(timers.size, 0);
+
+const abandonedSummaryEvents = [];
+const failedClient = new workerClientContext.WorkerClient();
+failedClient.sendEvent = (type, payload) => abandonedSummaryEvents.push([type, payload.meeting_id]);
+failedClient.pending.set('summary', {
+  type: 'summary.generate',
+  meetingId: 'interrupted',
+  reject() {},
+});
+failedClient.pending.set('translate', {
+  type: 'translation.generate',
+  meetingId: 'other',
+  reject() {},
+});
+failedClient.fail(new Error('Worker exited'));
+assert.deepEqual(abandonedSummaryEvents, [['summary.finished', 'interrupted']]);
 
 const activeMeeting = { meeting_id: 'meeting-1', started_at: Date.now() };
 const stopContext = {
@@ -1501,6 +1507,7 @@ console.log('Desktop behavior tests passed');
   for (const [platform, expected] of [
     ['darwin', ['dist:mac']],
     ['win32', ['dist:win']],
+    ['linux', ['dist:linux', 'dist:linux']],
   ]) {
     const calls = [];
     runInNewContext(source, {
@@ -1516,11 +1523,16 @@ console.log('Desktop behavior tests passed');
       calls.map((call) => call.args[1]),
       expected,
     );
+    if (platform === 'linux')
+      assert.deepEqual(
+        calls.map((call) => call.args.at(-1)),
+        ['cpu', 'cuda'],
+      );
     assert.equal(calls[0].options.env.APPLE_ID, undefined);
   }
   assert.throws(
-    () => runInNewContext(source, { process: { platform: 'linux' }, require: () => ({}) }),
-    /requires macOS or Windows/,
+    () => runInNewContext(source, { process: { platform: 'freebsd' }, require: () => ({}) }),
+    /requires macOS, Windows or Linux/,
   );
 }
 

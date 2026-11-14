@@ -1,7 +1,12 @@
-// 保守估算：英文按约两个 ASCII 字符一个 token，其他文字按 UTF-8 字节预算。
+// 汉字按一个 token 估算；实际超窗由引擎报告，再按来源边界分块。
+function tokenHalfUnits(ch) {
+  if (ch.codePointAt(0) < 128) return 1;
+  return /[\u3400-\u9fff]/u.test(ch) ? 2 : 2 * Buffer.byteLength(ch);
+}
+
 function estimatedTokens(text) {
   let halfTokens = 0;
-  for (const ch of text) halfTokens += ch.codePointAt(0) < 128 ? 1 : 2 * Buffer.byteLength(ch);
+  for (const ch of text) halfTokens += tokenHalfUnits(ch);
   return Math.ceil(halfTokens / 2);
 }
 
@@ -38,7 +43,7 @@ function splitByBudget(text, budget, preserveSources = false) {
     let part = prefix,
       cost = initial;
     for (const ch of body.slice(prefix.length)) {
-      const n = ch.codePointAt(0) < 128 ? 1 : 2 * Buffer.byteLength(ch);
+      const n = tokenHalfUnits(ch);
       if (cost + n > budget * 2) {
         chunks.push(part + suffix);
         part = prefix;
@@ -67,9 +72,28 @@ function verifyFactSources(markdown, segments) {
     .split('\n')
     .map((line) => {
       const fact = line
-        .split('[[')[0]
+        .replace(/\[\[(?:cause|action|decision|conclusion):[^\]]*\]\]/g, '')
         .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, '')
         .trim();
+      // 数字被改写、或唯一依据是问句时，展示有来源的原话，避免把转写疑点变成实绩。
+      const marks = [...line.matchAll(/\[\[(?:cause|action|decision|conclusion):([^\]]+)\]\]/g)];
+      const ids = [...new Set(marks.flatMap((mark) => mark[1].split(',').map((id) => id.trim())))];
+      const quotes = ids.map(
+        (id) => /^S[1-9]\d*$/.test(id) && segments[Number(id.slice(1)) - 1]?.text,
+      );
+      if (quotes.length && quotes.every(Boolean)) {
+        const numbers = fact.match(/\d{3,}(?:[.,]\d+)?/g) || [];
+        const invented = numbers.some(
+          (n) => !quotes.some((q) => (q.match(/\d+(?:[.,]\d+)?/g) || []).includes(n)),
+        );
+        const asked =
+          quotes.every((q) => /[?？]\s*$/.test(q) && !/[。.!！]/.test(q)) &&
+          !/[?？]|待确认|是否|尚未|不确定|unconfirmed/i.test(fact);
+        if (invented || asked)
+          return quotes
+            .map((q, i) => '- ' + q.replace(/[\r\n]+/g, ' ') + ' [[conclusion:' + ids[i] + ']]')
+            .join('\n');
+      }
       return line.replace(
         /\[\[(cause|conclusion|decision|action):([^\]]*)\]\]/g,
         (_, kind, references) => {
@@ -78,6 +102,17 @@ function verifyFactSources(markdown, segments) {
             .map((v) => v.trim())
             .filter((id) => /^S[1-9]\d*$/.test(id) && segments[Number(id.slice(1)) - 1]);
           const quote = (id) => segments[Number(id.slice(1)) - 1].text;
+          const han = plain(fact).match(/[\u3400-\u9fff]{2,}/g) || [];
+          if (han.length) {
+            // 仅有「嗯、先说吧」等无关字幕时去掉误引，保留正文供读者核对。
+            const pairs = han.flatMap((word) =>
+              Array.from(word.matchAll(/(?=(..))/gu), (m) => m[1]),
+            );
+            ids = ids.filter((id) => {
+              const source = plain(quote(id));
+              return pairs.some((word) => source.includes(word)) || !/[\u3400-\u9fff]/.test(source);
+            });
+          }
           const exact = ids.filter(
             (id) => plain(fact).length >= 4 && plain(quote(id)).includes(plain(fact)),
           );

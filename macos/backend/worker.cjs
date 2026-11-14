@@ -51,6 +51,7 @@ class Worker {
       process.env.BREVIA_RECOVER_INTERRUPTED !== '0'
         ? this.store.recoverInterruptedMeetings()
         : Promise.resolve();
+    const engineDir = process.env.BREVIA_NATIVE_ENGINES || path.join(this.resources, 'engines');
     this.models = new ModelManager(
       process.env.BREVIA_MODELS_DIR || this.store.modelsDir,
       (type, payload) => this.emit(type, payload),
@@ -59,6 +60,10 @@ class Worker {
           process.env.BREVIA_BUNDLED_MODELS_DIR ||
           path.join(this.resources, 'backend/bundled-models'),
         catalogPath: path.join(this.resources, 'backend/models.json'),
+        linuxBackend:
+          process.platform === 'linux' && fs.existsSync(path.join(engineDir, 'mlx-backend'))
+            ? fs.readFileSync(path.join(engineDir, 'mlx-backend'), 'utf8').trim()
+            : 'cpu',
       },
     );
     this.tasks = new TaskRegistry();
@@ -69,9 +74,12 @@ class Worker {
         ? engineFactory(runtime)
         : new EngineClient(
             path.join(
-              process.env.BREVIA_NATIVE_ENGINES || path.join(this.resources, 'engines'),
-              (runtime === 'mlx-audio' ? 'brevia-mlx' : 'brevia-inference') +
-                (process.platform === 'win32' ? '.exe' : ''),
+              engineDir,
+              (runtime === 'mlx-audio'
+                ? process.platform === 'linux'
+                  ? 'brevia-mlx-cpp'
+                  : 'brevia-mlx'
+                : 'brevia-inference') + (process.platform === 'win32' ? '.exe' : ''),
             ),
           );
       if (!reusable) {
@@ -131,9 +139,9 @@ class Worker {
     if (this.commandTimes.length >= 100) throw new Error('Command rate limit exceeded');
     this.commandTimes.push(now);
     if (!command.id || !command.type) throw new Error('Commands require id and type');
-    const handler = this.handlers[command.type];
-    if (!handler) throw new Error('Unknown command: ' + command.type);
-    return handler(sanitize(command.payload || {}));
+    if (typeof command.type !== 'string' || !Object.hasOwn(this.handlers, command.type))
+      throw new Error('Unknown command: ' + command.type);
+    return this.handlers[command.type](sanitize(command.payload || {}));
   }
   async cancelMeetingTasks(id, timeout = 5000) {
     this.tasks.cancelForMeeting(id);
@@ -296,10 +304,11 @@ async function main() {
     active = new Set();
   const maximumBytes = 32 * 1024 * 1024;
   function dispatch(line) {
-    if (!line.toString('utf8').trim()) return;
+    const text = line.toString('utf8');
+    if (!text.trim()) return;
     let command;
     try {
-      command = JSON.parse(line.toString('utf8'));
+      command = JSON.parse(text);
       if (!command || typeof command !== 'object' || Array.isArray(command))
         throw new Error('Commands must be objects');
     } catch (error) {
@@ -313,7 +322,8 @@ async function main() {
     active.add(task);
     void task.finally(() => active.delete(task));
   }
-  let pending = Buffer.alloc(0),
+  let chunks = [],
+    bytes = 0,
     discarding = false;
   try {
     for await (const chunk of process.stdin) {
@@ -322,20 +332,25 @@ async function main() {
         const newline = chunk.indexOf(10, at),
           end = newline < 0 ? chunk.length : newline;
         if (!discarding) {
-          if (pending.length + end - at > maximumBytes) {
+          if (bytes + end - at > maximumBytes) {
             worker.response(null, null, new Error('Command is too large'));
-            pending = Buffer.alloc(0);
+            chunks = [];
+            bytes = 0;
             discarding = true;
-          } else pending = Buffer.concat([pending, chunk.subarray(at, end)]);
+          } else if (end > at) {
+            chunks.push(chunk.subarray(at, end));
+            bytes += end - at;
+          }
         }
         if (newline < 0) break;
-        if (!discarding) dispatch(pending);
-        pending = Buffer.alloc(0);
+        if (bytes) dispatch(Buffer.concat(chunks, bytes));
+        chunks = [];
+        bytes = 0;
         discarding = false;
         at = newline + 1;
       }
     }
-    if (!discarding && pending.length) dispatch(pending);
+    if (bytes) dispatch(Buffer.concat(chunks, bytes));
   } finally {
     for (const entry of worker.tasks.controls.values()) entry.control.cancel();
     await Promise.allSettled([...active]);

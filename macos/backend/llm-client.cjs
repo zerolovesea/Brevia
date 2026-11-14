@@ -1,3 +1,5 @@
+const { randomUUID } = require('node:crypto');
+
 // 云端推理只接受调用方已确认分享的文本，重定向不得跨越凭据所属来源。
 async function post(endpoint, body, headers, signal) {
   let url = new URL(endpoint);
@@ -47,6 +49,9 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
       ? pathname + '/completions'
       : (pathname || '/v1') + '/chat/completions';
   const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Brevia/1.0' };
+  // OpenCode Go 按会话标识路由，同一会议的请求复用标识。
+  if (payload.provider === 'opencode-go')
+    headers['x-opencode-session'] = payload.meeting_id || randomUUID();
   if (payload.api_key) {
     if (anthropic)
       Object.assign(headers, { 'anthropic-version': '2023-06-01', 'x-api-key': payload.api_key });
@@ -56,6 +61,7 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
   if (anthropic) body.max_tokens = payload.max_tokens ?? 2048;
   else {
     body.stream = false;
+    if (payload.disable_thinking) body.thinking = { type: 'disabled' };
     if (payload.max_tokens) body.max_tokens = payload.max_tokens;
     if (jsonMode) body.response_format = { type: 'json_object' };
   }
@@ -64,9 +70,23 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
     (Number.isFinite(seconds) && seconds > 0 ? seconds : timeout) * 1000,
   );
   const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
+  async function request(body) {
+    try {
+      return await post(url, body, headers, combined);
+    } catch (error) {
+      if (
+        !body.thinking ||
+        !/LLM request failed \((400|422)\)/.test(error.message) ||
+        !/thinking/i.test(error.message)
+      )
+        throw error;
+      delete body.thinking;
+      return post(url, body, headers, combined);
+    }
+  }
   let data;
   try {
-    data = await post(url, body, headers, combined);
+    data = await request(body);
   } catch (error) {
     if (
       !anthropic &&
@@ -77,7 +97,7 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
     ) {
       body.max_completion_tokens = body.max_tokens;
       delete body.max_tokens;
-      data = await post(url, body, headers, combined);
+      data = await request(body);
     } else {
       const missing =
         /model.{0,80}?(?:not\s+(?:found|supported|exist)|does\s+not\s+exist|unsupported|unknown)|\bmodel_not_found\b|(?:unknown|no\s+such)\s+model\b|模型.{0,20}?(?:不存在|不支持)/i;
@@ -89,7 +109,7 @@ async function complete(payload, prompt, { signal, timeout = 120, jsonMode = fal
       )
         throw error;
       try {
-        data = await post(url, { ...body, model: body.model.toLowerCase() }, headers, combined);
+        data = await request({ ...body, model: body.model.toLowerCase() });
       } catch {
         throw error;
       }

@@ -9,6 +9,8 @@
 // 是脚本级词法绑定，跨文件读写语义不变），frontend/test-ui.mjs 里的「加载顺序契约」与
 // 「全局符号不得重复声明」两道门禁保证漏删原声明或顺序写错时立刻失败。
 
+// 视图在应用完成初始化后通过此对象调用应用动作。
+let appActions = {};
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let activeView = 'home';
 let pageTransition = null;
@@ -23,6 +25,7 @@ let inlineSummaryEditor = null;
 let detailNotesEditor = null;
 let modelCatalog = [];
 let summaryGeneratingMeetingId;
+let summaryDraftProgress;
 let seconds = 0;
 let timer;
 const progress = document.querySelector('#progress');

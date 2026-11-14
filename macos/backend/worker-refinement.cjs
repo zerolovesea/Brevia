@@ -542,6 +542,7 @@ function createRefinementHandlers(worker) {
         {
           path: worker.models.path(modelId),
           kind: model.kind,
+          ...(model.runtime === 'mlx-audio' && worker.models.recognitionDevice()),
           files: model.files,
           language,
           hotwords: store.asrTermOptions(meeting).hotwords || [],

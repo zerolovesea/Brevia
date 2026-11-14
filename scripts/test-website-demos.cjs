@@ -404,7 +404,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
                   progress:Number(task.querySelector('[role=progressbar]').getAttribute('aria-valuenow')),
                   step:task.dataset.stage, canGenerate:!!document.querySelector('[data-generate-summary]:not([disabled])'),
                   canCopy:!!document.querySelector('[data-copy-summary]'),
-                  pending:!!document.querySelector('.summary-empty[role=status] .summary-generating-icon')};
+                  pending:!!document.querySelector('[data-summary-in-progress] [role=status] .summary-generating-icon')};
               });
             })()`);
           assert.equal(generation[0].taskVisible, false);

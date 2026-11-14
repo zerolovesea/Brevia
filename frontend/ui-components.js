@@ -11,6 +11,7 @@ const checkIconSvg =
 /** 界面共用线框图标；名称固定，外部文本不参与 SVG 插值。 */
 function interfaceIcon(name) {
   const paths = {
+    link: '<path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/>',
     branch: '<path d="M4 20 20 4M8 16h8M12 12V5M15 9h5"/>',
     github:
       '<g transform="scale(1.5)"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></g>',
@@ -348,9 +349,11 @@ function speakerColor(identity, palette) {
   let color = hash % 6;
   if (!palette) return color;
   if (palette.has(identity)) return palette.get(identity);
-  const used = new Set(palette.values());
-  if (used.size >= 6) color = used.size;
-  else while (used.has(color)) color = (color + 1) % 6;
+  if (palette.size >= 6) color = palette.size;
+  else {
+    const used = new Set(palette.values());
+    while (used.has(color)) color = (color + 1) % 6;
+  }
   palette.set(identity, color);
   return color;
 }
@@ -517,7 +520,7 @@ function renderTranscriptSegment({
     : showSpeaker && speaker.name
       ? speakerMenuTrigger(speaker, palette, 'segment-speaker')
       : '';
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${identity}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${identity}${live ? overlap : ''}${signalBadge}</div>${live ? '' : overlap}${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
@@ -688,6 +691,10 @@ function renderDesktopPreferences() {
     )
     .join('');
   const appList = `<div class="desktop-meeting-apps">${meetingApps}<button class="secondary" type="button" data-add-meeting-app>${escapeHtml(t('添加会议应用'))}</button></div>`;
+  const meetingPromptRows =
+    window.brevia.platform === 'linux'
+      ? ''
+      : `${renderPreferenceRow('会议录音提醒', t('后台检测到会议应用发声时提示开始录音'), toggle('meetingPrompts', '会议录音提醒'))}${renderPreferenceRow('自定义会议应用', '', appList)}`;
   mount.innerHTML = `<div data-desktop-settings><section class="preferences-section" id="preferences-window" aria-labelledby="preferences-window-title"><header class="preferences-section-heading"><h2 id="preferences-window-title">${escapeHtml(t('窗口与后台'))}</h2></header>${renderPreferenceRow(
     '关闭主窗口时',
     desktopPreferences.closeBehavior === 'hide'
@@ -704,7 +711,7 @@ function renderDesktopPreferences() {
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}${renderPreferenceRow('自动显示会议胶囊', t('录音或回放时，最小化主窗口即可显示'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '自动显示会议胶囊')}</span>`)}${renderPreferenceRow('会议录音提醒', t('后台检测到会议应用发声时提示开始录音'), toggle('meetingPrompts', '会议录音提醒'))}${renderPreferenceRow('自定义会议应用', '', appList)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
+  )}${renderPreferenceRow('自动显示会议胶囊', t('录音或回放时，最小化主窗口即可显示'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '自动显示会议胶囊')}</span>`)}${meetingPromptRows}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -1783,6 +1790,19 @@ function renderSummaryDocument(markdown, summarySources = new Map()) {
     )
     .join('');
 }
+function renderSummaryProgressBody(progress, hasDocument = false) {
+  if (hasDocument && !progress?.parts_total && !progress?.preview?.length) return '';
+  const stage =
+    progress?.stage === 'summary.assembling'
+      ? '正在汇总纪要'
+      : progress?.stage === 'summary.saving'
+        ? '正在保存…'
+        : progress?.parts_total
+          ? '正在整理片段'
+          : '正在生成会议纪要';
+  const count = progress?.parts_total ? ` · ${progress.parts_done}/${progress.parts_total}` : '';
+  return `${hasDocument && !progress?.parts_total ? '' : `<header role="status">${hasDocument ? '' : `<span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span>`}${escapeHtml(t(stage) + count)}</header>`}${progress?.preview?.length ? `<h3>${escapeHtml(t('阶段要点'))}</h3><ul>${progress.preview.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>` : ''}`;
+}
 /** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
   markdown,
@@ -1790,6 +1810,7 @@ function renderMeetingSummary({
   waitingModels = false,
   blocked = false,
   generating = false,
+  progress,
   editing = false,
   participants = [],
   palette,
@@ -1802,7 +1823,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="summary-participant-list">${participants.map((person) => speakerMenuTrigger(person, palette, 'summary-participant-person')).join('')}</div></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? `<div class="summary-empty" role="status"><span class="summary-empty-mark"><span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span></span><h2>${escapeHtml(t('正在生成会议纪要'))}</h2></div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${generating && !editing ? `<section class="summary-in-progress" data-summary-in-progress>${renderSummaryProgressBody(progress, Boolean(markdown))}</section>` : ''}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? '' : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -2025,7 +2046,7 @@ function renderMeetingDetail() {
           scroll: oldRail.querySelector('.detail-cause-scroll').scrollTop,
           summaryScroll: reading.querySelector('.summary-body')?.scrollTop || 0,
           open: [...oldRail.querySelectorAll('details[open]')].map(
-            (card) => card.dataset.evidenceId,
+            (card) => card.dataset.causeMore ?? card.dataset.evidenceId,
           ),
         }
       : null;
@@ -2039,7 +2060,7 @@ function renderMeetingDetail() {
   reading.insertAdjacentHTML('beforeend', causeRail);
   if (railState) {
     reading.querySelectorAll('.detail-cause-rail details').forEach((card) => {
-      card.open = railState.open.includes(card.dataset.evidenceId);
+      card.open = railState.open.includes(card.dataset.causeMore ?? card.dataset.evidenceId);
     });
     reading.querySelector('.detail-cause-scroll')?.scrollTo({ top: railState.scroll });
   }
@@ -2084,6 +2105,7 @@ function renderMeetingDetail() {
       correctionFeedback(currentMeetingDetail, 'summary'),
     );
   filterDetailTranscript();
+  appActions.syncSegmentPlaybackButtons?.();
   syncSummaryFeedback();
   if (d.summaryEditing) {
     const root = document.querySelector('[data-inline-summary-editor]');

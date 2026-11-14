@@ -100,6 +100,7 @@ contextBridge.exposeInMainWorld('brevia', {
     noteImage: { save: invoke('meeting.note-image.save') },
   },
   share: {
+    cloud: invoke('share.cloud'),
     groupSummary: invoke('share.group-summary'),
     copyText: invoke('share.copy-text'),
     openExternal: invoke('share.open-external'),

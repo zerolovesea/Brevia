@@ -180,6 +180,184 @@ function restrictSources(markdown, allowed) {
         .join(',')}]]`,
   );
 }
+// Compare both sides within the same source sentence so a nearby, unrelated cause cannot qualify.
+const causalLink =
+  /导致|造成|致使|因此|从而|所以(?:嗯)?(?:导致)?|因为|是由于|原因是|缘于|のため|によって|때문에|из-за|поэтому|привело к|\b(?:because(?: of)?|due to|led to|resulted in|therefore|caused|debido a|por eso|provocó|à cause de|entraîné|car|deshalb|wegen|verursachte)\b/iu;
+const reverseLink = /因为|是由于|原因是|缘于|because|due to|debido a|à cause de|car|wegen|из-за/iu;
+function supportedRelation(statement, heading, sources, marked) {
+  const split = (text) => {
+    const pairs = [];
+    for (const link of text.matchAll(new RegExp(causalLink, 'giu'))) {
+      const left = text
+        .slice(0, link.index)
+        .replace(/[，,\s]+$/gu, '')
+        .split(/[：:。，,；;！？.!?]/u)
+        .at(-1)
+        .trim();
+      const right = text
+        .slice(link.index + link[0].length)
+        .split(/[。，,；;！？.!?]/u)[0]
+        .trim();
+      if (!left || !right || /(?:一开始|当时|之前|之后|的时候)$/u.test(left)) continue;
+      const outcome = left
+        .replace(/^.{1,12}(?:指出|表示|提到|认为)[，：:]?/u, '')
+        .replace(/的?(?:主要|直接|根本)$/u, '');
+      if (reverseLink.test(link[0])) {
+        if (outcome) pairs.push([right, outcome]);
+      } else {
+        pairs.push([left, right]);
+      }
+    }
+    return pairs;
+  };
+  const pairs = split(statement);
+  if (!pairs.length && marked) {
+    const clauses = statement.replace(/[。.!\s]+$/gu, '').split(/[，,；;]/u);
+    if (
+      clauses.length > 1 &&
+      clauses.length <= 3 &&
+      sources.some((source) => /导致|造成|致使|led to|resulted in|caused/iu.test(source.text))
+    )
+      pairs.push(clauses.slice(-2));
+    pairs.push([statement, heading]);
+  }
+  if (!pairs.length) return;
+  const normalize = (value) =>
+    value
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '');
+  const anchored = (phrase, speech) => {
+    const target = normalize(speech);
+    const tokens =
+      phrase.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+|[\p{L}\p{N}]+/gu) || [];
+    const anchors = tokens.flatMap((word) =>
+      /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(word)
+        ? Array.from(word.matchAll(/(?=(..))/gu), (m) => m[1])
+        : word.length >= 3 && !/^(the|and|for|that|was|with|this|are)$/i.test(word)
+          ? [word]
+          : [],
+    );
+    return (
+      anchors.length &&
+      anchors.filter((word) => target.includes(normalize(word))).length >=
+        Math.min(3, Math.max(1, Math.floor(anchors.length * 0.6)))
+    );
+  };
+  const negative =
+    /并非|并不是|不是.{0,16}(?:导致|造成)|不会导致|未导致|没有导致|not (?:because|due to)|did not cause/iu;
+  const uncertain =
+    /可能|怀疑|猜测|是不是|是否|并非|并不是|不一定|未必|might|perhaps|possibly|not because|did not cause/iu;
+  for (const source of sources) {
+    for (const match of source.text.matchAll(/[^。！？.!?]+[。！？.!?]?/gu)) {
+      const sentence = match[0];
+      if (/[？?]$/.test(sentence) || negative.test(sentence) || negative.test(statement)) continue;
+      const quoted = statement.trim() === source.text.trim();
+      if (quoted && /我在想|是否|是不是|怀疑|不知道/u.test(sentence)) continue;
+      const evidence = split(sentence);
+      if (quoted) {
+        const verified = [
+          ...sentence.matchAll(
+            /([^，,。！？.!?；;]{4,})[，,]?\s*(?:所以)?(?:嗯)?(?:导致|造成|致使)([^，,。！？.!?；;]{3,})/gu,
+          ),
+        ].find(
+          (m) =>
+            !/^(?:一个|这个|一些)?(?:问题|情况)[。！]?$/u.test(m[2].trim()) &&
+            m[1].replace(/[嗯啊呃，,\s]/gu, '').length >= 4,
+        );
+        if (verified) return verified[2].trim();
+        if (/\p{Script=Han}/u.test(sentence)) continue;
+      }
+      const pair = pairs.find((item) =>
+        evidence.some((sides) => item.every((side, i) => anchored(side, sides[i]))),
+      );
+      if (!pair) continue;
+      if (
+        evidence.some(
+          (sides) =>
+            uncertain.test(sides.join(' ')) && pair.every((side, i) => anchored(side, sides[i])),
+        ) &&
+        !uncertain.test(pair.join(' '))
+      )
+        continue;
+      if (pair[0] === pair[1]) continue;
+      return pair[1].replace(/^[\s，,:：]+|[。.,，\s]+$/gu, '');
+    }
+  }
+}
+// Recover only source clauses already discussed in one uniquely matching topic.
+function restoreCitedCauses(markdown, segments, headings) {
+  const lines = splitLines(markdown);
+  // Fenced examples are literal content, including apparent headings and source markers.
+  if (lines.some((line) => /^\s*(?:`{3,}|~{3,})/u.test(line))) return markdown;
+  let discussion = false;
+  const topics = [];
+  for (const [index, line] of lines.entries()) {
+    if (/^##\s/u.test(line)) discussion = line.replace(/^##\s+|\*/gu, '').trim() === headings[2];
+    if (!discussion) continue;
+    if (/^###\s/u.test(line)) topics.push({ end: index + 1, text: line });
+    else if (topics.length) {
+      topics.at(-1).end = index + 1;
+      topics.at(-1).text += '\n' + line;
+    }
+  }
+  const added = new Set();
+  const inserts = [];
+  for (const match of markdown.matchAll(MARK)) {
+    for (const id of match[2].split(',').map((value) => value.trim())) {
+      if (!/^S[1-9]\d*$/.test(id) || added.has(id)) continue;
+      added.add(id);
+      const source = segments[Number(id.slice(1)) - 1];
+      if (!source) continue;
+      for (const clause of source.text.matchAll(
+        /([^。，,！？.!?；;]{3,80})[，,]?\s*(?:所以)?(?:嗯)?(导致|造成|致使)([^。，,！？.!?；;]{3,60})/gu,
+      )) {
+        const quote = clause[0].trim();
+        if (/[<>\[\]`*_~\\|\r\n]/u.test(quote)) continue;
+        if (
+          /怀疑|猜测|是不是|是否|不是|没有导致|不一定|未必/u.test(quote) ||
+          /[？?]/u.test(source.text)
+        )
+          continue;
+        const anchors = (text, part) =>
+          new Set(
+            Array.from(part.matchAll(/(?=([\p{Script=Han}]{2}))/gu), (m) => m[1]).filter((word) =>
+              text.includes(word),
+            ),
+          ).size;
+        const matches = topics.filter(
+          (topic) => anchors(topic.text, clause[1]) >= 2 && anchors(topic.text, clause[3]) >= 2,
+        );
+        const citedTopics = matches.filter((topic) =>
+          [...topic.text.matchAll(MARK)].some((mark) =>
+            mark[2].split(',').some((label) => label.trim() === id),
+          ),
+        );
+        const candidates = citedTopics.length ? citedTopics : matches;
+        if (candidates.length !== 1) continue;
+        const topic = candidates[0];
+        if (
+          topic.text.split('\n').some((row) => supportedRelation(row, '', [source], false)) ||
+          topic.text.includes(quote) ||
+          topic.text
+            .split('\n')
+            .some(
+              (row) =>
+                row.includes('[[cause:') &&
+                supportedRelation(row.split('[[')[0], '', [source], true),
+            ) ||
+          !supportedRelation(quote, '', [source], false)
+        )
+          continue;
+        inserts.push({ index: topic.end, line: '- ' + quote + ' [[cause:' + id + ']]' });
+        break;
+      }
+    }
+  }
+  for (const item of inserts.sort((a, b) => b.index - a.index))
+    lines.splice(item.index, 0, item.line);
+  return lines.join('\n');
+}
 function parseClaims(markdown, segments, seekable = true, headings) {
   const output = [],
     claims = [],
@@ -187,7 +365,7 @@ function parseClaims(markdown, segments, seekable = true, headings) {
   let section = '',
     mainSection = '',
     fence = '';
-  const lines = splitLines(markdown);
+  const lines = splitLines(headings ? restoreCitedCauses(markdown, segments, headings) : markdown);
   for (const [index, original] of lines.entries()) {
     const stripped = original.trim(),
       delimiter = stripped.match(/^(`{3,}|~{3,})/);
@@ -236,13 +414,42 @@ function parseClaims(markdown, segments, seekable = true, headings) {
         marks.flatMap((m) => m[2].split(',').map((s) => s.trim())).filter((s) => byLabel.has(s)),
       ),
     ];
+    if (
+      headings &&
+      !marks.length &&
+      mainSection === headings[2] &&
+      section !== mainSection &&
+      causalLink.test(text)
+    ) {
+      const sentences = text.match(/[^。！？!?]+[。！？!?]?/gu) || [text];
+      for (const sentence of sentences.filter((value) => causalLink.test(value))) {
+        const matches = [];
+        for (const [label, segment] of byLabel) {
+          if (supportedRelation(sentence, section, [segment], false)) matches.push(label);
+          if (matches.length > 1) break;
+        }
+        if (matches.length !== 1) continue;
+        if (sentences.length > 1) {
+          // Cite only the supported sentence in a mixed, unmarked paragraph.
+          const split = original.indexOf(sentence);
+          const before = original.slice(0, split);
+          const after = original.slice(split + sentence.length);
+          if (before.trim() && before.trim() !== prefix.trim()) output.push(before.trimEnd());
+          text = sentence.trim();
+          cleaned = prefix + text;
+          if (after.trim()) lines.splice(index + 1, 0, after.trim());
+        }
+        references.push(matches[0]);
+        break;
+      }
+    }
     const sources = references.map((s) => snapshot(byLabel.get(s), seekable));
     const stamps = [...new Set(sources.filter((s) => s.seekable).map((s) => clock(s.start_ms)))];
     const suffix = (stamps.length ? ' 〔' + stamps.join(' · ') + '〕' : '') + tableEnd;
     let kind = marks[0]?.[1] || (table ? 'action' : 'conclusion'),
       problem = section;
     const cause = text.match(CAUSE);
-    if (kind === 'conclusion' && cause && sources.some((s) => CAUSE.test(s.text))) {
+    if (!headings && kind === 'conclusion' && cause && sources.some((s) => CAUSE.test(s.text))) {
       kind = 'cause';
       problem =
         text
@@ -251,7 +458,16 @@ function parseClaims(markdown, segments, seekable = true, headings) {
           .at(-1)
           .replace(/^[ ：:，,。.]+|[ ：:，,。.]+$/g, '') || section;
     }
-    if (headings && kind === 'cause') problem = section;
+    if (headings && mainSection === headings[2] && ['cause', 'conclusion'].includes(kind)) {
+      const marked = kind === 'cause' && section !== mainSection;
+      const result = supportedRelation(text, section, sources, marked);
+      if (result) {
+        kind = 'cause';
+        problem = result;
+      } else {
+        kind = 'conclusion';
+      }
+    }
     // 七章纪要只从议题讨论提取原因；模型有时会给关键数据和待确认事项也打 cause 标记。
     if (headings && kind === 'cause' && mainSection !== headings[2]) {
       kind =
@@ -271,13 +487,48 @@ function parseClaims(markdown, segments, seekable = true, headings) {
   }
   return [output.join('\n'), claims];
 }
+function claimLineIndex(lines, claim, claims) {
+  const first = lines.indexOf(claim.line);
+  if (first < 0) return -1;
+  const sharedCause =
+    claim.kind === 'cause' &&
+    claims.some(
+      (other) =>
+        other.kind === 'cause' && other.section !== claim.section && other.line === claim.line,
+    );
+  if (!sharedCause && first === lines.lastIndexOf(claim.line)) return first;
+  if (claim.kind !== 'cause' || !claim.section) return -1;
+
+  // 同一句原因可以产生不同结果。只在结果小节内有唯一命中时定位。
+  let section = '';
+  let fence = '';
+  let match = -1;
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim();
+    const delimiter = trimmed.match(/^(`{3,}|~{3,})/);
+    if (fence) {
+      if (trimmed.startsWith(fence) && [...trimmed].every((ch) => ch === fence[0])) fence = '';
+      continue;
+    }
+    if (delimiter) {
+      fence = delimiter[1];
+      continue;
+    }
+    if (/^#{1,6}\s/.test(trimmed))
+      section = trimmed.replace(/^[# ]+/, '').replace(/^[* ]+|[* ]+$/g, '');
+    if (section !== claim.section || line !== claim.line) continue;
+    if (match >= 0) return -1;
+    match = index;
+  }
+  return match;
+}
 function alignReplacement(claims, before, after) {
   const old = splitLines(before),
     next = splitLines(after);
   if (old.length !== next.length) return;
   for (const claim of claims) {
-    const i = old.indexOf(claim.line);
-    if (i < 0 || old.lastIndexOf(claim.line) !== i || old[i] === next[i]) continue;
+    const i = claimLineIndex(old, claim, claims);
+    if (i < 0 || old[i] === next[i]) continue;
     const line = next[i];
     if (!line.startsWith(claim.prefix) || !line.endsWith(claim.suffix)) continue;
     const text = line
@@ -297,8 +548,9 @@ function resolveClaims(claims, segments, markdown, accepted = false) {
     .split(/\r?\n/)
     .map((line) => (accepted ? line.replace(/^\s*(?:[-*+]|#{1,6})\s+/, '').trim() : line));
   for (const claim of claims || []) {
-    claim.detached =
-      lines.filter((line) => line === (accepted ? claim.text : claim.line)).length !== 1;
+    claim.detached = accepted
+      ? lines.filter((line) => line === claim.text).length !== 1
+      : claimLineIndex(lines, claim, claims) < 0;
     for (const src of claim.sources) src.current_segment_id = indexed.get(key(src)) || null;
     const chars = claim.sources.reduce((n, s) => n + [...s.text.trim()].length, 0);
     claim.source_chars = chars;
@@ -370,6 +622,7 @@ module.exports = {
   claimRecord,
   restrictSources,
   parseClaims,
+  claimLineIndex,
   alignReplacement,
   resolveClaims,
   latestSegments,

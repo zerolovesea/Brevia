@@ -30,7 +30,7 @@ macOS WebKit 实现面向 Apple Silicon、macOS 14 及以上。安装文件是�
 
 Node.js 随应用提供，两端共用同一业务层与 C++ 推理引擎。旧 Electron 壳、Python 后端及对应开发入口已删除，应用不依赖用户安装解释器。
 
-长会议纪要按上下文容量和语言估算分段，预留指令与成稿空间。内置模型按实际加载窗口和模型目录上限计算；未提供窗口的在线模型按 8192 token 估算。本地串行，在线最多三个请求同时处理。成功提取且含有效来源的片段保存在会议库内；重新生成时按原文、语言、模型、服务地址和提示词核对复用，随会议永久删除。合并后的行动、决定和数字与分段来源核对，仅对字幕中可逐字确认的遗漏自动补写。
+长会议纪要按上下文容量和语言估算分段，预留指令与成稿空间。内置模型按输入长度选择 16K 或 32K 窗口，受模型目录上限约束；未指定窗口时 DeepSeek V4 Pro／Flash 使用 64K 输入输出总预算，其他在线模型使用 8K。遇到实际上下文或输出截断限制时按来源边界拆分。本地串行，在线最多三个请求同时处理。同语言的内置与 DeepSeek V4 长会默认由模型选取原话段号并在本机生成七章；跨语言与自定义纪要指令继续由模型成稿。成功提取且含有效来源的片段保存在会议库内；重新生成时按原文、语言、模型、服务地址和提示词核对复用，随会议永久删除。合并后的行动、决定和数字与分段来源核对，仅对字幕中可逐字确认的遗漏自动补写。
 
 ### 接入模型
 
@@ -61,9 +61,11 @@ npm run test:mac:webkit
 
 `npm test` 包括死代码检查、桌面控制器、UI、Playwright 端到端、Node 后端、Agent 与发布回归；首次运行前执行 `npx playwright install chromium`。Playwright 只用于开发检查，不进入安装包。`npm run test:backend` 可单独验证业务后端；`npm run test:mac:webkit` 使用临时会议库检查真实 WKWebView、包内控制层、PDF 导出、录音暂停恢复和最后一批 PCM 落盘。`macos/inference/smoke.cjs` 使用本地真实模型验证各引擎。
 
+麦克风使用独立的 `AVCaptureSession`，避免蓝牙输出路由覆盖所选输入设备的采样格式。修改采集入口后，用 `node macos/test-audio-devices.cjs <brevia-audio 路径> [设备 UID ...]` 验证默认／指定输入、失效设备回退、预览转双轨、暂停恢复和收尾；此命令实际使用麦克风和系统音频，仅核对电平事件与 PCM 帧数，不保存音频。设备 UID 可通过 `<brevia-audio 路径> devices` 查询。
+
 macOS 14.4+ 的系统声音使用公开 Core Audio Tap API，仅申请音频录制权限；14.0–14.3 保留 ScreenCaptureKit。权限查询不会探录音，也不以录屏权限代替音频权限；公开 API 无法查询时返回 `screen: "unknown"`（保留既有协议字段），界面显示“录音时确认”。主动请求通过临时启动并释放 Tap 触发系统授权，检测到真实声音时返回 `true`，没有检测到声音时返回 `null`，首次尚未确认时，界面保留申请记录与重新检测入口；实际采集成功后本地记住确认结果，后续启动显示“已允许”。该记录表示上次确认成功，公开 API 无法同步用户在系统设置里的撤销操作。系统静音时不能推断授权结果。发布前额外验证延迟确认、拒绝后恢复、耳机／扬声器切换、采样率变化及双轨暂停收尾。
 
-正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 同时构建 macOS 原生版与 Windows 原生版。v1.4.5 的 Electron 更新器从 ModelScope 读取 `latest-mac.yml`（macOS）或 `latest.yml`（Windows）。v2.0.0 是桌面大版本更新：在 v1.4.5 内保存录音，等待后台任务结束，再检查并安装更新。此次 Release 同时生成旧版清单，macOS 指向符合旧版签名要求的 Brevia.app ZIP，Windows 指向同一份 x64 安装器。Windows 的旧版清单指向 v2.0.1，macOS 的旧版清单继续指向 v2.0.0。后续 Release 保留这两份清单及对应文件；完成迁移的桌面应用通过 `latest-webkit.json` 或 `latest-windows.json` 在应用内更新。
+正式发布前仍需在 macOS 14 真机核对设备授权、双轨长录音、系统休眠恢复和公证后升级安装。自动更新使用独立 `latest-webkit.json`，生成更新清单还需要安装 [Tauri CLI](https://tauri.app/reference/cli/)，并同时配置 `BREVIA_NATIVE_UPDATE_PUBKEY`、Tauri 私钥和 Developer ID。正式 Release 构建 macOS、Windows 和 Linux 安装包。v1.4.5 的 Electron 更新器从 ModelScope 读取 `latest-mac.yml`（macOS）或 `latest.yml`（Windows）。v2.0.0 是桌面大版本更新：在 v1.4.5 内保存录音，等待后台任务结束，再检查并安装更新。此次 Release 同时生成旧版清单，macOS 指向符合旧版签名要求的 Brevia.app ZIP，Windows 指向同一份 x64 安装器。Windows 的旧版清单指向 v2.0.1，macOS 的旧版清单继续指向 v2.0.0。后续 Release 保留这两份清单及对应文件；完成迁移的桌面应用通过 `latest-webkit.json` 或 `latest-windows.json` 在应用内更新。
 
 ## Windows 开发与打包
 
@@ -87,6 +89,26 @@ npm run test:windows:native
 从 Windows 正式版 v1.4.3 或 v1.4.5 升级至 v2.0.1 会按版本校验旧卸载器并清理旧程序文件，保留会议、模型和原安装目录。未列入校验范围的版本或卸载器被修改时拒绝自动执行，先保留应用数据手动卸载旧版再安装。应用内更新前保存录音并等待后台任务结束，旧版会在启动安装器时自行退出。安装器先检查 AVX2 能力，再迁移旧安装；不强行结束正在运行的 Brevia。原生更新清单为 `latest-windows.json`，与 macOS 分开。
 
 `npm start` 在两端都复用原生依赖的编译缓存，但仍重新组装应用；`start:fresh` 只额外重置引导，不清会议。`npm run clean` 回收可重建的原生编译目录，保留安装包和已下载模型；下次启动会重新编译。`npm run clean:dist` 删除整个 `dist`（包括本地安装包与下载缓存），先退出其中运行的应用。
+
+## Linux 桌面开发与打包
+
+Linux 桌面版面向支持 AVX2 的 Ubuntu 24.04 x86-64 机器，使用 Tauri、WebKitGTK 4.1 和 PulseAudio（或 PipeWire 的 PulseAudio 兼容服务）。安装 Node.js 22.23.1、Rust stable、C/C++ 工具链及 [Linux CI 中列出的系统依赖](.github/workflows/native-linux-mlx.yml)，执行：
+
+```bash
+npm ci
+npm run dist:linux -- cpu
+npm run dist:linux -- cuda
+```
+
+按设备选择一份安装包，运行 `sudo apt install ./dist/native-linux/Brevia-<version>-amd64-cpu.deb` 或对应的 `-cuda.deb`。两种包使用同一 Debian 包名 `brevia`，如需切换同版本的 CPU／CUDA 构建，使用 `sudo dpkg -i ./另一份安装包.deb`。在应用菜单打开 Brevia，或运行 `brevia-desktop`。CPU 版使用 CPU 进行语音转写；CUDA 版使用 NVIDIA GPU 运行 MLX 转写，其他本地推理组件使用 CPU。
+
+### 独立推理引擎构建
+
+Windows x64 可用 `node windows/build.cjs --cuda` 构建 sherpa-onnx CUDA 引擎，输出到 `dist/native-win/cuda/engines`。运行 CUDA 推理需安装兼容的 NVIDIA 驱动、CUDA 12.x、cuDNN 9.x 和 x64 Visual C++ 运行库，并让进程可找到其 DLL。转写、声纹和说话人分段请求 CUDA，语音活动检测仍用 CPU。CUDA 初始化失败时 sherpa-onnx 可能回退 CPU，验收时需核对设备日志。现有 Windows 安装包继续使用 CPU 引擎。
+
+Ubuntu 24.04 x86-64 安装 CMake、C++ 编译器、Rust、`libarchive-tools`、`patchelf` 和 `libopenblas0-pthread` 后，可分别执行 `node scripts/build-linux-mlx.cjs cpu` 和 `node scripts/build-linux-mlx.cjs cuda`。两者从同一套 C++ 转写源码编译，复用现有 MLX Safetensors 模型，输出到 `dist/native-linux-mlx/cpu` 和 `dist/native-linux-mlx/cuda`。CUDA 版需要 CUDA 12.9 对应的 NVIDIA 驱动和用户态库（cuBLAS、cuFFT、cuSOLVER、NVRTC、cuDNN 9、NCCL），由运行机器提供。MLX 的部分 CUDA 内核在首次转写时由 NVRTC 编译，需要 CUDA 12.9 Toolkit 的运行时头文件及 CCCL 头文件（包括 `cuda/std/tuple`）。多版本共存时，将 `CUDA_HOME` 指向匹配的 Toolkit 根目录。
+
+Windows 原生工作流上传 sherpa CUDA 引擎，Linux 工作流分别构建 CPU 和 CUDA 桌面安装包，安装后执行冒烟测试。CPU 构建运行 MLX 计算自检，CUDA 构建检查链接产物，实际 CUDA 推理需要配有 NVIDIA GPU 的 Linux 机器。
 
 ### 手机导入与实时说话人
 
@@ -157,7 +179,8 @@ README 使用同一命令生成的 `docs/assets/brevia-hero.gif`：白底动态�
 | Code style                     | PR / main 的统一 JS、文档及 Python 格式与静态检查。                                                                                                   |
 | Native macOS validation        | 桌面相关改动的测试、原生打包、真实 WKWebView / PDF / 录音收尾及 Agent 验证。                                                                          |
 | Native Windows validation      | Windows 与共享桌面代码的测试、MSVC / NSIS 构建、WebView2 / PDF、旧版升级和真实模型验证；macOS 专属代码、手机、官网和说明文档不触发。                  |
-| Release                        | 标签或手动运行时构建两端正式签名成品，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                                                      |
+| Native Linux desktop           | 构建并安装 Ubuntu 24.04 x86-64 的 CPU 和 CUDA 桌面包。                                                                                                |
+| Release                        | 标签或手动运行时构建三端安装包，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                                                            |
 | Mobile CI and distribution     | 手机改动的 Flutter / 原生检查；main 按共享、iOS、Android 改动选择分发平台，文档不触发，Flutter／发布脚本测试改动仅检查；正式 App Store 送审单独触发。 |
 | Deploy website to GitHub Pages | 官网与演示脚本变更独立运行浏览器回归；PR 只检查，main 检查通过后部署静态站点。                                                                        |
 
@@ -230,7 +253,7 @@ npm run build         # tailwind.css → styles.css，构建后 styles.css 应�
 
 ### 5. 打包与发布
 
-先提交版本号、更新日志和 release note，确认待发布提交已通过检查，再由维护者创建并推送 `v<version>` 标签。[Release 工作流](.github/workflows/release.yml)在标签推送时构建并发布 macOS 和 Windows 安装包；也支持手动触发。签名和发布凭据由维护者配置，普通贡献者无需持有。
+先提交版本号、更新日志和 release note，确认待发布提交已通过检查，再由维护者创建并推送 `v<version>` 标签。[Release 工作流](.github/workflows/release.yml)在标签推送时构建并发布 macOS、Windows 和 Linux CPU／CUDA 安装包；也支持手动触发。签名和发布凭据由维护者配置，普通贡献者无需持有。
 
 macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.4.1（Swift 6.3）与固定版本的 Tauri CLI；构建目标仍为 macOS 14。GitHub Secrets 需配置 `APPLE_CERTIFICATE_P12_BASE64`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`，以及稳定的 `BREVIA_NATIVE_UPDATE_PUBKEY` 和 `TAURI_SIGNING_PRIVATE_KEY`（加密私钥另设 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。缺少任一必要密钥会阻止发布，不会生成无法更新的正式版。
 
@@ -242,11 +265,12 @@ macOS 使用 Apple Silicon 的 `macos-26` runner、Xcode 26.4.1（Swift 6.3）�
 npm run release:offline
 ```
 
-`release:offline` 按当前系统生成原生 DMG 或 Windows 安装器，不运行 Python 或 Electron 打包。此入口不提交 Apple 公证。手动触发 Release 工作流会构建和验证两端签名成品；只有 `v*` 标签触发才公开发布。
+`release:offline` 按当前系统生成原生 DMG、Windows 安装器或 Linux 两款 deb 安装包，不运行 Python 或 Electron 打包。此入口不提交 Apple 公证。手动触发 Release 工作流会构建和验证两端签名成品；只有 `v*` 标签触发才公开发布。
 
 ### 6. 发布后
 
 - [ ] 确认 GitHub Release 里的 `Brevia-WebKit-<version>-arm64.dmg`、签名原生更新包和 `latest-webkit.json` 与 `Brevia-<version>-x64-setup.exe`、其签名和 `latest-windows.json` 存在。
+- [ ] 确认 GitHub Release 和镜像包含同版本的 `Brevia-<version>-amd64-cpu.deb` 和 `Brevia-<version>-amd64-cuda.deb`。
 - [ ] 确认 CI 已更新官网与各语言 README 的下载链接（`scripts/update-release-links.mjs`）。
 - [ ] 在应用内「更新日志」里确认新版本被标为当前版本。
 
@@ -332,3 +356,24 @@ Windows MCP 客户端可直接调用随包运行时，避免依赖 shell 对 JSO
 自定义安装目录时同步修改这两个路径；自动启动优先使用 CLI 所在安装包的应用。
 
 工具名将 CLI 方法的点换成下划线，如 `inference_run`、`task_get`、`recording_control`。stdio 使用 JSON-RPC 换行消息，stdout 只输出协议内容；`mcp --no-start` 禁止工具调用自动启动应用。应用协议与 MCP 工具参数由同一 schema 生成。运行 `npm run test:agent` 检查认证、权限、自动启动、任务、文件导出和录音确认回归。
+
+## 云端文档分享（Cloudflare）
+
+桌面会后标题栏「分享」上传当前已保存的转写稿、会议纪要及原因图快照，不包含录音、私人笔记、模型配置或本机路径。有效期为 3／7／15／30 天，可选密码保护；修改配置需要重新生成链接，已生成的旧链接保持原有效期及密码。链接持有人可阅读并保存内容；启用密码后，还需输入正确密码。过期无法撤回读者已保存的副本。
+
+服务位于 `cloudflare/share`，通过 Workers + KV 提供 `share.brevia.work`。随机链接使用加密随机 UUID；KV 设置自动过期，读取时再检查服务器到期时间，所有响应禁止缓存和索引。密码通过 HTTPS 请求体传递，保存独立随机盐和 PBKDF2-SHA256（100,000 次）结果，不回传密码校验材料。分享页复用官网 Manrope 字体、品牌和控件样式，以及桌面原因图渲染器，支持浅深色和窄屏。公开纪要通过 Marked 解析 Markdown，原始 HTML 按文本显示，生成内容经 DOMPurify 清理。默认纪要与鱼骨图左右同页，手机上下排布，逐字稿单独切换。
+
+```sh
+npm run test:share
+npm run dev:share                 # 本地 Worker + KV
+node cloudflare/share/test-browser.mjs  # 在另一个终端运行，使用虚构内容验收
+npm run deploy:share              # Cloudflare OAuth / CI API token，使用配置中的账号与子域名
+```
+
+分享 CI 在本地 Wrangler 上运行单测、静态资源构建和 Chromium 浏览器回归。分享协议的改动同时触发两个桌面原生检查。
+
+首次部署由 Wrangler 创建 `SHARES` KV；将输出的资源 ID 填入配置并保留，后续部署复用。桌面正式地址为 `desktop/cloud-share-config.json`，本地联调可设置 `BREVIA_SHARE_URL`（只允许 HTTPS 或本机 HTTP）。浏览器验收支持 `SHARE_TEST_URL` 指定已部署服务；会创建一份三天有效的虚构密码文档。服务部署不会打包或发布桌面应用。
+
+单次上传最多 4 MiB；上传按 IP 每分钟 5 次、每个边缘位置共享每分钟 100 次限制；密码尝试按 IP 每分钟 10 次限制。Cloudflare Rate Limiting 为边缘位置近似计数，并非全局硬性费用上限。无账号上传服务在公开推广前应结合实际流量设置 Cloudflare 预算提醒／WAF。遥测采样设为 0，防止请求路径中的分享凭据进入日志；排错时不要记录正文、密码或完整链接。相关接口与配置依据 [KV 到期写入](https://developers.cloudflare.com/kv/api/write-key-value-pairs/) 和 [Workers Rate Limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)。
+
+分享快照可选保存会议日期、时长及说话人身份，兼容旧链接；标题下展示实际参会者，新上传的逐字稿按身份筛选，同名参与者单独列出。快照附带当前逐字稿已保存且未过期的译文，有译文时默认对照，也可切换为原文或仅译文。仅译文模式只列出已翻译的段落。此前未保存译文的链接需要重新分享。界面语言优先匹配浏览器语言列表中的八种支持语言，未匹配时使用英语；页面切换只更新界面，不翻译会议原文。每次成功读取文档计为一次浏览（刷新也计入，非独立访客）；密码错误、页内筛选和语言切换不计数。浏览计数使用 SQLite Durable Objects 事务，并在分享到期后通过 alarm 清理；已有链接从此版本开始累计，不回填历史访问。不记录访客 IP 或浏览历史。新部署需保留 `share-views-v1` migration 与 `VIEWS` 绑定。

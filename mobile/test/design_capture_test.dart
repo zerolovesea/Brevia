@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'collaboration_test.dart' show Host, Phone, MemoryLibrary;
+import 'package:brevia_mobile/collaboration.dart';
 import 'dart:ui' as ui;
 
 import 'package:brevia_mobile/app_model.dart';
@@ -204,6 +206,21 @@ void main() {
     ]);
     await show(BreviaApp(model: model));
     await capture('mobile-library');
+    final previewComputer = DesktopConnection(
+      address: 'https://192.168.1.24:43187',
+      fingerprint: 'preview',
+      name: 'MacBook Pro',
+    );
+    model.desktop = previewComputer;
+    model.desktopOnline = true;
+    model.notifyListeners();
+    await capture('mobile-library-connected');
+    model.desktopOnline = false;
+    model.notifyListeners();
+    await capture('mobile-library-offline');
+    model.desktop = null;
+    model.notifyListeners();
+    await previewComputer.dispose();
     final meetings = [...model.meetings];
     model.meetings = [];
     model.notifyListeners();
@@ -217,7 +234,7 @@ void main() {
     await capture('mobile-prepare');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     await capture('mobile-connection');
     await tester.ensureVisible(find.text(tr('输入配对码')));
@@ -250,9 +267,22 @@ void main() {
     expect(find.byType(ConnectionHelpPage), findsOneWidget);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    Navigator.of(tester.element(find.byType(ConnectionPage))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(tr('设置')).first);
     await tester.pumpAndSettle();
     await capture('mobile-settings');
+    model.appearance = 'dark';
+    model.notifyListeners();
+    await tester.pumpAndSettle();
+    await capture('mobile-settings-dark');
+    tester.view.physicalSize = const Size(320, 740);
+    await tester.pumpAndSettle();
+    await capture('mobile-settings-narrow');
+    tester.view.physicalSize = const Size(390, 844);
+    model.appearance = 'light';
+    model.notifyListeners();
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text(tr('界面语言')),
       120,
@@ -320,7 +350,7 @@ void main() {
       await tester.tap(button);
       await tester.pumpAndSettle();
       await capture(name);
-      await tester.tap(find.byType(BackButton));
+      await tester.tap(find.byType(CloseButton));
       await tester.pumpAndSettle();
     }
     await show(
@@ -353,6 +383,32 @@ void main() {
       ),
     );
     await capture('mobile-review-summary');
+    await tester.tap(find.text(tr('全屏阅读')));
+    await tester.pumpAndSettle();
+    await capture('mobile-minutes-reader');
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(tr('更多')).last);
+    await tester.pumpAndSettle();
+    await capture('mobile-minutes-actions');
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    final reviewSnapshot = model.meetings.first['snapshot'] as Map;
+    reviewSnapshot['task'] = {
+      'id': 'summary-preview',
+      'action': 'summary',
+      'state': 'running',
+      'progress': .42,
+    };
+    model.notifyListeners();
+    await capture('mobile-summary-progress');
+    expect(find.textContaining('42%'), findsOneWidget);
+    reviewSnapshot.remove('task');
+    model.notifyListeners();
+    await tester.pump();
+
+    await tester.tap(find.text(tr('鱼骨图')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile).first);
     await tester.pumpAndSettle();
     await capture('mobile-review-evidence');
@@ -390,6 +446,13 @@ void main() {
       ),
     );
     await capture('mobile-device-manage');
+    model.desktopOnline = true;
+    model.notifyListeners();
+    await tester.pumpAndSettle();
+    await capture('mobile-device-online');
+    model.desktopOnline = false;
+    model.notifyListeners();
+    await tester.pumpAndSettle();
     await tester.tap(find.text(tr('更新电脑地址')));
     await tester.pumpAndSettle();
     await capture('mobile-address-update');
@@ -407,8 +470,21 @@ void main() {
     model.desktopMicrophoneSelected = false;
     model.desktop = null;
 
+    const liveId = '00000000-0000-4000-8000-000000000001';
+    final notesRoot = Directory.systemTemp.createTempSync('brevia-notes-');
+    Directory(
+      '${notesRoot.path}/recordings/$liveId',
+    ).createSync(recursive: true);
+    const paths = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(paths, (_) async => notesRoot.path);
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(paths, null);
+      notesRoot.deleteSync(recursive: true);
+    });
     model.live = {
-      'id': 'live',
+      'id': liveId,
       'title': pick('产品周会', 'Product sync'),
       'samples': 12096000,
       'state': 'recording',
@@ -423,10 +499,14 @@ void main() {
         'segments': [
           {
             'start_ms': 0,
+            'speaker': 'speaker-1',
+            'speaker_name': 'Lin',
             'text': pick('我们先回顾上周的进展。', 'Let’s review our progress this week.'),
           },
           {
             'start_ms': 12000,
+            'speaker': 'speaker-2',
+            'speaker_name': 'Chen',
             'text': pick(
               '设计稿已经完成，周四交付测试版本。周五前完成验收，下周一小范围发布。',
               'The design is ready. Deliver the test build on Thursday, complete acceptance by Friday, and start a limited rollout next Monday.',
@@ -440,12 +520,48 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
+    for (var i = 0; i < 29; i++) {
+      model.inputLevel.value = [.08, .32, .12, .7, .22, .46, .04][i % 7];
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await capture('mobile-live');
+    await tester.tap(find.text(tr('会议纪要')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text(tr('暂无会议纪要')), findsOneWidget);
+    await capture('mobile-live-minutes');
     await tester.tap(find.text(tr('笔记')));
-    await tester.pump();
+    for (var i = 0; i < 12 && find.byType(TextField).evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+    }
+    await tester.enterText(
+      find.byType(TextField),
+      pick(
+        '周四交付测试版。\n周五完成验收，确认发布安排。',
+        'Deliver the test build Thursday.\nConfirm release after Friday acceptance.',
+      ),
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    final savedNote = File(
+      '${notesRoot.path}/recordings/$liveId/phone-notes.json',
+    );
+    for (var i = 0; i < 12 && !savedNote.existsSync(); i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+    }
+    expect(
+      savedNote.readAsStringSync(),
+      contains(pick('周四交付测试版。', 'Deliver the test build Thursday.')),
+    );
     await capture('mobile-live-notes');
     await tester.tap(find.text(tr('转写')));
     await tester.pump();
@@ -460,15 +576,6 @@ void main() {
     model.live!['uploaded'] = 20;
     model.notifyListeners();
     await capture('mobile-reconnected-transcript');
-    await tester.tap(find.byTooltip(tr('返回录音')));
-    await tester.pump(const Duration(milliseconds: 500));
-    await capture('mobile-reconnected');
-
-    await tester.tap(find.byTooltip(tr('结束')));
-    await tester.pump(const Duration(milliseconds: 500));
-    await capture('mobile-end-confirmation');
-    await tester.tap(find.text(tr('继续录音')));
-    await tester.pump(const Duration(milliseconds: 500));
     final liveSnapshot = model.live!['snapshot'];
     model.live!['localOnly'] = true;
     model.live!['snapshot'] = <String, dynamic>{};
@@ -489,7 +596,10 @@ void main() {
     model.live!['snapshot'] = liveSnapshot;
     model.notifyListeners();
     await tester.pump();
-    await tester.tap(find.byTooltip(tr('重点')));
+    await tester.tap(find.byTooltip(tr('会议操作')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, tr('重点')));
     await tester.pump(const Duration(milliseconds: 500));
     await capture('mobile-bookmark');
     Navigator.of(tester.element(find.text(tr('保存重点')))).pop();
@@ -498,7 +608,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.dark),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     await capture('mobile-live-dark');
@@ -514,7 +624,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     await capture('mobile-mic-active');
@@ -537,7 +647,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: breviaTheme(Brightness.light),
-        home: MeetingPage(model: model, id: 'live'),
+        home: MeetingPage(model: model, id: liveId),
       ),
     );
     expect(find.text(tr('导出已有录音')), findsOneWidget);
@@ -602,6 +712,28 @@ void main() {
     await tester.pumpAndSettle();
     await capture('mobile-permissions');
     await tester.pumpWidget(const SizedBox());
+    await show(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: breviaTheme(Brightness.light),
+        home: const ScannerPage(camera: ColoredBox(color: Color(0xff202020))),
+      ),
+    );
+    await capture('mobile-scanner');
+    final host = Host();
+    final phone = Phone(MemoryLibrary(host));
+    await show(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: breviaTheme(Brightness.light),
+        home: DesktopMeetingPage(model: phone, id: 'one'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await capture('mobile-shared-meeting');
+    await tester.pumpWidget(const SizedBox());
+    phone.dispose();
+    await host.dispose();
     model.dispose();
     writeCaptureRun(Directory(output), sources, screenshots, {
       'method': 'Flutter widget RepaintBoundary, isolated fixtures',

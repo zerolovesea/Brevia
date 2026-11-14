@@ -26,13 +26,15 @@ class DesktopMeetingPage extends StatefulWidget {
   State<DesktopMeetingPage> createState() => _DesktopMeetingPageState();
 }
 
-enum _Section { transcript, notes, summary }
+enum _Section { transcript, notes, summary, evidence }
 
 class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   late final library = widget.model.desktopLibrary!;
   SharedNoteDraft draft = SharedNoteDraft();
   MeetingData snapshot = {};
   final editor = TextEditingController();
+  String transcriptQuery = '';
+  bool compactSearch = false;
   final transcriptScroll = ScrollController();
   final requestIds = <String, String>{};
   Timer? poll, autosave;
@@ -44,6 +46,9 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
       unavailable = false;
   String? error;
   bool online = false;
+  bool legacyNotes = false, syncingNotes = false;
+  String? notesError;
+  Object? shownSummaryFailure;
   _Section section = _Section.transcript;
   ModalRoute<dynamic>? meetingDialog;
   AudioPlayer? player;
@@ -62,6 +67,13 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   @override
   void initState() {
     super.initState();
+    transcriptScroll.addListener(() {
+      if (!mounted || !ended || !transcriptScroll.hasClients) return;
+      final direction = transcriptScroll.position.userScrollDirection.name;
+      if (direction == 'idle') return;
+      final compact = direction == 'reverse';
+      if (compact != compactSearch) setState(() => compactSearch = compact);
+    });
     widget.model.addListener(_libraryChanged);
     _open();
   }
@@ -91,7 +103,11 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   }
 
   Future<void> _open() async {
+    final target = library;
+    target.editingNotes.add(id);
     try {
+      await target.syncingSavedNotes[id];
+      if (!current || unavailable) return;
       final cached = await library.cached(id);
       final saved = await library.draft(id);
       if (!current || unavailable) return;
@@ -121,6 +137,7 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
       if (current && !unavailable) {
         online = true;
         _receive(data);
+        await _syncNotes();
       }
     } on DesktopHttpException catch (e) {
       online = false;
@@ -166,10 +183,13 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
     final value = draft.toJson();
     final target = library;
     final meetingId = id;
-    saving = saving.then((_) => target.saveDraft(meetingId, value)).catchError((
-      Object e,
-    ) {
-      if (current) setState(() => error = e.toString());
+    saving = saving.then((_) async {
+      try {
+        await target.saveDraft(meetingId, value);
+        if (current && notesError != null) setState(() => notesError = null);
+      } catch (e) {
+        if (current) setState(() => notesError = e.toString());
+      }
     });
     return saving;
   }
@@ -177,7 +197,10 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   void _change(String text) {
     setState(() => draft.text = text);
     autosave?.cancel();
-    autosave = Timer(const Duration(milliseconds: 300), _save);
+    autosave = Timer(const Duration(milliseconds: 300), () async {
+      await _save();
+      await _syncNotes();
+    });
   }
 
   void _insert(String value, {bool append = false}) {
@@ -210,6 +233,56 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
       }
     } finally {
       if (current) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _syncNotes() async {
+    final revision = draft.revision;
+    if (!current ||
+        unavailable ||
+        !online ||
+        legacyNotes ||
+        syncingNotes ||
+        revision == null ||
+        !draft.dirty ||
+        draft.proposalId != null ||
+        remoteChanged) {
+      return;
+    }
+    setState(() => syncingNotes = true);
+    try {
+      await _save();
+      if (!current ||
+          unavailable ||
+          notesError != null ||
+          remoteChanged ||
+          draft.revision != revision ||
+          !draft.dirty) {
+        return;
+      }
+      final sent = draft.text;
+      final result = await library.syncNotes(id, revision, sent);
+      if (!current || unavailable) return;
+      if (snapshot['revision'] == revision ||
+          snapshot['revision'] == result['revision']) {
+        setState(() => snapshot = {...snapshot, ...result});
+      }
+      setState(() => draft.resolve(result, keepLocal: draft.text != sent));
+      await _save();
+    } on DesktopHttpException catch (e) {
+      if (!current || unavailable) return;
+      if (e.status == 404) {
+        // 老桌面仍可通过原有提议流程接收笔记。
+        setState(() => legacyNotes = true);
+      } else if (e.status == 409) {
+        if (!fetching) unawaited(_refresh());
+      } else {
+        setState(() => error = e.message);
+      }
+    } catch (_) {
+      if (current && !unavailable) setState(() => online = false);
+    } finally {
+      if (current && !unavailable) setState(() => syncingNotes = false);
     }
   }
 
@@ -331,41 +404,58 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
       editor.text = draft.text;
     });
     await _save();
+    await _syncNotes();
   }
 
   Future<void> _process(String action) async {
-    final summary = action == 'summary';
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        meetingDialog = ModalRoute.of(ctx);
-        return AlertDialog(
-          title: Text(tr(summary ? '生成会议纪要' : '会后精修')),
-          content: Text(
-            tr(
-              summary
-                  ? '电脑将使用已配置的模型整理会议。使用在线模型时，相关文字会发送给所选服务商。'
-                  : '电脑将重新处理这场会议的录音，完成后会同步逐字稿。',
-            ),
-          ),
+    if (!online) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('等待电脑连接')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(tr('取消')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(tr('开始处理')),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr('关闭')),
             ),
           ],
-        );
-      },
-    );
-    meetingDialog = null;
-    if (approved != true || !current || unavailable) return;
+        ),
+      );
+      return;
+    }
+    if (action != 'summary') {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          meetingDialog = ModalRoute.of(ctx);
+          return AlertDialog(
+            title: Text(tr('会后精修')),
+            content: Text(tr('电脑将重新处理这场会议的录音，完成后会同步逐字稿。')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(tr('取消')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(tr('开始处理')),
+              ),
+            ],
+          );
+        },
+      );
+      meetingDialog = null;
+      if (approved != true || !current || unavailable) return;
+    }
     // 如果服务器已接单但响应丢失，下一次点击仍携带同一请求 id。
     final requestId = requestIds.putIfAbsent(action, () => Uuid().v4());
-    await library.process(id, action, requestId);
+    final task = await library.process(id, action, requestId);
+    if (current && !unavailable && task != null) {
+      final latest = snapshot['task'];
+      if (latest?['id'] != task['id']) {
+        setState(() => snapshot = {...snapshot, 'task': task});
+      }
+    }
     requestIds.remove(action);
     await _refresh();
   }
@@ -408,6 +498,7 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
   @override
   void dispose() {
     widget.model.removeListener(_libraryChanged);
+    library.editingNotes.remove(id);
     poll?.cancel();
     autosave?.cancel();
     if (!unavailable && draft.revision != null) unawaited(_save());
@@ -419,6 +510,34 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final task = snapshot['task'];
+    if (task is Map &&
+        task['action'] == 'summary' &&
+        task['state'] == 'failed' &&
+        task['id'] != null &&
+        task['id'] != shownSummaryFailure &&
+        RegExp('模型|model', caseSensitive: false).hasMatch('${task['error']}')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            ModalRoute.of(context)?.isCurrent != true ||
+            shownSummaryFailure == task['id']) {
+          return;
+        }
+        shownSummaryFailure = task['id'];
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            content: Text(remoteError(task['error'] ?? '')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(tr('关闭')),
+              ),
+            ],
+          ),
+        );
+      });
+    }
     final c = Theme.of(context).colorScheme;
     if (unavailable) {
       return Scaffold(
@@ -428,7 +547,12 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
     }
     final header = library.meetings.where((m) => m['id'] == id).firstOrNull;
     final shown = ended
-        ? [_Section.summary, _Section.notes, _Section.transcript]
+        ? [
+            _Section.summary,
+            _Section.evidence,
+            _Section.notes,
+            _Section.transcript,
+          ]
         : [_Section.transcript, _Section.notes];
     return Scaffold(
       appBar: AppBar(
@@ -522,6 +646,8 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                               ? '逐字稿'
                               : s == _Section.notes
                               ? '笔记'
+                              : s == _Section.evidence
+                              ? '鱼骨图'
                               : '会议纪要',
                         ),
                       ),
@@ -581,6 +707,15 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                       _Section.notes => _notes(context),
                       _Section.transcript => _transcript(context),
                       _Section.summary => _summary(context),
+                      _Section.evidence => ListView(
+                        padding: const EdgeInsets.all(20),
+                        children: [
+                          MeetingEvidenceTree(
+                            snapshot: snapshot,
+                            onSeek: _seek,
+                          ),
+                        ],
+                      ),
                     },
             ),
             if (ended && snapshot['has_audio'] == true)
@@ -661,12 +796,50 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
               icon: const BreviaIcon(Icons.image_outlined, size: 20),
             ),
             const Spacer(),
-            if (pending)
-              Text(tr('等待电脑确认'), style: Theme.of(context).textTheme.labelMedium)
-            else if (draft.dirty || draft.proposalId != null)
-              FilledButton(
-                onPressed: busy || !online ? null : () => _action(_send),
-                child: Text(tr('发送至电脑')),
+            if (remoteChanged && draft.dirty)
+              Flexible(
+                child: TextButton(
+                  onPressed: online ? () => _action(_compare) : null,
+                  child: Text(tr('电脑版本')),
+                ),
+              )
+            else if (pending)
+              Flexible(
+                child: Text(
+                  tr('等待电脑确认'),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              )
+            else if ((legacyNotes && draft.dirty) || draft.proposalId != null)
+              Flexible(
+                child: TextButton(
+                  onPressed: busy || !online ? null : () => _action(_send),
+                  child: Text(tr('发送至电脑')),
+                ),
+              )
+            else if (notesError != null)
+              Flexible(
+                child: TextButton(
+                  onPressed: () => _action(_save),
+                  child: Text(
+                    notesError!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: Text(
+                  tr(
+                    draft.dirty || syncingNotes
+                        ? '已保存 · 待同步'
+                        : online
+                        ? '已同步'
+                        : '离线',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
           ],
         ),
@@ -675,18 +848,10 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
         child: editing
             ? Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: TextField(
-                  controller: editor,
+                child: NoteComposer(
+                  editor: editor,
                   onChanged: _change,
-                  expands: true,
-                  minLines: null,
-                  maxLines: null,
-                  textAlignVertical: TextAlignVertical.top,
-                  keyboardType: TextInputType.multiline,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: tr('写笔记…'),
-                  ),
+                  expanded: true,
                 ),
               )
             : ListView(
@@ -711,9 +876,16 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
 
   Widget _transcript(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final shown = _selectedMs == null
-        ? segments
-        : segments.where((s) => s['start_ms'] == _selectedMs).toList();
+    final speakers = mobileSpeakerPalette(segments);
+    final shown = segments
+        .where(
+          (s) =>
+              (_selectedMs == null || s['start_ms'] == _selectedMs) &&
+              (s['text']?.toString() ?? '').toLowerCase().contains(
+                transcriptQuery.toLowerCase(),
+              ),
+        )
+        .toList();
     return Column(
       children: [
         if (ended)
@@ -721,12 +893,36 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: TextButton.icon(
-                icon: const BreviaIcon(Icons.tune, size: 17),
-                label: Text(tr('会后精修')),
+              child: IconButton(
+                tooltip: tr('会后精修'),
+                icon: const BreviaIcon(Icons.tune, size: 20),
                 onPressed: processing || busy || !online
                     ? null
                     : () => _action(() => _process('refine')),
+              ),
+            ),
+          ),
+        if (ended)
+          AnimatedSize(
+            duration: BreviaMotion.duration(context, BreviaMotion.spatial),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, compactSearch ? 0 : 4, 20, 6),
+              child: TextFormField(
+                initialValue: transcriptQuery,
+                onChanged: (value) => setState(() => transcriptQuery = value),
+                style: Theme.of(context).textTheme.bodySmall,
+                decoration: InputDecoration(
+                  hintText: tr('搜索转写'),
+                  prefixIcon: const BreviaIcon(Icons.search, size: 16),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 34),
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: compactSearch ? 5 : 9,
+                    horizontal: 8,
+                  ),
+                  isDense: true,
+                ),
               ),
             ),
           ),
@@ -766,6 +962,10 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          MobileSpeakerAvatar(
+                            color: speakers[mobileSpeakerIdentity(segment)],
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,18 +1022,20 @@ class _DesktopMeetingPageState extends State<DesktopMeetingPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            icon: const BreviaIcon(Icons.auto_awesome, size: 17),
-            label: Text(tr(summary.isEmpty ? '生成会议纪要' : '重新生成纪要')),
-            onPressed: busy || processing || !online
-                ? null
-                : () => _action(() => _process('summary')),
-          ),
+        MeetingArtifactActions(
+          hasSummary: summary.isNotEmpty,
+          busy: busy || processing,
+          onGenerate: () => _action(() => _process('summary')),
+          onRefine: ended && online
+              ? () => _action(() => _process('refine'))
+              : null,
         ),
-        MeetingEvidenceTree(snapshot: snapshot, onSeek: _seek),
-        if (summary.isNotEmpty) _markdown(summary),
+        if (busy || processing)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: MeetingTaskProgress(task: snapshot['task'] as Map?),
+          ),
+        if (summary.isNotEmpty) MinutesDocument(child: _markdown(summary)),
       ],
     );
   }

@@ -270,7 +270,7 @@
             aria-expanded="true"
             ><span data-interface-icon="sidebar"></span></button
           ><strong class="window-wordmark" translate="no">Brevia</strong
-          ><span id="crumb">所有会议</span><small class="app-credit">Powered by zerolovesea</small
+          ><span id="crumb">所有会议</span
           ><div class="window-actions"
             ><small id="app-version">v—</small
             ><a
@@ -580,6 +580,12 @@
           ><div class="detail-actions"
             ><button
               class="primary-action"
+              data-share-detail
+              aria-haspopup="dialog"
+              aria-expanded="false"
+              ><span data-interface-icon="link" aria-hidden="true"></span>分享</button
+            ><button
+              class="primary-action"
               data-export-detail
               aria-haspopup="dialog"
               aria-expanded="false"
@@ -722,7 +728,6 @@
     <div class="toast" id="toast" role="status"></div>
     <script src="./app-state.js"></script>
     <script src="./motion.js"></script>
-    <script src="./app-actions.js"></script>
     <script src="./app-utils.js"></script>
     <script src="./backend-client.js"></script>
     <script src="./ui-data.js"></script>

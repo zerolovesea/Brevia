@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:brevia_mobile/app_model.dart';
 import 'package:brevia_mobile/connection.dart';
+import 'package:brevia_mobile/design_system.dart';
 import 'package:brevia_mobile/i18n.dart';
 import 'package:brevia_mobile/main.dart';
 import 'package:brevia_mobile/onboarding.dart';
@@ -17,8 +18,69 @@ void main() {
   });
   tearDown(() => uiLanguage = 'system');
 
+  testWidgets('reading scroll compacts and restores meeting destinations', (
+    tester,
+  ) async {
+    final model = AppModel();
+    addTearDown(model.dispose);
+    model.meetings = [
+      {
+        'id': 'fixture-scroll',
+        'title': 'Scroll',
+        'state': 'ended',
+        'snapshot': {
+          'segments': [
+            for (var i = 0; i < 60; i++)
+              {'start_ms': i * 1000, 'text': 'Line $i'},
+          ],
+        },
+      },
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MeetingPage(model: model, id: 'fixture-scroll', initialTab: 0),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final list = find.byType(ListView).last;
+    final nav = find.byType(MeetingDestinations);
+    await tester.drag(list, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    expect(tester.widget<MeetingDestinations>(nav).compact, isTrue);
+    await tester.drag(list, const Offset(0, 160));
+    await tester.pumpAndSettle();
+    expect(tester.widget<MeetingDestinations>(nav).compact, isFalse);
+  });
+
+  testWidgets('notes navigation opens the selected meeting notes directly', (
+    tester,
+  ) async {
+    final model = AppModel();
+    addTearDown(model.dispose);
+    model.meetings = [
+      {
+        'id': 'fixture-notes',
+        'title': '笔记入口',
+        'state': 'ended',
+        'finished': true,
+        'samples': 16000,
+        'snapshot': {
+          'notes': '保留原有笔记',
+          'summary': {'markdown': '会议结论'},
+        },
+      },
+    ];
+    await tester.pumpWidget(BreviaApp(model: model));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(tr('笔记')).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('笔记入口'));
+    await tester.pumpAndSettle();
+    expect(find.text('保留原有笔记'), findsOneWidget);
+    expect(find.text('会议结论'), findsNothing);
+  });
   testWidgets(
-    'first run prioritizes desktop download and requires approved pairing',
+    'first run offers offline recording and requires approval for pairing',
     (tester) async {
       final model = AppModel();
       addTearDown(model.dispose);
@@ -45,8 +107,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('先在电脑安装 Brevia，再用手机扫码配对。'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '复制电脑端下载地址'), findsOneWidget);
+      expect(find.byTooltip('复制电脑端下载地址'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '先离线录音'), findsOneWidget);
       await tester.tap(find.text('电脑已安装，开始配对'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('已打开二维码，开始扫码'));
@@ -93,7 +155,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('电脑已选择此手机为声源'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     expect(find.text('等待电脑开始录音'), findsOneWidget);
     expect(find.text('尚未开始录音'), findsOneWidget);
@@ -141,7 +203,7 @@ void main() {
     addTearDown(model.dispose);
     await tester.pumpWidget(BreviaApp(model: model));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.tap(find.byTooltip(tr('设置')).first);
     await tester.pumpAndSettle();
     for (final title in ['界面语言', '外观', '录音与后台', '连接与设备', '本地存储', '隐私与关于']) {
       expect(find.text(title).hitTestable(), findsOneWidget, reason: title);

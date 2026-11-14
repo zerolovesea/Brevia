@@ -1477,23 +1477,6 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
   color: var(--color-text-muted);
   margin: 0 0 16px;
 }
-.settings-page .model-library-item {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  margin: 0 0 8px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-}
-.settings-page .model-library-item > span {
-  min-width: 0;
-}
-.settings-page .model-library-item p {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
 .model-library-toolbar {
   display: flex;
   align-items: center;
@@ -1555,26 +1538,8 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
 .settings-page .modal-title p {
   max-width: none;
 }
-.model-library-item > .interface-icon {
-  background: var(--color-navigation);
-  width: 40px;
-  height: 40px;
-  padding: 8px;
-  border-radius: 8px;
-}
 .model-library-headline {
   font-size: 18px;
-}
-.model-library-item .model-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  max-width: 210px;
-}
-.model-library-item p {
-  font-size: 14px;
 }
 .model-download-progress {
   font-size: 14px;
@@ -1739,10 +1704,6 @@ details.advanced-settings-section[open]::details-content {
 .storage-settings .storage-data-heading {
   margin-top: 12px;
 }
-.storage-settings .storage-privacy summary {
-  min-height: 72px;
-  padding: 12px 16px;
-}
 .storage-usage-heading,
 .storage-data-heading {
   display: flex;
@@ -1801,17 +1762,6 @@ details.advanced-settings-section[open]::details-content {
   padding: 4px 10px;
   font-size: 13px;
 }
-.storage-privacy summary > span {
-  display: grid;
-  gap: 6px;
-}
-.storage-privacy summary b {
-  font-weight: 600;
-}
-.storage-privacy summary small {
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
 .storage-list {
   border: 1px solid var(--color-line);
   border-radius: 8px;
@@ -1822,27 +1772,6 @@ details.advanced-settings-section[open]::details-content {
 }
 .storage-list section:last-child {
   border-bottom: 0;
-}
-.storage-privacy {
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-}
-.storage-privacy summary {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  cursor: pointer;
-  list-style: none;
-  font-size: 16px;
-}
-.storage-privacy summary > .interface-icon:last-child {
-  margin-left: auto;
-}
-.storage-privacy p {
-  padding: 0 20px 16px;
-  font-size: 14px;
-  color: var(--color-text-muted);
 }
 .storage-overview h3 {
   margin-bottom: 12px;
@@ -2506,17 +2435,6 @@ details.advanced-settings-section[open]::details-content {
   }
   #detail-view .player-meta {
     grid-column: 3;
-  }
-  .settings-page .config-fields label {
-    display: flex;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .settings-page .ai-service-choice legend {
-    float: none;
-    width: auto;
-    margin-bottom: 12px;
-    padding: 0;
   }
 }
 
@@ -4480,8 +4398,13 @@ textarea,
   font-size: 14px;
   order: 2;
 }
-#detail-view .segment-meta :is(.overlap-speakers, .caption-signals) {
+#detail-view .segment-meta .caption-signals {
   order: 3;
+}
+#detail-view .transcript-body .segment > .overlap-speakers {
+  grid-column: 2;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
 }
 #detail-view .segment-copy {
   grid-column: 2;
@@ -5073,18 +4996,6 @@ textarea,
   justify-content: flex-end;
   gap: 12px;
   margin-top: auto;
-}
-.model-library-item {
-  padding: 16px;
-  border-radius: 8px;
-}
-.model-library-item h4 {
-  font-size: 18px;
-  line-height: 1.4;
-}
-.model-library-item :is(p, .model-library-details) {
-  font-size: 14px;
-  line-height: 1.6;
 }
 .advanced-fields label {
   display: grid;
@@ -5769,8 +5680,7 @@ textarea,
   padding-top: 12px;
 }
 /* 图册共享控件：菜单、角标与浮层不再继承旧版密度。 */
-.flow-select-options button,
-.meeting-workspace-menu .menu-item {
+.flow-select-options button {
   min-height: var(--menu-row-height);
   padding: 10px 12px;
   font-size: 16px;
@@ -5822,7 +5732,6 @@ textarea,
   height: 20px;
 }
 .meeting-menu,
-.meeting-workspace-menu,
 .segment-context-menu {
   border-color: var(--color-line);
   background: var(--color-overlay);
@@ -5830,9 +5739,6 @@ textarea,
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   padding: 4px;
   border-radius: var(--control-radius);
-}
-.meeting-workspace-menu .menu-item:hover {
-  background: var(--color-selected);
 }
 #home-view:has(#trash-back:not([hidden])) .page-head {
   flex-wrap: wrap;
@@ -5948,10 +5854,6 @@ textarea,
   font-size: 14px;
   min-height: 28px;
   padding: 4px 10px;
-}
-.settings-page .model-library-item .model-actions {
-  flex-wrap: nowrap;
-  max-width: none;
 }
 .settings-page .modal-body > :is(.summary-model-form, .ai-assist-config-form) {
   gap: 12px;
@@ -6090,13 +5992,6 @@ textarea,
 }
 .settings-page .model-library-toolbar {
   margin-bottom: 16px;
-}
-.settings-page .model-library-item .model-library-description {
-  grid-column: 1 / -1;
-  margin: 2px 0 0;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--color-text-muted);
 }
 .settings-page .modal-body > .advanced-settings-form {
   gap: 12px;
@@ -7997,44 +7892,6 @@ html[data-theme] .toast,
   border-top: 1px solid var(--color-line);
   margin-top: 8px;
   padding-top: 12px;
-}
-.meeting-workspace-menu {
-  width: 260px;
-  max-width: calc(100vw - 16px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  padding: 12px;
-}
-.meeting-workspace-menu h3 {
-  margin: 0 8px 8px;
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-.meeting-workspace-menu .menu-section {
-  overflow: auto;
-}
-.meeting-workspace-menu .menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  width: 100%;
-  padding: 8px;
-}
-.meeting-workspace-menu .interface-icon {
-  width: 20px;
-  height: 20px;
-}
-.meeting-workspace-menu .workspace-icon {
-  width: 20px;
-  display: flex;
-}
-.meeting-workspace-menu .menu-item > span:nth-child(2) {
-  flex: 1;
-  text-align: left;
-}
-.meeting-workspace-menu .active {
-  background: var(--color-selected);
 }
 .meeting-title-rename {
   min-width: 0;

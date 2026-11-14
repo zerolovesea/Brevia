@@ -1,0 +1,46 @@
+name: Cloud share validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: &share-paths
+      - 'cloudflare/share/**'
+      - 'desktop/cloud-share*'
+      - 'frontend/**'
+      - 'website/assets/**'
+      - 'package*.json'
+      - '.github/workflows/share.yml'
+  push:
+    branches: [main]
+    paths: *share-paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: share-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:share
+      - run: npm run build:share
+      - run: npx playwright install --with-deps chromium
+      - name: Check the local Worker in Chromium
+        env:
+          SHARE_TEST_URL: http://127.0.0.1:8787
+        run: |
+          ./node_modules/.bin/wrangler dev --local --ip 127.0.0.1 --port 8787 --config cloudflare/share/wrangler.jsonc &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          curl --silent --show-error --fail --retry 30 --retry-connrefused --retry-delay 1 "$SHARE_TEST_URL/" -o /dev/null
+          node cloudflare/share/test-browser.mjs

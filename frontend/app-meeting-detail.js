@@ -168,6 +168,7 @@ function applyBackendDetail(meeting) {
         blocked: summaryBlocked,
         generating: summaryGenerating,
       };
+  if (summaryGenerating) uiData.detail.summary.progress = summaryDraftProgress;
   uiData.detail.summary.waitingModels =
     'summaryWaitState' in appActions && appActions.summaryWaitState(meeting.id);
   const heading = document.querySelector('#detail-view .detail-head h1');

@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
@@ -43,8 +44,11 @@ class BreviaStateChange extends StatelessWidget {
     switchInCurve: BreviaMotion.out,
     switchOutCurve: BreviaMotion.into,
     transitionBuilder: (child, animation) => FadeTransition(
-      opacity: Tween<double>(begin: .55, end: 1).animate(animation),
-      child: child,
+      opacity: animation,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: .9, end: 1).animate(animation),
+        child: child,
+      ),
     ),
     layoutBuilder: (current, previous) => current ?? const SizedBox.shrink(),
     child: child,
@@ -81,39 +85,39 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
   fontFamily ??= defaultTargetPlatform == TargetPlatform.iOS
       ? '.SF Pro Text'
       : 'Roboto';
-  final ink = dark ? Color(0xfff2f2f2) : Color(0xff222222);
-  final canvas = dark ? Color(0xff191919) : Color(0xffffffff);
-  final muted = dark ? Color(0xffb0b0b0) : Color(0xff666666);
-  final line = dark ? Color(0xff4a4a4a) : Color(0xffd6d6d6);
-  final sheet = dark ? Color(0xff242424) : Colors.white;
+  final ink = dark ? Color(0xfff0f0f0) : Color(0xff171717);
+  final canvas = dark ? Color(0xff101010) : Color(0xfffafafa);
+  final muted = dark ? Color(0xffacacac) : Color(0xff696969);
+  final line = dark ? Color(0xff404040) : Color(0xffd4d4d4);
+  final sheet = dark ? Color(0xff171717) : Colors.white;
   final scheme = ColorScheme.fromSeed(seedColor: ink, brightness: brightness)
       .copyWith(
         primary: ink,
         onPrimary: canvas,
-        primaryContainer: dark ? Color(0xff303030) : Color(0xfff2f2f2),
+        primaryContainer: dark ? Color(0xff303030) : Color(0xffeeeeee),
         onPrimaryContainer: ink,
         secondary: ink,
         onSecondary: canvas,
-        secondaryContainer: dark ? Color(0xff303030) : Color(0xfff2f2f2),
+        secondaryContainer: dark ? Color(0xff303030) : Color(0xffeeeeee),
         onSecondaryContainer: ink,
         tertiary: ink,
         onTertiary: canvas,
-        tertiaryContainer: dark ? Color(0xff303030) : Color(0xfff2f2f2),
+        tertiaryContainer: dark ? Color(0xff2a2a2a) : Color(0xfffafafa),
         onTertiaryContainer: ink,
         inverseSurface: ink,
         onInverseSurface: canvas,
         surface: canvas,
-        surfaceContainerLowest: dark ? Color(0xff151515) : Color(0xfffafafa),
-        surfaceContainerLow: dark ? Color(0xff242424) : Color(0xfffafafa),
-        surfaceContainer: dark ? Color(0xff242424) : Color(0xfff2f2f2),
-        surfaceContainerHigh: dark ? Color(0xff303030) : Color(0xfff2f2f2),
-        surfaceContainerHighest: dark ? Color(0xff303030) : Color(0xffeaeaea),
+        surfaceContainerLowest: dark ? Color(0xff151515) : Color(0xffffffff),
+        surfaceContainerLow: dark ? Color(0xff171717) : Color(0xffffffff),
+        surfaceContainer: dark ? Color(0xff171717) : Color(0xfffafafa),
+        surfaceContainerHigh: dark ? Color(0xff2a2a2a) : Color(0xfffafafa),
+        surfaceContainerHighest: dark ? Color(0xff2a2a2a) : Color(0xffeeeeee),
         onSurface: ink,
         onSurfaceVariant: muted,
         outline: line,
         outlineVariant: dark
-            ? const Color(0xff393a3b)
-            : const Color(0xffe5e5e3),
+            ? const Color(0xff2b2b2b)
+            : const Color(0xffe5e5e5),
         surfaceTint: Colors.transparent,
         error: dark ? Color(0xffed9494) : Color(0xffa83b3b),
       );
@@ -138,7 +142,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: ink,
-      linearTrackColor: dark ? Color(0xff4a4a4a) : Color(0xffe5e5e9),
+      linearTrackColor: dark ? Color(0xff404040) : Color(0xffe5e5e9),
       linearMinHeight: 6,
       borderRadius: BorderRadius.circular(3),
       trackGap: 0,
@@ -180,7 +184,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
     appBarTheme: AppBarTheme(
       backgroundColor: canvas,
       foregroundColor: ink,
-      centerTitle: true,
+      centerTitle: false,
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
         fontSize: 20,
@@ -189,18 +193,21 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       ),
       elevation: 0,
       scrolledUnderElevation: 0,
+      shape: Border(bottom: BorderSide(color: scheme.outlineVariant)),
     ),
     textTheme: base.textTheme
         .copyWith(
           headlineLarge: TextStyle(
-            fontSize: 32,
-            height: 1.25,
+            fontSize: 28,
+            letterSpacing: -1.1,
+            height: 1.18,
             fontWeight: FontWeight.w600,
             color: ink,
           ),
           headlineSmall: TextStyle(
             fontSize: 24,
-            height: 1.4,
+            letterSpacing: -.5,
+            height: 1.25,
             fontWeight: FontWeight.w600,
             color: ink,
           ),
@@ -231,13 +238,13 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
         )
         .apply(fontFamily: fontFamily),
     dividerTheme: DividerThemeData(
-      color: dark ? Color(0xff4a4a4a) : Color(0xffd6d6d6),
+      color: dark ? Color(0xff404040) : Color(0xffd4d4d4),
       thickness: .5,
       space: 32,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: canvas,
+      fillColor: scheme.surfaceContainerLow,
       contentPadding: EdgeInsets.all(16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -249,7 +256,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: line),
+        borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -337,11 +344,14 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       backgroundColor: canvas,
       height: 64,
       elevation: 0,
-      indicatorColor: scheme.surfaceContainer,
+      indicatorColor: scheme.onSurface,
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 24,
-          color: states.contains(WidgetState.selected) ? ink : muted,
+          color: states.contains(WidgetState.selected) ? canvas : muted,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
@@ -419,15 +429,37 @@ class BreviaPageTransitionsBuilder extends PageTransitionsBuilder {
   }
 }
 
-Widget breviaBrand(BuildContext context, {double size = 32}) => Image.asset(
-  Theme.of(context).brightness == Brightness.dark
-      ? 'assets/brevia-lockup-dark.png'
-      : 'assets/brevia-lockup.png',
-  width: size * 505 / 160,
-  height: size,
-  fit: BoxFit.contain,
-  semanticLabel: 'Brevia',
-);
+Widget breviaBrand(BuildContext context, {double size = 32}) =>
+    SvgPicture.asset(
+      'assets/brand.svg',
+      width: size * 3.75,
+      height: size,
+      semanticsLabel: 'Brevia',
+      colorFilter: Theme.of(context).brightness == Brightness.dark
+          ? const ColorFilter.matrix([
+              -1,
+              0,
+              0,
+              0,
+              255,
+              0,
+              -1,
+              0,
+              0,
+              255,
+              0,
+              0,
+              -1,
+              0,
+              255,
+              0,
+              0,
+              0,
+              1,
+              0,
+            ])
+          : null,
+    );
 
 Widget breviaLogo({double size = 32}) => Image.asset(
   'assets/brevia-logo.png',
@@ -451,10 +483,7 @@ class BreviaPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     );
@@ -479,6 +508,73 @@ class BreviaGlyph extends StatelessWidget {
 }
 
 /// Intrinsic widths keep long translations and large text horizontally accessible.
+class MeetingDestinations extends StatelessWidget {
+  const MeetingDestinations({
+    super.key,
+    this.compact = false,
+    required this.entries,
+    required this.selected,
+    required this.onSelect,
+  });
+  final List<(int, String)> entries;
+  final int selected;
+  final bool compact;
+  final ValueChanged<int> onSelect;
+  @override
+  Widget build(BuildContext context) {
+    const icons = [
+      Icons.subject,
+      Icons.edit_note,
+      Icons.bookmark_border,
+      Icons.article_outlined,
+      Icons.account_tree_outlined,
+    ];
+    final colors = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (value, label) in entries)
+            Semantics(
+              selected: value == selected,
+              child: TextButton(
+                onPressed: () => onSelect(value),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(48, 44),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  backgroundColor: value == selected
+                      ? colors.inverseSurface
+                      : null,
+                  foregroundColor: value == selected
+                      ? colors.onInverseSurface
+                      : colors.onSurfaceVariant,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedSize(
+                      duration: BreviaMotion.duration(
+                        context,
+                        BreviaMotion.feedback,
+                      ),
+                      child: compact
+                          ? const SizedBox.shrink()
+                          : Icon(icons[value], size: 18),
+                    ),
+                    Text(label, style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class BreviaTabs extends StatelessWidget {
   const BreviaTabs({
     super.key,
@@ -497,49 +593,106 @@ class BreviaTabs extends StatelessWidget {
       alignment: AlignmentDirectional.centerStart,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              children: [
-                for (final (value, label) in entries)
-                  Semantics(
-                    selected: selected == value,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(48, 44),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        backgroundColor: selected == value
-                            ? scheme.surface
-                            : Colors.transparent,
-                        foregroundColor: selected == value
-                            ? scheme.onSurface
-                            : scheme.onSurfaceVariant,
-                        textStyle: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(
-                              fontSize: 14,
-                              fontWeight: selected == value
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                      ),
-                      onPressed: () => onSelect(value),
-                      child: Text(label),
+        child: Row(
+          children: [
+            for (final (value, label) in entries)
+              Semantics(
+                selected: selected == value,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    animationDuration: BreviaMotion.duration(
+                      context,
+                      BreviaMotion.feedback,
+                    ),
+                    foregroundColor: selected == value
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                    textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontSize: 14,
+                      fontWeight: selected == value
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                     ),
                   ),
-              ],
-            ),
-          ),
+                  onPressed: () => onSelect(value),
+                  child: AnimatedContainer(
+                    duration: BreviaMotion.duration(
+                      context,
+                      BreviaMotion.feedback,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: selected == value
+                              ? scheme.primary
+                              : Colors.transparent,
+                          width: 3,
+                        ),
+                      ),
+                    ),
+                    child: Tooltip(message: label, child: Text(label)),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// 入场点阵只播放一轮，随后静止，不常驻消耗录音电量。
+class BreviaAmbientSurface extends StatelessWidget {
+  const BreviaAmbientSurface({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: BreviaMotion.duration(
+      context,
+      const Duration(milliseconds: 2600),
+    ),
+    curve: Curves.easeOutCubic,
+    child: child,
+    builder: (context, phase, child) => CustomPaint(
+      painter: _AmbientDots(Theme.of(context).colorScheme.onSurface, phase),
+      child: child,
+    ),
+  );
+}
+
+class _AmbientDots extends CustomPainter {
+  const _AmbientDots(this.ink, this.phase);
+  final Color ink;
+  final double phase;
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 点阵在右侧留白区渐隐，正文始终保持纯净背景。
+    final paint = Paint();
+    for (var x = size.width * .55; x < size.width; x += 9) {
+      for (var y = 8.0; y < size.height; y += 9) {
+        final distance = ((x / size.width) - phase).abs();
+        final strength = (1 - distance * 3).clamp(0.0, 1.0);
+        paint.color = ink.withValues(alpha: .025 + strength * .065);
+        canvas.drawCircle(Offset(x, y), .6 + strength * .45, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AmbientDots old) => old.phase != phase || old.ink != ink;
 }

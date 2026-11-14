@@ -41,6 +41,13 @@ Object.assign(app, {
   isPackaged: true,
   getPath(key) {
     if (key === 'home') return os.homedir();
+    if (key === 'userData' && process.platform === 'linux') {
+      const dir = process.env.XDG_DATA_HOME;
+      return path.join(
+        dir && path.isAbsolute(dir) ? dir : path.join(os.homedir(), '.local/share'),
+        'Brevia',
+      );
+    }
     if (key === 'userData')
       return process.platform === 'win32'
         ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData/Roaming'), 'Brevia')
@@ -87,19 +94,11 @@ class NativeWindow extends EventEmitter {
         }),
       getURL: () => this.webContents.mainFrame?.url,
       setZoomFactor: (factor) => this.call('setZoom', { factor }),
-      setWindowOpenHandler() {}, // 导航策略由 WKWebView 宿主强制执行。
-      setIgnoreMenuShortcuts() {},
       isCrashed: () => Boolean(this.crashed),
-      printToPDF: async () =>
-        Buffer.from(await native('window.printPDF', { path: this.printFile }), 'base64'),
     });
   }
   async loadFile(file, options) {
     const page = path.basename(file);
-    if (file.endsWith('.print.html')) {
-      this.printFile = file;
-      return;
-    }
     if (
       ![
         'index.html',
@@ -179,7 +178,6 @@ class NativeWindow extends EventEmitter {
     this.options.alwaysOnTop = value;
     this.call('setAlwaysOnTop', { value });
   }
-  setVisibleOnAllWorkspaces() {} // 宿主创建浮窗时设置。
   isEnabled() {
     return this.enabled !== false;
   }
@@ -400,6 +398,7 @@ module.exports = {
   powerMonitor,
   globalShortcut,
   nativeAudio,
+  printPDF: async (path) => Buffer.from(await native('window.printPDF', { path }), 'base64'),
   ipcMain: { handle: (name, fn) => callbacks.set(name, fn) },
   screen: {
     getPrimaryDisplay: () => ({ id: 1, workArea: display, workAreaSize: display }),

@@ -20,7 +20,7 @@
       <div class="dmp-screen">
         <div class="dmp-statusbar"><b aria-hidden="true">9:41</b><span class="dmp-island"></span><button type="button" class="dmp-pause" data-preview-pause aria-pressed="false">${icon('pause')}</button></div>
         <section class="dmp-scene is-active" data-preview-scene="0" role="group" tabindex="-1" data-preview-label="会议列表">
-          <header class="dmp-header"><img src="./assets/brevia-logo.svg" alt="Brevia"/><strong>Brevia</strong>${copy('演示', 'small')}</header>
+          <header class="dmp-header"><img src="./assets/brevia-logo.svg" alt="Brevia"/><strong>Brevia</strong><span class="dmp-computer" role="img" aria-label="${escape(translate('连接电脑') + ' · ' + translate('演示'))}" title="${escape(translate('连接电脑') + ' · ' + translate('演示'))}">${icon('laptop')}</span></header>
           <div class="dmp-scroll">
             <div class="dmp-page-heading">${copy('会议', 'h2')}<span>03</span></div>
             <div class="dmp-search">${icon('search')}${copy('会议列表')}</div>
@@ -35,7 +35,7 @@
           <nav class="dmp-phone-nav" aria-hidden="true"><span class="is-selected">${icon('list')}${copy('会议')}</span><span>${icon('notes')}${copy('笔记')}</span><span>${icon('settings')}${copy('设置')}</span></nav>
         </section>
         <section class="dmp-scene" data-preview-scene="1" role="group" tabindex="-1" data-preview-label="实时转写" aria-hidden="true" inert>
-          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="0" data-preview-label="返回">${icon('back')}</button><strong>${copy('产品讨论')}</strong>${copy('演示', 'small')}</header>
+          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="0" data-preview-label="返回">${icon('back')}</button><strong>${copy('产品讨论')}</strong></header>
           <div class="dmp-live-meta"><span><i></i>${copy('录音中')}</span><time data-preview-timer>00:42</time></div>
           <div class="dmp-waveform" aria-hidden="true">${Array.from({ length: 29 }, (_, index) => `<i style="--bar-level:${0.2 + Math.abs(Math.sin(index * 1.7)) * 0.65}"></i>`).join('')}</div>
           <div class="dmp-live-tabs"><span>${copy('实时转写')}</span><span>${copy('笔记')}</span></div>
@@ -45,7 +45,7 @@
           <div class="dmp-live-footer"><span class="dmp-record-indicator">${icon('recording')}</span><button data-preview-select="2" type="button">${copy('查看纪要')}${icon('arrow-right')}</button></div>
         </section>
         <section class="dmp-scene" data-preview-scene="2" role="group" tabindex="-1" data-preview-label="会议纪要" aria-hidden="true" inert>
-          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="1" data-preview-label="返回">${icon('back')}</button><strong>${copy('会议纪要')}</strong>${copy('演示', 'small')}</header>
+          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="1" data-preview-label="返回">${icon('back')}</button><strong>${copy('会议纪要')}</strong></header>
           <div class="dmp-scroll dmp-summary">
             <div class="dmp-summary-heading">${copy('产品讨论', 'h2')}<small>14:30 · 12:08</small></div>
             <div class="dmp-summary-status">${icon('ai')}${copy('会议总结')}<span>${icon('check')}<span data-preview-summary-state>${escape(translate('已完成'))}</span></span></div>

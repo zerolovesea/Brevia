@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { schemas, failure } = require('../../desktop/agent-contract.cjs');
-const { latestSegments } = require('./meeting-evidence.cjs');
 const { srtTime } = require('./worker-exports.cjs');
 const { ModelNotInstalled } = require('./models.cjs');
 
@@ -164,7 +163,7 @@ function createAgentHandlers(worker) {
               });
               await control.wait();
               const meeting = await worker.handlers['meeting.get']({ meeting_id });
-              segments = latestSegments(meeting.segments).map((s) => ({
+              segments = meeting.segments.map((s) => ({
                 start_ms: s.start_ms,
                 end_ms: s.end_ms,
                 text: s.text,

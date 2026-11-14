@@ -265,21 +265,28 @@ function createSpeakerHandlers(worker) {
         const segments = store.currentSegments(p.meeting_id);
         if (!segments.some((segment) => segment.speaker === p.speaker_id))
           throw new Error('Speaker not found');
-        if (
-          store.one(
-            'SELECT 1 FROM speakers WHERE meeting_id=? AND id<>? AND name=?',
-            p.meeting_id,
-            p.speaker_id,
-            p.name,
-          ) ||
-          segments.some(
-            (segment) => segment.speaker !== p.speaker_id && segment.speaker_name === p.name,
-          )
-        )
-          throw Object.assign(new Error('Speaker name already in use'), {
-            code: 'error.speaker_name_taken',
+        const matches = new Set([
+          ...store
+            .query(
+              'SELECT id FROM speakers WHERE meeting_id=? AND id<>? AND name=?',
+              p.meeting_id,
+              p.speaker_id,
+              p.name,
+            )
+            .map((s) => s.id),
+          ...segments
+            .filter((s) => s.speaker !== p.speaker_id && s.speaker_name === p.name)
+            .map((s) => s.speaker),
+        ]);
+        if (p.merge_target_id && matches.has(p.merge_target_id)) {
+          store.mergeMeetingSpeaker(p.meeting_id, p.speaker_id, p.merge_target_id, p.name);
+        } else if (matches.size || p.merge_target_id) {
+          throw Object.assign(new Error('Speaker selection changed'), {
+            code: 'error.transcript_conflict',
           });
-        store.renameSpeaker(p.meeting_id, p.speaker_id, p.name, p.locked);
+        } else {
+          store.renameSpeaker(p.meeting_id, p.speaker_id, p.name, p.locked);
+        }
         return store.getMeeting(p.meeting_id);
       }
       const profile = defaultName(p.name) ? null : store.ensureSpeakerProfile(p.name);
@@ -306,17 +313,32 @@ function createSpeakerHandlers(worker) {
     }),
     'segment.speaker': managed('segment.speaker', async (p, c) => {
       const meeting = store.getMeeting(p.meeting_id);
-      if (defaultName(p.name)) return meeting;
-      if (!meeting.segments.some((s) => s.id === p.segment_id))
+      if (defaultName(p.name) && !p.target_speaker_id) return meeting;
+      store.editableMeeting(p.meeting_id);
+      if (!meeting.current_segments.some((s) => s.id === p.segment_id))
         throw new Error('Segment not found');
       if (!p.enroll) {
-        const target = meeting.speakers.find((s) => s.name === p.name);
+        const matching = new Set([
+          ...meeting.speakers.filter((person) => person.name === p.name).map((person) => person.id),
+          ...meeting.current_segments
+            .filter((segment) => segment.speaker_name === p.name)
+            .map((segment) => segment.speaker),
+        ]);
+        if (p.target_speaker_id && !matching.has(p.target_speaker_id))
+          throw Object.assign(new Error('Speaker selection changed'), {
+            code: 'error.transcript_conflict',
+          });
+        if (!p.target_speaker_id && matching.size > 1)
+          throw Object.assign(new Error('Speaker name already in use'), {
+            code: 'error.speaker_name_taken',
+          });
+        const targetId = p.target_speaker_id || [...matching][0];
         store.setSegmentSpeaker(
           p.meeting_id,
           p.segment_id,
-          target?.id || 'manual-' + randomUUID(),
-          target?.profile_id,
-          p.name,
+          targetId || 'manual-' + randomUUID(),
+          null,
+          targetId ? null : p.name,
         );
         return store.getMeeting(p.meeting_id);
       }

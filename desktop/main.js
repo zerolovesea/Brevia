@@ -11,6 +11,7 @@ const {
   Tray,
   powerMonitor,
   protocol,
+  printPDF,
   screen,
   ShareMenu,
   shell,
@@ -40,6 +41,7 @@ const {
   serializeMarkdown,
   sendGroupSummary,
 } = require('./markdown-workflow');
+const { uploadShare } = require('./cloud-share.cjs');
 const { MobileServer } = require('./mobile-server');
 const { AgentService } = require('./agent-service.cjs');
 const { createRecordingController } = require('./agent-recording.cjs');
@@ -125,7 +127,17 @@ const { defaultRefinedModelId } = require(
 );
 const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
-  platform: { app, NativeWindow, Menu, Tray, nativeImage, screen, globalShortcut, nativeAudio },
+  platform: {
+    app,
+    NativeWindow,
+    Menu,
+    Tray,
+    nativeImage,
+    screen,
+    globalShortcut,
+    nativeAudio,
+    supportsMeetingProbe: process.platform !== 'linux',
+  },
   root: packagedRoot,
   dataDir: () => dataDir(),
   text: (key, locale) => translate(key, locale || app.getLocale().split('-')[0]),
@@ -302,6 +314,7 @@ const workerEvent = z
       'refinement.started',
       'speaker-profile.deleted',
       'speaker-profile.updated',
+      'summary.finished',
       'summary.progress',
       'summary.ready',
       'summary.started',
@@ -389,6 +402,7 @@ const summaryProviderIds = [
   'mistral',
   'groq',
   'openrouter',
+  'opencode-go',
   'custom-openai',
   'custom-claude',
 ];
@@ -628,6 +642,7 @@ class WorkerClient {
     )
       writeLog('ERROR', message.payload);
     if (message.type === 'worker.warning') writeLog('WARNING', message.payload);
+    if (message.type === 'summary.progress') mobileServer?.updateSummaryProgress(message.payload);
     if (message.type === 'app.maintenance' && mobileServer) {
       void mobileServer
         .serial(() => mobileServer.refreshDeleted())
@@ -792,8 +807,10 @@ class WorkerClient {
   }
 
   fail(error) {
-    this.pending.forEach(({ reject, timer }) => {
+    this.pending.forEach(({ reject, timer, type, meetingId }) => {
       clearTimeout(timer);
+      if (type === 'summary.generate')
+        this.sendEvent('summary.finished', { meeting_id: meetingId });
       reject(error);
     });
     this.pending.clear();
@@ -1245,23 +1262,12 @@ async function copyExportIntoDirectory(source, directory) {
 async function prepareExport(value) {
   const exported = await worker.request('meeting.export', value);
   if (!exported.print_pdf) return exported;
-  const printWindow = new NativeWindow({ show: false, webPreferences: { sandbox: true } });
+  if (!exported.path.endsWith('.print.html')) throw new Error('Invalid print document');
   const pdfPath = exported.path.replace(/\.print\.html$/, '.pdf');
   try {
-    await printWindow.loadFile(exported.path);
-    await writeAtomicFile(
-      pdfPath,
-      await printWindow.webContents.printToPDF({
-        printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate:
-          '<div style="width:100%;text-align:center;opacity:.72"><svg width="98" height="28" viewBox="0 0 196 56" xmlns="http://www.w3.org/2000/svg" aria-label="Brevia"><rect width="56" height="56" fill="#000"/><text x="28" y="39" fill="#fff" font-family="PingFang SC,Hiragino Sans GB,Noto Sans CJK SC,sans-serif" font-size="28" font-weight="600" text-anchor="middle">言</text><text x="76" y="42" fill="#000" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" letter-spacing="-2">brevia</text></svg></div>',
-        footerTemplate: '<div></div>',
-      }),
-    );
+    await writeAtomicFile(pdfPath, await printPDF(exported.path));
     return { path: pdfPath, format: 'pdf' };
   } finally {
-    if (!printWindow.isDestroyed()) printWindow.destroy();
     await rm(exported.path, { force: true });
   }
 }
@@ -1287,7 +1293,9 @@ function registerIpc() {
     const cli =
       process.platform === 'darwin'
         ? path.join(process.resourcesPath, 'control/brevia')
-        : path.resolve(process.resourcesPath, '../brevia.cmd');
+        : process.platform === 'linux'
+          ? '/usr/bin/brevia'
+          : path.resolve(process.resourcesPath, '../brevia.cmd');
     const mcp =
       process.platform === 'darwin'
         ? { command: cli, args: ['mcp'] }
@@ -1790,6 +1798,7 @@ function registerIpc() {
       name: z.string().trim().min(1).max(32),
       locked: z.boolean().optional(),
       meeting_only: z.boolean().optional(),
+      merge_target_id: z.string().min(1).optional(),
     }),
     'speaker.rename',
   );
@@ -1880,6 +1889,7 @@ function registerIpc() {
       segment_id: z.string().min(1),
       name: z.string().trim().min(1).max(32),
       enroll: z.boolean().optional(),
+      target_speaker_id: z.string().min(1).optional(),
     }),
   );
   // 同时限制单句和整批字符数，避免编辑请求占满 worker 的 32 MiB 命令容量。
@@ -2111,6 +2121,21 @@ function registerIpc() {
         });
         return result.canceled ? null : result.filePaths[0];
       },
+    );
+  });
+  handleIpc('share.cloud', async (_, payload) => {
+    const { meeting_id, days, language, password } = id
+      .extend({
+        days: z.union([z.literal(3), z.literal(7), z.literal(15), z.literal(30)]),
+        password: z.string().min(1).max(128).optional(),
+        language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']),
+      })
+      .parse(payload);
+    return uploadShare(
+      await worker.request('meeting.get', { meeting_id }),
+      days,
+      language,
+      password,
     );
   });
   handleIpc('share.group-summary', async (_, payload) => {
@@ -2571,38 +2596,13 @@ async function installUpdate() {
 }
 
 function createWindow() {
-  const appUrl = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const windowScale = Math.min(0.9, width / 1280, height / 800);
   const window = new NativeWindow({
     width: Math.round(1280 * windowScale),
     height: Math.round(800 * windowScale),
-    useContentSize: true,
     minWidth: Math.round(880 * windowScale),
     minHeight: Math.round(640 * windowScale),
-    show: false,
-    titleBarStyle: 'hiddenInset',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      // 窗口与内容同比缩小，保留原有工作面的布局比例。
-      zoomFactor: windowScale,
-      backgroundThrottling: false,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  const openExternal = (url) => {
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
-  };
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    openExternal(url);
-    return { action: 'deny' };
-  });
-  window.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith(appUrl)) return;
-    event.preventDefault();
-    openExternal(url);
   });
   let pageReady = false;
   let animationComplete = false;
@@ -2622,7 +2622,6 @@ function createWindow() {
     window.webContents.send('brevia:event', { type: 'startup.ready' });
   };
   window.webContents.on('did-finish-load', () => {
-    // 旧用户目录保存的缩放会覆盖 webPreferences，加载后重新应用默认比例。
     window.webContents.setZoomFactor(windowScale);
     pageReady = true;
     if (!process.argv.includes('--background')) window.show();
@@ -2752,32 +2751,10 @@ function showFloatingCaption() {
     height,
     x,
     y,
-    frame: false,
     transparent: true,
     resizable: false,
-    movable: true,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    skipTaskbar: true, // Skip taskbar to prevent appearing as separate window in dock
     alwaysOnTop: true,
-    hasShadow: false,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
   }));
-
-  // On macOS, explicitly show dock icon when floating caption is created
-  // This ensures the main app stays accessible via dock
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.show();
-  }
-  captionWindow.setAlwaysOnTop(true, 'screen-saver');
-  captionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   captionWindow.webContents.on('did-finish-load', () => {
     if (floatingCaptionWindow !== captionWindow) return;
@@ -2875,7 +2852,7 @@ app.whenReady().then(async () => {
         busy: true,
       }),
     discovered: () => worker.sendEvent('mobile.discovered', {}),
-    changed: () => worker.sendEvent('mobile.collaboration', {}),
+    changed: (value = {}) => worker.sendEvent('mobile.collaboration', value),
     request: async (type, payload) => {
       if (storageMigrationInProgress || destructiveOperationInProgress)
         throw new Error('电脑正在移动或清理数据，请稍后重试');
@@ -2927,11 +2904,11 @@ app.whenReady().then(async () => {
           !service ||
           (service.provider === 'built-in' && !ready.some((m) => m.id === service.model))
         )
-          throw new Error('请先在电脑配置纪要模型');
+          throw Object.assign(new Error('请先在电脑配置纪要模型'), { status: 409 });
         const { provider, model, endpoint, format, keyReference } = service;
         const api_key = await getSecret(keyReference);
         if (provider !== 'built-in' && (!api_key || payload.consent !== true))
-          throw new Error('请在手机确认使用电脑配置的在线服务');
+          throw Object.assign(new Error('请先在电脑配置纪要模型和在线服务密钥'), { status: 409 });
         return worker.request('summary.generate', {
           meeting_id: payload.meeting_id,
           provider,

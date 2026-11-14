@@ -549,14 +549,16 @@ final class Track {
   }
 }
 
-private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate,
+  AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable
+{
   let queue = DispatchQueue(label: "brevia.audio.write")
   private let delivery = DispatchQueue(label: "brevia.audio.screen")
   private let slots = DispatchSemaphore(value: 192)
   private let failureLock = NSLock()
   private var failed = false
   private let mic = Track("mic"), system = Track("system")
-  private var engine: AVAudioEngine?
+  private var microphoneSession: AVCaptureSession?
   private var stream: SCStream?
   // AnyObject 使 macOS 14.0 仍能加载宿主；仅在 14.4+ 构造 Tap。
   private var systemTap: AnyObject?
@@ -614,46 +616,29 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
       guard await AVCaptureDevice.requestAccess(for: .audio) else {
         throw CaptureError("麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试")
       }
-      let engine = AVAudioEngine()
-      let input = engine.inputNode
-      if !uid.isEmpty {
-        if let device = try InputDevice.available().first(where: { $0.uid == uid }),
-          let unit = input.audioUnit
-        {
-          var id = device.id
-          guard
-            AudioUnitSetProperty(
-              unit, kAudioOutputUnitProperty_CurrentDevice,
-              kAudioUnitScope_Global, 0, &id, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr
-          else { throw CaptureError("无法打开所选麦克风") }
-        } else {
-          fellBack = true
-        }
-      }
-      let format = input.outputFormat(forBus: 0)
-      guard format.channelCount > 0, format.sampleRate > 0 else {
+      let devices = AVCaptureDevice.DiscoverySession(
+        deviceTypes: [.microphone], mediaType: .audio, position: .unspecified
+      ).devices
+      let selected = devices.first(where: { $0.uniqueID == uid })
+      fellBack = !uid.isEmpty && selected == nil
+      guard let device = selected ?? AVCaptureDevice.default(for: .audio) else {
         throw CaptureError("未检测到麦克风设备，请在系统设置中开启麦克风访问权限")
       }
-      input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, when in
-        guard let self, buffer.frameLength > 0 else { return }
-        // tap 返回后系统可以重用输入内存；在回调内仅复制，转换与管道写入在另一条队列中。
-        guard
-          let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength)
-        else { return }
-        copy.frameLength = buffer.frameLength
-        for (from, to) in zip(
-          UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList),
-          UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList))
-        {
-          if let source = from.mData, let destination = to.mData {
-            memcpy(destination, source, Int(from.mDataByteSize))
-          }
-        }
-        self.submit(self.mic, timestamp: AVAudioTime.seconds(forHostTime: when.hostTime)) { copy }
-      }
-      self.engine = engine
-      try engine.start()
-      // 有些已断开的设备仍会成功启动 engine，至少收到一帧才向界面报告就绪。
+      // 独立采集输入，避免 AVAudioEngine 的默认输出路由覆盖所选麦克风及其采样格式。
+      let session = AVCaptureSession()
+      let input = try AVCaptureDeviceInput(device: device)
+      let output = AVCaptureAudioDataOutput()
+      guard session.canAddInput(input) else { throw CaptureError("无法打开所选麦克风") }
+      session.addInput(input)
+      guard session.canAddOutput(output) else { throw CaptureError("不支持输入设备的音频格式") }
+      session.addOutput(output)
+      output.setSampleBufferDelegate(self, queue: delivery)
+      microphoneSession = session
+      configurationObserver = NotificationCenter.default.addObserver(
+        forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: nil
+      ) { [weak self] _ in self?.fail(CaptureError("无法打开所选麦克风")) }
+      session.startRunning()
+      // 有些已断开的设备仍会成功启动采集，至少收到一帧才向界面报告就绪。
       let received = await withCheckedContinuation { continuation in
         DispatchQueue.global().async {
           continuation.resume(returning: self.firstMicBuffer.wait(timeout: .now() + 3) == .success)
@@ -662,9 +647,6 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
       guard received else {
         throw CaptureError("麦克风未产生音频数据")
       }
-      configurationObserver = NotificationCenter.default.addObserver(
-        forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
-      ) { [weak self] _ in self?.fail(CaptureError("麦克风设备配置已更改，请重新开始录音")) }
     }
     if desktop {
       if #available(macOS 14.4, *) {
@@ -704,6 +686,22 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
     return fellBack
   }
 
+  func captureOutput(
+    _ output: AVCaptureOutput, didOutput buffer: CMSampleBuffer,
+    from connection: AVCaptureConnection
+  ) {
+    guard buffer.isValid, buffer.numSamples > 0,
+      let clock = microphoneSession?.synchronizationClock
+    else { return }
+    // AVCapture 的时间戳属于会话时钟，转到双轨共用的 host clock 后再对齐。
+    let timestamp = CMSyncConvertTime(
+      buffer.presentationTimeStamp, from: clock, to: CMClockGetHostTimeClock())
+    guard timestamp.isNumeric else { return }
+    submit(mic, timestamp: timestamp.seconds) {
+      try sampleBufferAudio(buffer)
+    }
+  }
+
   func stream(_ stream: SCStream, didStopWithError error: Error) { fail(error) }
 
   func stream(
@@ -720,9 +718,10 @@ private final class Capture: NSObject, SCStreamOutput, SCStreamDelegate, @unchec
       if let observer = configurationObserver {
         NotificationCenter.default.removeObserver(observer)
       }
-      if let engine {
-        engine.stop()
-        engine.inputNode.removeTap(onBus: 0)
+      if let session = microphoneSession {
+        session.stopRunning()
+        delivery.sync {}
+        microphoneSession = nil
       }
       if let stream {
         try await stream.stopCapture()

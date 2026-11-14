@@ -59,6 +59,10 @@ fn system_operation(method: &str, args: &Value, window: Option<&WebviewWindow>) 
     crate::windows::dispatch(method, args, window)
 }
 
+#[cfg(target_os = "linux")]
+fn system_operation(method: &str, args: &Value, _window: Option<&WebviewWindow>) -> NativeResult {
+    crate::linux::dispatch(method, args)
+}
 fn local_page(url: &tauri::Url, page: &str) -> bool {
     let origin = if cfg!(windows) {
         matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost")
@@ -77,9 +81,20 @@ fn shortcut_key(accelerator: &str) -> String {
     accelerator
         .replace(
             "CommandOrControl",
-            if cfg!(windows) { "Control" } else { "Super" },
+            if cfg!(target_os = "macos") {
+                "Super"
+            } else {
+                "Control"
+            },
         )
-        .replace("CmdOrCtrl", if cfg!(windows) { "Control" } else { "Super" })
+        .replace(
+            "CmdOrCtrl",
+            if cfg!(target_os = "macos") {
+                "Super"
+            } else {
+                "Control"
+            },
+        )
         .replace("Command", "Super")
 }
 
@@ -98,12 +113,18 @@ fn window_bounds(window: &WebviewWindow) -> NativeResult {
     Ok(json!({"x":pos.x,"y":pos.y,"width":size.width,"height":size.height}))
 }
 
-fn open_web_link(url: &tauri::Url) {
-    if matches!(url.scheme(), "https" | "http") {
+fn can_open_web_link(page: &str, url: &tauri::Url) -> bool {
+    page == "index.html" && matches!(url.scheme(), "https" | "http")
+}
+
+fn open_web_link(page: &str, url: &tauri::Url) {
+    if can_open_web_link(page, url) {
         let address = url.as_str().to_owned();
         std::thread::spawn(move || {
             #[cfg(target_os = "macos")]
             let _ = Command::new("/usr/bin/open").arg(address).status();
+            #[cfg(target_os = "linux")]
+            let _ = crate::linux::open(&address);
             #[cfg(windows)]
             let _ = crate::windows::open(&address, false);
         });
@@ -131,7 +152,13 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(target.into()))
         .initialization_script(format!(
             "window.__BREVIA_PLATFORM__ = {:?};",
-            if cfg!(windows) { "win32" } else { "darwin" }
+            if cfg!(windows) {
+                "win32"
+            } else if cfg!(target_os = "macos") {
+                "darwin"
+            } else {
+                "linux"
+            }
         ))
         .initialization_script(include_str!("../../bridge.js").replace(
             "/* BREVIA_PRELOAD */",
@@ -139,15 +166,13 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         ))
         .on_navigation(move |url| {
             let local = local_page(url, page);
-            if !local && page == "index.html" {
-                open_web_link(url);
+            if !local {
+                open_web_link(page, url);
             }
             local
         })
         .on_new_window(move |url, _| {
-            if page == "index.html" {
-                open_web_link(&url);
-            }
+            open_web_link(page, &url);
             NewWindowResponse::Deny
         })
         .on_page_load(|window, load| {
@@ -372,6 +397,8 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
                 }
                 #[cfg(target_os = "macos")]
                 open.arg(url.as_str());
+                #[cfg(target_os = "linux")]
+                crate::linux::open(url.as_str())?;
                 #[cfg(windows)]
                 crate::windows::open(url.as_str(), false)?;
             } else {
@@ -386,6 +413,16 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
                     }
                     open.arg(path);
                 }
+                #[cfg(target_os = "linux")]
+                crate::linux::open(
+                    if method == "shell.showItem" {
+                        path.parent().unwrap_or(path)
+                    } else {
+                        path
+                    }
+                    .to_str()
+                    .ok_or("Invalid path")?,
+                )?;
                 #[cfg(windows)]
                 crate::windows::open(text("path")?, method == "shell.showItem")?;
             }
@@ -509,6 +546,23 @@ mod tests {
             &"http://tauri.localhost:8080/index.html".parse().unwrap(),
             "index.html"
         ));
+    }
+    #[test]
+    fn external_web_links_only_open_from_the_main_document() {
+        let link = "https://example.org/".parse().unwrap();
+        assert!(can_open_web_link("index.html", &link));
+        assert!(!can_open_web_link(
+            "index.html",
+            &"file:///tmp/a".parse().unwrap()
+        ));
+        for page in [
+            "floating-caption.html",
+            "recording-capsule.html",
+            "meeting-prompt.html",
+        ] {
+            assert!(!can_open_web_link(page, &link));
+            assert!(!local_page(&link, page));
+        }
     }
     #[test]
     fn command_or_control_uses_the_platform_modifier() {

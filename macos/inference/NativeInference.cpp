@@ -1,4 +1,4 @@
-#include "EngineProtocol.h"
+#include "EnginePCM.h"
 #include "UTF8Text.h"
 #include "base64.hpp"
 #include <algorithm>
@@ -57,7 +57,12 @@ static std::string file(const std::string &base, const std::string &name = "") {
     throw std::runtime_error("Model file not installed: " + path.u8string());
   return path.u8string();
 }
-#ifdef _WIN32
+#ifdef BREVIA_SHERPA_CUDA
+static constexpr const char *sherpaProvider = "cuda";
+#else
+static constexpr const char *sherpaProvider = "cpu";
+#endif
+#if defined(_WIN32) && !defined(BREVIA_SHERPA_CUDA)
 static std::string nanoCPUProvider() {
   std::wstring executable(32768, L'\0');
   const auto length = GetModuleFileNameW(nullptr, executable.data(),
@@ -71,25 +76,6 @@ static std::string nanoCPUProvider() {
                        "funasr-cpu.conf");
 }
 #endif
-static std::vector<float> pcm(const JSON &p) {
-  if (number(p, "sample_rate", 16000) != 16000)
-    throw std::runtime_error("Expected 16 kHz mono PCM16");
-  auto encoded = string(p, "pcm");
-  std::string data;
-  try {
-    data = base64::decode(encoded);
-  } catch (const base64_error &) {
-    throw std::runtime_error("Invalid or oversized PCM");
-  }
-  if (data.empty() || data.size() % 2 || data.size() > 16000 * 2 * 600 ||
-      base64::encode(data) != encoded)
-    throw std::runtime_error("Invalid or oversized PCM");
-  std::vector<float> samples(data.size() / 2);
-  const auto *bytes = reinterpret_cast<const uint8_t *>(data.data());
-  for (size_t i = 0; i < samples.size(); ++i)
-    samples[i] = (int16_t)(bytes[2 * i] | bytes[2 * i + 1] << 8) / 32768.f;
-  return samples;
-}
 static std::string encode(const float *samples, size_t size) {
   std::string values(size * 2, '\0');
   for (size_t i = 0; i < size; ++i) {
@@ -140,8 +126,8 @@ static JSON loadASR(const JSON &p) {
   SherpaOnnxOfflineRecognizerConfig config{};
   config.feat_config.sample_rate = 16000;
   config.feat_config.feature_dim = 80;
-  std::string provider = "cpu";
-#ifdef _WIN32
+  std::string provider = sherpaProvider;
+#if defined(_WIN32) && !defined(BREVIA_SHERPA_CUDA)
   if (kind == "funasr-nano")
     provider = nanoCPUProvider();
 #endif
@@ -394,7 +380,7 @@ static JSON embed(const JSON &p) {
   SherpaOnnxSpeakerEmbeddingExtractorConfig config{};
   config.model = path.c_str();
   config.num_threads = integer(p, "threads", 4, 1, 32);
-  config.provider = "cpu";
+  config.provider = sherpaProvider;
   auto key = std::make_pair(path, config.num_threads);
   if (!speakerExtractor || key != loadedEmbedding) {
     speakerExtractor.reset(SherpaOnnxCreateSpeakerEmbeddingExtractor(&config));
@@ -433,10 +419,10 @@ static JSON diarize(const JSON &p) {
   SherpaOnnxOfflineSpeakerDiarizationConfig config{};
   config.segmentation.pyannote.model = segmentation.c_str();
   config.segmentation.num_threads = 4;
-  config.segmentation.provider = "cpu";
+  config.segmentation.provider = sherpaProvider;
   config.embedding.model = embedding.c_str();
   config.embedding.num_threads = 4;
-  config.embedding.provider = "cpu";
+  config.embedding.provider = sherpaProvider;
   auto speakers = number(p, "num_speakers", -1);
   if (speakers != -1 &&
       (speakers < 1 || speakers > 100 || speakers != std::trunc(speakers)))

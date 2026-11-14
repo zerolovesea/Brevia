@@ -90,27 +90,24 @@ class MobileRecoveryPage extends StatelessWidget {
                 ),
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 104,
-                    height: 104,
-                    decoration: BoxDecoration(
-                      color: colors.error.withValues(alpha: .08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: BreviaIcon(icon, size: 48, color: colors.error),
+                  Row(
+                    children: [
+                      BreviaIcon(icon, size: 26, color: colors.error),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          tr(title),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 32),
-                  Text(
-                    tr(title),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  SizedBox(height: 20),
+                  const Divider(height: 32),
                   Text(
                     tr(description),
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.start,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),

@@ -154,6 +154,7 @@ version = "2.0.3"
 dependencies = [
  "base64 0.22.1",
  "cc",
+ "gio",
  "percent-encoding",
  "rusty-leveldb",
  "serde_json",

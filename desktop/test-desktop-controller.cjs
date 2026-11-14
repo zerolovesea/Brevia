@@ -13,10 +13,6 @@ class Window extends EventEmitter {
     this.options = options;
     this.rectangle = { x: 0, y: 0, width: 344, height: 80 };
     this.webContents = new EventEmitter();
-    this.webContents.setWindowOpenHandler = () => {};
-    this.webContents.setIgnoreMenuShortcuts = (value) => {
-      this.ignoreMenuShortcuts = value;
-    };
     this.webContents.send = (...args) => {
       this.sent = args;
     };
@@ -56,7 +52,6 @@ class Window extends EventEmitter {
     this.rectangle = bounds;
   }
   setAlwaysOnTop() {}
-  setVisibleOnAllWorkspaces() {}
   loadFile() {
     this.webContents.emit('did-finish-load');
     return Promise.resolve();
@@ -507,12 +502,10 @@ class Tray extends EventEmitter {
     assert.equal(controller.preferences.autoCapsule, false, '独立偏好并发保存不会互相覆盖');
     controller.editShortcuts(true);
     assert.equal(suspended, true);
-    assert.equal(main.ignoreMenuShortcuts, true, '按键编辑不能触发菜单的重新加载或退出');
     await controller.save({ lastCaptureMode: 'both' });
     assert.equal(suspended, true, '后台记忆来源不能打断按键编辑');
     main.emit('blur');
     assert.equal(suspended, false);
-    assert.equal(main.ignoreMenuShortcuts, false);
     const recordingName = controller.shortcutName('Alt+R');
     const pauseName = controller.shortcutName('Alt+P');
     const invoke = (name) => {

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 112" role="img" aria-label="Brevia">
+  <!-- 官网导航专用手绘版本；固定笔画，不依赖系统字体。 -->
+  <path fill="#26221e" d="M9 7C34 5 75 8 103 6C106 31 104 70 107 103C78 106 40 103 7 105C5 75 8 39 9 7Z"/>
+  <g fill="none" stroke="#fbfaf7" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="5.2" d="M52 31L56 38M32 41C47 40 64 42 80 40M39 51C52 50 63 52 73 51M39 61L73 60"/>
+    <path stroke-width="4.8" d="M38 71C50 70 64 72 74 70L73 86M38 71L37 87M38 82C50 81 62 83 73 82"/>
+  </g>
+  <g fill="none" stroke="#26221e" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="6.2" d="M137 85C139 67 143 39 150 22C153 15 161 14 160 22C159 34 147 49 142 56M140 69C148 54 166 48 174 58C183 71 167 88 152 86C146 85 142 81 141 77"/>
+    <path stroke-width="5.8" d="M182 85C185 74 190 60 192 54M188 68C197 54 210 49 219 55"/>
+    <path stroke-width="6" d="M222 72C234 74 251 67 252 58C253 49 239 49 230 58C214 73 221 91 240 86C248 84 255 78 261 73"/>
+    <path stroke-width="6.2" d="M265 55C266 66 269 79 275 86C286 78 297 63 302 53"/>
+    <path stroke-width="5.8" d="M316 55C312 68 307 84 317 86C323 87 329 80 334 74M322 35L323 33"/>
+    <path stroke-width="6" d="M385 57C373 46 352 54 345 71C339 85 350 92 362 83C372 75 379 63 385 54M385 54C381 68 376 83 385 85C394 87 403 79 410 72"/>
+  </g>
+</svg>

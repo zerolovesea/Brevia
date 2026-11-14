@@ -155,12 +155,15 @@ class ModelManager {
       bundledRoot = process.env.BREVIA_BUNDLED_MODELS_DIR,
       catalogPath = path.join(__dirname, '../../backend/models.json'),
       platform = process.platform,
+      linuxBackend = 'cpu',
     } = {},
   ) {
     this.root = path.resolve(root);
     this.bundledRoot = bundledRoot;
     this.event = event;
     this.platform = platform;
+    if (!['cpu', 'cuda'].includes(linuxBackend)) throw new Error('Invalid packaged MLX backend');
+    this.linuxBackend = linuxBackend;
     fs.mkdirSync(this.root, { recursive: true });
     this.all = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     this.catalog = new Map();
@@ -241,6 +244,11 @@ class ModelManager {
         : candidates.find((m) => this.isReady(m.id)) || declared || candidates[0]
     )?.id;
   }
+  recognitionDevice() {
+    return this.platform === 'linux'
+      ? { device: this.linuxBackend === 'cuda' ? 'gpu' : 'cpu' }
+      : {};
+  }
   device() {
     let physical = os.cpus().length;
     try {
@@ -254,7 +262,12 @@ class ModelManager {
     } catch {}
     return {
       architecture: os.arch(),
-      asr_backend: this.platform === 'darwin' ? 'mlx-metal' : 'cpu',
+      asr_backend:
+        this.platform === 'linux'
+          ? 'mlx-' + this.linuxBackend
+          : this.platform === 'darwin'
+            ? 'mlx-metal'
+            : 'cpu',
       providers: ['CPUExecutionProvider'],
       backend: 'cpu',
       threads: Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2))),

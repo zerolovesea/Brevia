@@ -53,6 +53,73 @@ class BreviaIcon extends Icon {
 Path? _iconPath(IconData? icon) {
   final p = Path();
   switch (icon) {
+    case Icons.graphic_eq:
+      for (final (x, h) in [
+        (3.0, 3.0),
+        (7.5, 7.0),
+        (12.0, 10.0),
+        (16.5, 5.0),
+        (21.0, 2.0),
+      ]) {
+        p.moveTo(x, 12 - h);
+        p.lineTo(x, 12 + h);
+      }
+    case Icons.note_outlined:
+      p.addRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(5, 3, 15, 18),
+          const Radius.circular(2),
+        ),
+      );
+      p.moveTo(9, 3);
+      p.lineTo(9, 21);
+      p.moveTo(12, 8);
+      p.lineTo(17, 8);
+      p.moveTo(12, 12);
+      p.lineTo(15, 12);
+    case Icons.refresh:
+      p.moveTo(20, 4);
+      p.lineTo(20, 10);
+      p.lineTo(14, 10);
+      p.moveTo(20, 10);
+      p.cubicTo(18, 1, 4, 2, 3, 11);
+      p.cubicTo(2, 20, 15, 25, 20, 17);
+    case Icons.wifi:
+      p.moveTo(2, 8);
+      p.quadraticBezierTo(12, 0, 22, 8);
+      p.moveTo(5, 12);
+      p.quadraticBezierTo(12, 6, 19, 12);
+      p.moveTo(8.5, 16);
+      p.quadraticBezierTo(12, 13, 15.5, 16);
+      p.addOval(Rect.fromCircle(center: const Offset(12, 20), radius: 1));
+    case Icons.lock_outline:
+      p.addRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(5, 10, 14, 11),
+          const Radius.circular(2),
+        ),
+      );
+      p.moveTo(8, 10);
+      p.lineTo(8, 7);
+      p.cubicTo(8, 1, 16, 1, 16, 7);
+      p.lineTo(16, 10);
+      p.moveTo(12, 14);
+      p.lineTo(12, 17);
+    case Icons.tune:
+      for (final y in [6.0, 12.0, 18.0]) {
+        final x = y == 12 ? 15.0 : 9.0;
+        p.moveTo(3, y);
+        p.lineTo(x - 2, y);
+        p.moveTo(x + 2, y);
+        p.lineTo(21, y);
+        p.addOval(Rect.fromCircle(center: Offset(x, y), radius: 2));
+      }
+    case Icons.visibility_outlined:
+      p.moveTo(2, 12);
+      p.cubicTo(7, 3, 17, 3, 22, 12);
+      p.cubicTo(17, 21, 7, 21, 2, 12);
+      p.close();
+      p.addOval(const Rect.fromLTWH(9, 9, 6, 6));
     case Icons.article_outlined || Icons.description_outlined || Icons.article:
       p.moveTo(14, 2);
       p.lineTo(6, 2);

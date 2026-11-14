@@ -236,6 +236,51 @@ module.exports = {
     }
     return new Set(rows.map((r) => r.profile_id)).size;
   },
+  mergeMeetingSpeaker(mid, source, target, name) {
+    this.transaction(() => {
+      this.renameSpeaker(mid, target, name, true);
+      this.run(
+        'UPDATE segments SET speaker=?,user_edited=1 WHERE meeting_id=? AND speaker=?',
+        target,
+        mid,
+        source,
+      );
+      this.run(
+        'INSERT OR IGNORE INTO speaker_turns(meeting_id,version,start_ms,end_ms,speaker) SELECT meeting_id,version,start_ms,end_ms,? FROM speaker_turns WHERE meeting_id=? AND speaker=?',
+        target,
+        mid,
+        source,
+      );
+      this.run('DELETE FROM speaker_turns WHERE meeting_id=? AND speaker=?', mid, source);
+      for (const row of this.query(
+        'SELECT rowid,word_timestamps FROM segments WHERE meeting_id=? AND word_timestamps IS NOT NULL',
+        mid,
+      )) {
+        const words = JSON.parse(row.word_timestamps);
+        let changed = false;
+        for (const word of words) {
+          if (word.speaker === source) {
+            word.speaker = target;
+            changed = true;
+          }
+          if (word.overlap_speakers?.includes(source)) {
+            word.overlap_speakers = [
+              ...new Set(word.overlap_speakers.map((id) => (id === source ? target : id))),
+            ];
+            word.overlap = word.overlap_speakers.length > 1;
+            changed = true;
+          }
+        }
+        if (changed)
+          this.run(
+            'UPDATE segments SET word_timestamps=? WHERE rowid=?',
+            JSON.stringify(words),
+            row.rowid,
+          );
+      }
+      this.run('DELETE FROM speakers WHERE meeting_id=? AND id=?', mid, source);
+    });
+  },
   setSegmentSpeaker(mid, id, speaker, profileId = null, name = null) {
     this.transaction(() => {
       this.run(
@@ -244,11 +289,13 @@ module.exports = {
         mid,
         id,
       );
+      // 选用本场已有身份只锁定这句；保留其余发言的自动识别状态。
+      if (name === null) return;
       this.run(
         'INSERT INTO speakers(meeting_id,id,name,profile_id,locked) VALUES(?,?,?,?,1) ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name,profile_id=excluded.profile_id,locked=1',
         mid,
         speaker,
-        name || speaker,
+        name,
         profileId,
       );
     });

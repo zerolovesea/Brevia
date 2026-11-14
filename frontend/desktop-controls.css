@@ -190,7 +190,8 @@ body .ui-menu .ui-menu-caption {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-body .ui-menu > button {
+body .ui-menu > button,
+body .meeting-workspace-menu .menu-section > button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -205,7 +206,8 @@ body .ui-menu > button {
   font: 400 12px/18px system-ui;
   text-align: left;
 }
-body .ui-menu > button:hover {
+body .ui-menu > button:hover,
+body .meeting-workspace-menu .menu-section > button:is(:hover, .active) {
   background: var(--color-selected);
 }
 body .ui-menu > button svg {
@@ -223,6 +225,33 @@ body .ui-menu > button.meeting-menu-danger {
 body .meeting-menu.ui-menu {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+body .meeting-workspace-menu {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+.meeting-workspace-menu .menu-section {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.meeting-workspace-menu button > svg {
+  flex: none;
+}
+.meeting-workspace-menu button > .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+.meeting-workspace-menu button > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-workspace-menu .menu-separator {
+  height: 1px;
+  margin: 4px 3px;
+  background: var(--color-line);
 }
 body .modal-backdrop:not(.settings-page) {
   z-index: 300;
@@ -946,4 +975,207 @@ body .library-confirmation .confirmation-actions [data-confirm-action] {
 }
 #desktop-app .navigation-meeting .more.is-confirmation-anchor {
   opacity: 1;
+}
+/* 分享与文件导出各自锚定，保持同一浮层层级和退出行为。 */
+[data-share-detail] {
+  anchor-name: --meeting-share;
+}
+body .modal-backdrop.cloud-share-modal[popover] {
+  position-anchor: --meeting-share;
+  width: min(356px, calc(100vw - 16px));
+}
+body .modal-backdrop.cloud-share-modal[popover] .ui-surface-heading {
+  padding: 18px 20px 12px;
+}
+body .modal-backdrop.cloud-share-modal[popover] .ui-surface .modal-body {
+  padding: 0 20px 20px;
+}
+.cloud-share {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--color-text);
+}
+.cloud-share-document {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--color-line);
+}
+.cloud-share-document > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+.cloud-share-document > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cloud-share-document strong {
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.cloud-share-document span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.cloud-share-expiry {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.cloud-share-expiry legend {
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.cloud-share-durations {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border-radius: 7px;
+  background: var(--color-navigation);
+}
+.cloud-share-durations label {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+.cloud-share-durations input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+}
+.cloud-share-durations span {
+  display: block;
+  padding: 7px 2px;
+  border-radius: 5px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-text-muted);
+}
+.cloud-share-durations input:checked + span {
+  background: var(--color-overlay);
+  color: var(--color-text);
+  box-shadow: 0 1px 3px #00000014;
+}
+.cloud-share-durations input:focus-visible + span {
+  outline: 2px solid var(--color-text-muted);
+  outline-offset: 1px;
+}
+.cloud-share-durations input:disabled + span {
+  opacity: 0.5;
+  cursor: wait;
+}
+.cloud-share-protection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 24px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.cloud-share-protection .preference-toggle {
+  flex: none;
+}
+body .modal-backdrop.cloud-share-modal[popover] [data-cloud-password] {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  margin-top: -6px;
+  border: 1px solid var(--desktop-input-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+}
+.cloud-share-notice {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+body .modal-backdrop.cloud-share-modal[popover] .cloud-share-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.cloud-share-create svg {
+  width: 16px;
+  height: 16px;
+}
+.cloud-share-result {
+  min-width: 0;
+}
+.cloud-share-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-navigation);
+}
+body .modal-backdrop.cloud-share-modal[popover] [data-cloud-link] {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 0;
+  outline-offset: -2px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+body .modal-backdrop.cloud-share-modal[popover] [data-cloud-copy] {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text);
+  background: transparent;
+}
+body .modal-backdrop.cloud-share-modal[popover] [data-cloud-copy]:hover {
+  background: var(--color-selected);
+}
+[data-cloud-copy] svg {
+  width: 16px;
+  height: 16px;
+}
+.cloud-share [data-cloud-status] {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+}
+html[data-theme="dark"] .cloud-share-durations input:checked + span {
+  background: var(--color-selected);
+  box-shadow: none;
 }

@@ -100,23 +100,20 @@ class _OnboardingGateState extends State<OnboardingGate> {
       padding: const EdgeInsets.all(24),
       children: [
         if (step == 0) ...[
-          breviaBrand(context),
-          const SizedBox(height: 32),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: breviaBrand(context),
+          ),
+          const SizedBox(height: 20),
           Text(
             tr('手机录音，电脑转写。'),
             style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: 12),
-          Text(
-            tr('先在电脑安装 Brevia，再用手机扫码配对。'),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
           const SizedBox(height: 32),
-          const Center(child: PairingIllustration()),
-          const SizedBox(height: 28),
-          Text(tr('在电脑浏览器打开')),
+          const PairingIllustration(),
+          const SizedBox(height: 32),
+          Text(tr('在电脑浏览器打开'), style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.only(left: 16),
@@ -144,32 +141,15 @@ class _OnboardingGateState extends State<OnboardingGate> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text('macOS  ·  Windows', textAlign: TextAlign.center),
         ] else if (step == 1 || step == 2) ...[
           Text(tr('在电脑上准备好'), style: Theme.of(context).textTheme.headlineLarge),
           const SizedBox(height: 12),
-          Text(tr('安装完成后，打开 Brevia 的「设备连接」。')),
-          const SizedBox(height: 24),
-          const Center(child: PairingIllustration()),
-          const SizedBox(height: 24),
-          instruction(
-            Icons.laptop_outlined,
-            '安装并打开电脑端 Brevia',
-            '在电脑浏览器打开 brevia.work，下载适合电脑的版本。',
-          ),
-          const SizedBox(height: 4),
-          instruction(
-            Icons.description_outlined,
-            '完成电脑端的模型准备',
-            '手机采集音频，电脑完成转写',
-          ),
-          const SizedBox(height: 4),
           instruction(
             Icons.qr_code_scanner,
             '打开「设备连接 → 连接新设备」',
             '手机与电脑需在同一局域网',
           ),
-          const SizedBox(height: 24),
+          const Divider(height: 32),
           Text(tr('按需授权'), style: Theme.of(context).textTheme.titleLarge),
           instruction(Icons.mic_none, '麦克风', '首次录音时申请。'),
           instruction(Icons.wifi_outlined, '本地网络', '连接电脑时申请。'),
@@ -272,14 +252,14 @@ class _OnboardingGateState extends State<OnboardingGate> {
                       onPressed: saving
                           ? null
                           : step == 0
-                          ? copyDownload
+                          ? finish
                           : step == 1
                           ? () => setState(() => step = 2)
                           : finish,
                       child: Text(
                         tr(
                           step == 0
-                              ? '复制电脑端下载地址'
+                              ? '先离线录音'
                               : step == 1
                               ? '已打开二维码，开始扫码'
                               : step == 3
@@ -295,10 +275,6 @@ class _OnboardingGateState extends State<OnboardingGate> {
                             ? null
                             : () => setState(() => step = 1),
                         child: Text(tr('电脑已安装，开始配对')),
-                      ),
-                      TextButton(
-                        onPressed: saving ? null : finish,
-                        child: Text(tr('先离线录音')),
                       ),
                     ],
                     if (step == 1)

@@ -4,7 +4,11 @@
 #define MA_NO_ENGINE
 #define MA_NO_RESOURCE_MANAGER
 #define MA_ENABLE_ONLY_SPECIFIC_BACKENDS
+#ifdef _WIN32
 #define MA_ENABLE_WASAPI
+#else
+#define MA_ENABLE_PULSEAUDIO
+#endif
 #define MINIAUDIO_IMPLEMENTATION
 #include "base64.hpp"
 #include "miniaudio.h"
@@ -19,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstring>
 #include <deque>
 #include <iostream>
 #include <memory>
@@ -33,9 +38,10 @@ static void emit(const JSON &value) {
 }
 static void check(ma_result result) {
   if (result != MA_SUCCESS)
-    throw std::runtime_error("WASAPI audio error: " + std::to_string(result));
+    throw std::runtime_error("Audio device error: " + std::to_string(result));
 }
 #ifndef BREVIA_AUDIO_TEST
+#ifdef _WIN32
 static std::string device_id(const ma_device_id &id) {
   auto size = WideCharToMultiByte(CP_UTF8, 0, id.wasapi, -1, nullptr, 0,
                                   nullptr, nullptr);
@@ -64,11 +70,18 @@ static bool microphone_allowed() {
     }
   return true;
 }
+#else
+static std::string device_id(const ma_device_id &id) { return id.pulse; }
+#endif
 #endif
 struct Context {
   ma_context value{};
   Context() {
+#ifdef _WIN32
     ma_backend backend = ma_backend_wasapi;
+#else
+    ma_backend backend = ma_backend_pulseaudio;
+#endif
     check(ma_context_init(&backend, 1, nullptr, &value));
   }
   ~Context() { ma_context_uninit(&value); }
@@ -222,8 +235,17 @@ struct Capture {
     auto track = std::make_unique<Track>();
     track->owner = this;
     track->name = name;
+#ifdef _WIN32
     auto config = ma_device_config_init(
         name == "mic" ? ma_device_type_capture : ma_device_type_loopback);
+#else
+    auto config = ma_device_config_init(ma_device_type_capture);
+    ma_device_id monitor{};
+    if (name == "system") {
+      std::strcpy(monitor.pulse, "@DEFAULT_MONITOR@");
+      id = &monitor;
+    }
+#endif
     config.capture.pDeviceID = id;
     config.capture.format = ma_format_s16;
     config.capture.channels = 1;
@@ -232,7 +254,9 @@ struct Capture {
     config.dataCallback = audio;
     config.notificationCallback = notification;
     config.pUserData = track.get();
+#ifdef _WIN32
     config.wasapi.noAutoConvertSRC = MA_FALSE;
+#endif
     check(ma_device_init(&context.value, &config, &track->device));
     track->initialized = true;
     check(ma_device_start(&track->device));
@@ -283,10 +307,14 @@ struct Capture {
   }
 };
 #ifndef BREVIA_AUDIO_TEST
+#ifdef _WIN32
 JSON meeting_audio(const std::vector<std::string> &excluded, const JSON &apps);
+#endif
 int main(int argc, char **argv) {
+#ifdef _WIN32
   _setmode(_fileno(stdin), _O_BINARY);
   _setmode(_fileno(stdout), _O_BINARY);
+#endif
   try {
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty())
@@ -294,6 +322,7 @@ int main(int argc, char **argv) {
     auto has = [&](const std::string &value) {
       return std::find(args.begin(), args.end(), value) != args.end();
     };
+#ifdef _WIN32
     if (args[0] == "meeting-audio") {
       if (args.size() == 2 && args[1] == "--stdin") {
         const auto options = JSON::parse(std::cin);
@@ -304,26 +333,38 @@ int main(int argc, char **argv) {
         emit(meeting_audio({args.begin() + 1, args.end()}, JSON::object()));
       return 0;
     }
+#endif
     if (args[0] == "permissions") {
+#ifdef _WIN32
       emit({{"microphone", microphone_allowed() ? "granted" : "denied"},
             {"screen", "granted"},
             {"systemAudioSupported", true}});
+#else
+      emit({{"microphone", "unknown"},
+            {"screen", "unknown"},
+            {"systemAudioSupported", true}});
+#endif
       return 0;
     }
-    if (args[0] == "request-screen") {
-      emit(true);
-      return 0;
-    }
-    if (args[0] == "request-microphone") {
-      if (!microphone_allowed()) {
-        emit(false);
+    if (args[0] == "request-screen" || args[0] == "request-microphone") {
+#ifdef _WIN32
+      if (args[0] == "request-screen" || !microphone_allowed()) {
+        emit(args[0] == "request-screen");
         return 0;
       }
+#endif
       try {
         // 权限查询只返回一个 JSON 值，不能混入预览的电平事件。
         Context context;
         Track track;
         auto config = ma_device_config_init(ma_device_type_capture);
+#ifndef _WIN32
+        ma_device_id monitor{};
+        if (args[0] == "request-screen") {
+          std::strcpy(monitor.pulse, "@DEFAULT_MONITOR@");
+          config.capture.pDeviceID = &monitor;
+        }
+#endif
         config.capture.format = ma_format_s16;
         config.capture.channels = 1;
         config.sampleRate = 16000;
@@ -369,8 +410,10 @@ int main(int argc, char **argv) {
     }
     Capture capture(has("--preview"));
     if (has("--mic")) {
+#ifdef _WIN32
       if (!microphone_allowed())
         throw std::runtime_error("Microphone access denied");
+#endif
       capture.add(context, "mic", id);
     }
     if (has("--system"))

@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:brevia_mobile/design_icons.dart';
 import 'package:brevia_mobile/design_system.dart';
 import 'dart:io';
@@ -254,8 +255,6 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('结束'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('结束并保存'));
-        await tester.pumpAndSettle();
         expect(model.ends, 1);
         model.saved.complete();
         await tester.pumpAndSettle();
@@ -344,18 +343,13 @@ void main() {
     expect(find.text('笔记'), findsOneWidget);
     expect(find.byType(RecordingFocus), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('● 已连接'), findsOneWidget);
+    expect(find.text('已连接'), findsOneWidget);
     expect(find.byTooltip('暂停').hitTestable(), findsOneWidget);
     expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
-    await tester.tap(find.byTooltip('返回录音'));
-    await tester.pump();
+    expect(find.byTooltip('返回录音'), findsNothing);
+    await tester.tap(find.text('会议纪要'));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(RecordingFocus), findsOneWidget);
-    await tester.tap(find.byTooltip('转写'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('转写'), findsOneWidget);
-    expect(find.byType(RecordingFocus), findsNothing);
+    expect(find.text('暂无会议纪要'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -412,7 +406,7 @@ void main() {
       expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
       expect(tester.getRect(find.text('转写')), tabs);
       expect(tester.getRect(find.byType(RecordingControls)), controls);
-      expect(find.text(connected ? '● 已连接' : '正在重新连接'), findsOneWidget);
+      expect(find.text(connected ? '已连接' : '正在重新连接'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(tester.takeException(), isNull);
     }
@@ -479,7 +473,7 @@ void main() {
     expect(tester.getSize(glyph), const Size(20, 20));
     expect(find.byIcon(Icons.search), findsOneWidget);
     final dynamic painter = tester.widget<CustomPaint>(glyph).painter;
-    expect(painter.color, const Color(0xfff2f2f2));
+    expect(painter.color, breviaTheme(Brightness.dark).colorScheme.onSurface);
     expect(breviaTheme(Brightness.light).sliderTheme.trackHeight, 3);
     expect(
       breviaTheme(Brightness.light).progressIndicatorTheme.linearMinHeight,
@@ -536,7 +530,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
-    final status = find.text('● 已连接');
+    final status = find.text('已连接');
     expect(status, findsOneWidget);
     final position = tester.getTopLeft(status);
     for (final counts in [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)]) {
@@ -599,7 +593,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 240));
     expect(find.text('转写'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('● 已连接'), findsOneWidget);
+    expect(find.text('已连接'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     model.dispose();
@@ -749,7 +743,7 @@ void main() {
       model.notifyListeners();
       await tester.pump();
       expect(find.text('Partial transcript'), findsOneWidget);
-      expect(find.textContaining('发言人'), findsNothing);
+      expect(find.text('发言人'), findsOneWidget);
       expect(dots, findsNWidgets(3));
       await tester.tap(find.text('笔记'));
       await tester.pump(const Duration(milliseconds: 300));
@@ -804,7 +798,8 @@ void main() {
       await tester.scrollUntilVisible(find.text(tr('隐私与关于')), 400);
       await tester.tap(find.text(tr('隐私与关于')));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text(tr('完整隐私政策')), 300);
+      await tester.ensureVisible(find.text(tr('完整隐私政策')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text(tr('完整隐私政策')));
       await tester.pumpAndSettle();
       final policy = tester
@@ -869,6 +864,19 @@ void main() {
     addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     expect(languageCode, 'ja');
     expect(defaultMeetingTitle(DateTime(2026, 10, 7)), '会議 20261007');
+    final literalCall = RegExp(r"""\btr\(\s*(['"])([^'"\n]+)\1\s*[,)]""");
+    for (final file in Directory(
+      'lib',
+    ).listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      for (final match in literalCall.allMatches(file.readAsStringSync())) {
+        expect(
+          translations['en'],
+          contains(match[2]!.replaceAll(r'\n', '\n')),
+          reason: file.path,
+        );
+      }
+    }
     for (final language in languageNames.keys.where((l) => l != 'zh')) {
       expect(
         translations[language]!.keys.toSet(),
@@ -892,7 +900,7 @@ void main() {
       );
     await tester.pumpWidget(BreviaApp(model: model));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.tap(find.byTooltip(tr('设置')).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('界面语言'));
     await tester.pumpAndSettle();
@@ -991,47 +999,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'end confirmation preserves recording and blocks repeated saves',
-    (tester) async {
-      final model = EndModel()
-        ..serviceRunning = true
-        ..live = {
-          'id': 'live',
-          'title': 'Meeting',
-          'state': 'recording',
-          'samples': 16000,
-          'localOnly': true,
-        };
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: breviaTheme(Brightness.light),
-          home: MeetingPage(model: model, id: 'live'),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('结束'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 0);
-      expect(find.byType(BottomSheet), findsOneWidget);
-      await tester.tap(find.text('继续录音'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 0);
-      await tester.tap(find.byTooltip('结束'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('结束并保存'));
-      await tester.pumpAndSettle();
-      expect(model.ends, 1);
-      expect(find.byType(BottomSheet), findsNothing);
-      await tester.tap(find.byTooltip('结束'));
-      expect(model.ends, 1);
-      model.saved.complete();
-      await tester.pumpAndSettle();
-      expect(find.byType(SavedMeetingPage), findsOneWidget);
-      expect(find.text('录音已结束'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('end saves directly and blocks repeated saves', (tester) async {
+    final model = EndModel()
+      ..serviceRunning = true
+      ..live = {
+        'id': 'live',
+        'title': 'Meeting',
+        'state': 'recording',
+        'samples': 16000,
+        'localOnly': true,
+      };
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: MeetingPage(model: model, id: 'live'),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('结束'));
+    await tester.pumpAndSettle();
+    expect(model.ends, 1);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.tap(find.byTooltip('结束'));
+    expect(model.ends, 1);
+    model.saved.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(SavedMeetingPage), findsOneWidget);
+    expect(find.text('录音已结束'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'remote stop stops capture before final upload acknowledgement',
@@ -1147,14 +1143,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final image = tester.widget<Image>(find.byType(Image));
-      expect(
-        (image.image as AssetImage).assetName,
-        brightness == Brightness.dark
-            ? 'assets/brevia-lockup-dark.png'
-            : 'assets/brevia-lockup.png',
-      );
-      expect(image.semanticLabel, 'Brevia');
+      final image = tester.widget<SvgPicture>(find.byType(SvgPicture));
+      expect(image.semanticsLabel, 'Brevia');
+      expect(image.colorFilter != null, brightness == Brightness.dark);
       expect(tester.takeException(), isNull);
     }
   });
@@ -1208,16 +1199,20 @@ void main() {
     (tester) async {
       await tester.pumpWidget(BreviaApp(model: AppModel()));
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsOneWidget);
+      await tester.tap(find.byTooltip(tr('笔记')).first);
+      await tester.pumpAndSettle();
+      expect(find.text(tr('暂无笔记')), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
       expect(find.text('新建录音'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.link_outlined).last);
+      await tester.tap(find.byTooltip(tr('连接电脑')).first);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('输入配对码'));
       await tester.tap(find.text('输入配对码'));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNWidgets(2));
       await tester.enterText(find.byType(TextField).last, '123456');
-      expect(find.text('连接电脑'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '连接电脑'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1366,11 +1361,13 @@ void main() {
     await tester.pumpWidget(BreviaApp(model: model));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.tap(find.byTooltip(tr('连接电脑')).first);
     await tester.pumpAndSettle();
     expect(find.text('重新扫码连接'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    Navigator.of(tester.element(find.byType(ConnectionPage))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(tr('设置')).first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

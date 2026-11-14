@@ -78,3 +78,8 @@ credentials.json
 
 # Flutter web build of the mobile product demo
 /website/mobile-preview/
+
+# Cloudflare 分享构建与本地数据
+cloudflare/share/public/
+cloudflare/share/.wrangler/
+cloudflare/share/.dev.vars*

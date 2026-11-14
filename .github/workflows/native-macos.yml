@@ -5,6 +5,7 @@ on:
     paths: &native-macos-paths
       - 'macos/**'
       - 'desktop/**'
+      - 'cloudflare/share/schema.cjs'
       - 'frontend/**'
       - 'backend/**'
       - 'scripts/**'

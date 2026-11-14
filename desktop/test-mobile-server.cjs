@@ -507,13 +507,21 @@ const { MobileServer } = require('./mobile-server');
     await fs.writeFile(samplePath, sample);
     let summaries = 0;
     let summaryResult = { saved: true };
+    let finishSummary;
     const sharedRequest = async (type, payload) => {
       if (type === 'mobile.library') return [sharedMeeting, { id: captureId }, { id }];
       if (type === 'meeting.get') return { ...sharedMeeting, id: payload.meeting_id };
+      if (type === 'meeting.update') {
+        assert.equal(payload.meeting_id, sharedMeeting.id);
+        if (payload.expected_notes !== sharedMeeting.notes)
+          throw Error('电脑笔记已更新，请重新核对。');
+        Object.assign(sharedMeeting, payload.updates);
+        return sharedMeeting;
+      }
       if (type === 'mobile.proposal.status') return null;
       if (type === 'mobile.summary') {
         summaries++;
-        return summaryResult;
+        return finishSummary ? finishSummary.promise : summaryResult;
       }
       if (type === 'meeting.refine') return { ...sharedMeeting, status: 'ready' };
       if (type === 'mobile.audio.open') return fs.open(samplePath, 'r');
@@ -560,6 +568,27 @@ const { MobileServer } = require('./mobile-server');
     assert.equal(sharedSnapshot.summary.raw_response, undefined);
     assert.equal(sharedSnapshot.audio, undefined);
     assert.match(sharedSnapshot.revision, /^[a-f0-9]{64}$/);
+    const desktopNotes = (await getShared('/notes')).body;
+    assert.equal(desktopNotes.notes, sharedSnapshot.notes);
+    assert.equal(desktopNotes.revision, sharedSnapshot.revision);
+    const pushNotes = (notes, base_revision, as = token, target = sharedPath) =>
+      call('POST', target + '/notes', { notes, base_revision }, as);
+    assert.equal(
+      (
+        await pushNotes(
+          'Forbidden',
+          desktopNotes.revision,
+          second.body.token,
+          '/desktop-meetings/' + id,
+        )
+      ).status,
+      404,
+    );
+    assert.equal((await pushNotes('Phone edit', desktopNotes.revision)).status, 200);
+    assert.equal((await pushNotes('Phone edit', desktopNotes.revision)).status, 200);
+    assert.equal((await pushNotes('Stale overwrite', desktopNotes.revision)).status, 409);
+    assert.equal((await getShared('/snapshot')).body.notes, 'Phone edit');
+
     assert.equal(sharedSnapshot.has_audio, true);
     assert.deepEqual((await getShared('/audio')).body, sample);
     const doc = await getShared('/document/mynotes/docx');
@@ -575,10 +604,23 @@ const { MobileServer } = require('./mobile-server');
       (await call('POST', sharedPath + '/action', { ...summary, consent: false }, token)).status,
       400,
     );
+    const waitForSummary = new Promise((resolve) => {
+      finishSummary = { resolve };
+    });
+    finishSummary.promise = waitForSummary;
     assert.equal(
       (await call('POST', sharedPath + '/action', summary, token)).body.task.state,
       'running',
     );
+    server.updateSummaryProgress({ meeting_id: sharedMeeting.id, completed: 37, total: 100 });
+    server.updateSummaryProgress({ meeting_id: sharedMeeting.id, completed: 10, total: 100 });
+    assert.equal((await getShared('/snapshot')).body.task.progress, 0.37);
+    finishSummary.resolve(summaryResult);
+    finishSummary = null;
+    for (let i = 0; i < 20; i++) {
+      if ((await getShared('/snapshot')).body.task.state === 'done') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     await server.queue;
     assert.equal(
       (await call('POST', sharedPath + '/action', summary, token)).body.task.state,

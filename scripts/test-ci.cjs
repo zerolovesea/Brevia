@@ -11,6 +11,7 @@ const workflow = (name) =>
   fs.readFileSync(path.join(__dirname, '../.github/workflows', name), 'utf8');
 const mac = workflow('native-macos.yml');
 const windows = workflow('windows-backend.yml');
+const linuxMlx = workflow('native-linux-mlx.yml');
 const mobile = workflow('mobile.yml');
 const release = workflow('release.yml');
 const website = workflow('deploy-pages.yml');
@@ -59,6 +60,34 @@ test('platform filters keep shared runtime inputs and skip unrelated changes', (
       expected,
       file,
     );
+  }
+});
+
+test('accelerator jobs keep separate artifacts and track shared engine inputs', () => {
+  for (const file of [
+    'inference/mlx/main.cpp',
+    'macos/inference/EnginePCM.h',
+    'scripts/build-linux-mlx.cjs',
+    'windows/build.cjs',
+  ])
+    assert.equal(triggered(linuxMlx, file), true, file);
+  assert.equal(triggered(linuxMlx, 'mobile/lib/main.dart'), false);
+  assert.match(linuxMlx, /backend: \[cpu, cuda\]/);
+  assert.ok(linuxMlx.includes('linux/smoke.sh ${{ matrix.backend }}'));
+  assert.ok(linuxMlx.includes('*-amd64-${{ matrix.backend }}.deb'));
+  assert.ok(release.includes('uses: ./.github/workflows/native-linux-mlx.yml'));
+  assert.ok(release.includes('needs: [build, linux]'));
+  assert.match(windows, /run: node windows\/build\.cjs --cuda/);
+  assert.match(windows, /path: dist\/native-win\/cuda\/engines\//);
+});
+
+test('share viewer and worker changes use share CI; the schema also validates desktop packages', () => {
+  const share = workflow('share.yml');
+  for (const file of ['viewer.css', 'viewer.js', 'entry.mjs', 'worker.mjs', 'schema.cjs']) {
+    const source = 'cloudflare/share/' + file;
+    assert.equal(triggered(share, source), true, source);
+    for (const native of [mac, windows])
+      assert.equal(triggered(native, source), file === 'schema.cjs', source);
   }
 });
 

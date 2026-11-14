@@ -26,6 +26,12 @@ pub fn profile() -> Option<PathBuf> {
                 .map(|h| PathBuf::from(h).join("Library/Application Support/Brevia"));
             #[cfg(windows)]
             let path = std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("Brevia"));
+            #[cfg(target_os = "linux")]
+            let path = std::env::var_os("XDG_DATA_HOME")
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/share")))
+                .map(|p| p.join("Brevia"));
             path
         })
 }

@@ -43,14 +43,15 @@ download "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/$sherpa
 if [[ ! -d "$cache/$sherpa" ]]; then tar -xjf "$cache/sherpa.tar.bz2" -C "$cache"; fi
 mkdir -p "$cache/sherpa-headers/sherpa-onnx/c-api"
 download 'https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v2.0.1/sherpa-onnx/c-api/c-api.h' "$cache/sherpa-headers/sherpa-onnx/c-api/c-api.h" 5698f38ba09ad2bdf085c56a6cbbd7741acf15e25f4ce5c7097b9702cadf437f
-llama_commit=e3546c7948e3af463d0b401e6421d5a4c2faf565
-download "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/$llama_commit" "$cache/llama-native.tar.gz" f53842f1e5c1dd7a92776576cc4add2e381d0c1b345793e89459489019b9f61a
+llama_commit=b1b770d90d94cad9e9ea5b993bdbc383a522fb28 # v1.0.0
+download "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/$llama_commit" "$cache/llama-native.tar.gz" ae8556670b17c25931cd39eb7c95617650eaf6091bbcff206750583ddde1acb4
 llama="$cache/llama.cpp-$llama_commit"
+llama_build="$cache/llama-native-build-v1.0.0"
 if [[ ! -d "$llama" ]]; then tar -xzf "$cache/llama-native.tar.gz" -C "$cache"; fi
-cmake -S "$llama" -B "$cache/llama-native-build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_NATIVE=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_OPENMP=OFF -DLLAMA_BUILD_APP=OFF -DLLAMA_BUILD_COMMON=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF
-cmake --build "$cache/llama-native-build" --parallel 8
+cmake -S "$llama" -B "$llama_build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_NATIVE=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_OPENMP=OFF -DLLAMA_BUILD_IS_DEV=OFF -DLLAMA_BUILD_APP=OFF -DLLAMA_BUILD_COMMON=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF
+cmake --build "$llama_build" --parallel 8
 cp -R "$cache/$sherpa/lib/"*.dylib "$output/"
-cp -R "$cache/llama-native-build/bin/"*.dylib "$output/"
+cp -R "$llama_build/bin/"*.dylib "$output/"
 for library in "$output/"*.dylib; do
   [[ -L "$library" ]] && continue
   install_name_tool -id "@rpath/$(basename "$library")" "$library"

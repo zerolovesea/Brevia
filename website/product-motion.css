@@ -392,8 +392,7 @@ body.is-compact #motion-stage .window-bar {
   min-height: 36px;
 }
 body.is-compact #motion-stage .window-bar .window-actions,
-body.is-compact #motion-stage .window-bar #crumb,
-body.is-compact #motion-stage .window-bar .app-credit {
+body.is-compact #motion-stage .window-bar #crumb {
   display: none;
 }
 body.is-compact #live-view.active {

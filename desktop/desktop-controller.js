@@ -211,7 +211,6 @@ class DesktopController {
     clearTimeout(this.shortcutEditTimer);
     this.shortcutEditing = editing;
     this.globalShortcut.setSuspended(editing);
-    this.mainWindow?.webContents.setIgnoreMenuShortcuts(editing);
     if (editing) this.shortcutEditTimer = setTimeout(() => this.editShortcuts(false), 60000);
   }
 
@@ -255,7 +254,7 @@ class DesktopController {
       this.mainBlurred = true;
       this.editShortcuts(false);
     });
-    if (this.nativeAudio) {
+    if (this.nativeAudio && this.supportsMeetingProbe !== false) {
       clearInterval(this.meetingTimer);
       this.meetingTimer = setInterval(() => void this.checkMeetingSound(), 8000);
       this.meetingTimer.unref();
@@ -285,6 +284,7 @@ class DesktopController {
     return (
       this.mainWindow &&
       (this.mainBlurred || this.background()) &&
+      this.supportsMeetingProbe !== false &&
       this.preferences.meetingPrompts &&
       this.state?.ready &&
       ['idle', 'saved'].includes(this.state.phase) &&
@@ -635,30 +635,11 @@ class DesktopController {
     const window = (this.capsule = new this.NativeWindow({
       width: 344,
       height: 80,
-      frame: false,
       transparent: true,
-      hasShadow: false,
       resizable: false,
-      minimizable: false,
-      maximizable: false,
-      fullscreenable: false,
-      skipTaskbar: true,
-      type: process.platform === 'darwin' ? 'panel' : undefined,
-      acceptFirstMouse: true,
-      show: false,
       alwaysOnTop: true,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        backgroundThrottling: false,
-      },
     }));
     void this.layout(false).catch(this.reportError);
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.webContents.on('did-finish-load', () => {
       if (this.capsule !== window) return;
       this.ready = true;

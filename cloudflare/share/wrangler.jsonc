@@ -1,0 +1,62 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "brevia-share",
+  "workers_dev": false,
+  "preview_urls": false,
+  "main": "entry.mjs",
+  "durable_objects": { "bindings": [{ "name": "VIEWS", "class_name": "ShareViews" }] },
+  "migrations": [{ "tag": "share-views-v1", "new_sqlite_classes": ["ShareViews"] }],
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SHARES",
+      "id": "ce37ce3df64c4063a924ff48c3e95de9",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "UPLOAD_LIMIT",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 5,
+        "period": 60,
+      },
+    },
+    {
+      "name": "TOTAL_LIMIT",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 100,
+        "period": 60,
+      },
+    },
+    {
+      "name": "PASSWORD_LIMIT",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 10,
+        "period": 60,
+      },
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0,
+    },
+  },
+  "account_id": "a61e1b5ec6ad81bfa2be8a45b1a89fd6",
+  "routes": [
+    {
+      "pattern": "share.brevia.work",
+      "custom_domain": true,
+    },
+  ],
+}

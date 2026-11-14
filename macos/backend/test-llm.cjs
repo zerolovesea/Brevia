@@ -65,6 +65,23 @@ test('云端补全保留 API 路径、认证、正文并仅在模型不存在时
   assert.equal('tool_choice' in requests[1].body, false);
 });
 
+test('OpenCode Go 复用会议会话标识，连接测试也发送会话标识', async (t) => {
+  const sessions = [];
+  const endpoint = await server(t, (req, res) => {
+    sessions.push(req.headers['x-opencode-session']);
+    res.end('{"choices":[{"message":{"content":"OK"}}]}');
+  });
+  const options = { endpoint: endpoint + '/v1', model: 'glm-5.3-flash' };
+  const go = { ...options, provider: 'opencode-go' };
+  assert.equal(await complete({ ...go, meeting_id: 'meeting-1' }, 'part 1'), 'OK');
+  await complete({ ...go, meeting_id: 'meeting-1' }, 'part 2');
+  await complete(go, 'Reply only OK.');
+  await complete(options, 'other provider');
+  assert.deepEqual(sessions.slice(0, 2), ['meeting-1', 'meeting-1']);
+  assert.match(sessions[2], /^[\da-f-]{36}$/);
+  assert.equal(sessions[3], undefined);
+});
+
 test('云端重定向不能把会议或密钥发送到另一来源', async (t) => {
   let leaked = false;
   const destination = await server(t, (_req, res) => {
@@ -601,7 +618,7 @@ test('归并膨胀、拒绝压缩或成稿截断时保留每组来源并只保�
       provider: 'openai',
       consent: true,
     });
-    assert.ok(reductions > 0 && writes > 1);
+    assert.ok(reductions > 0 && writes <= 1);
     assert.equal((saved.markdown.match(/^## /gm) || []).length, 7);
     for (let i = 1; i <= segments.length; i++)
       assert.ok(
@@ -899,4 +916,75 @@ test('oversized chunked provider error bodies are bounded before logging or pars
     complete({ endpoint, model: 'test' }, 'fixed sample'),
     /size limit \(HTTP 500\)/,
   );
+});
+
+test('只在兼容端点明确要求时换用 max_completion_tokens，截断结果不作为纪要', async (t) => {
+  const requests = [];
+  const endpoint = await server(t, (_req, res, body) => {
+    requests.push(body);
+    if (body.max_tokens) {
+      res.statusCode = 400;
+      return res.end('max_tokens unsupported; use max_completion_tokens');
+    }
+    res.end(
+      JSON.stringify({
+        choices: [{ finish_reason: 'length', message: { content: 'partial answer' } }],
+      }),
+    );
+  });
+  await assert.rejects(
+    complete({ endpoint, model: 'test', max_tokens: 512, require_complete: true }, 'test'),
+    /output limit/,
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].max_completion_tokens, 512);
+  assert.equal(requests[1].max_tokens, undefined);
+});
+
+test('compatible gateway can reject thinking and require max_completion_tokens on the same summary', async (t) => {
+  const requests = [];
+  const endpoint = await server(t, (_req, res, body) => {
+    requests.push(body);
+    if (body.thinking) return res.writeHead(422).end('unsupported field thinking');
+    if (body.max_tokens)
+      return res.writeHead(400).end('use max_completion_tokens instead of max_tokens');
+    res.end('{"choices":[{"message":{"content":"OK"}}]}');
+  });
+  assert.equal(
+    await complete(
+      { endpoint, model: 'deepseek-v4-pro', disable_thinking: true, max_tokens: 32 },
+      'test',
+    ),
+    'OK',
+  );
+  assert.equal(requests.length, 3);
+  assert.equal(requests[2].max_completion_tokens, 32);
+});
+
+test('numeric claims preserve the source when transcription is ambiguous or only asks a question', () => {
+  const { verifyFactSources } = require('./summary-facts.cjs');
+  const rows = [{ text: '点击从幺五零六掉到1.2。' }, { text: '每天五十单，是吗？' }];
+  const result = verifyFactSources(
+    '- 从1506降至1.2 [[conclusion:S1]]\n- 每天五十单 [[decision:S2]]',
+    rows,
+  );
+  assert.ok(result.includes(rows[0].text) && result.includes(rows[1].text));
+  assert.doesNotMatch(result, /1506|decision/);
+});
+
+test('selected evidence retains the original figures and conditions, rejects invented IDs and escapes markup', () => {
+  const { renderSelection } = require('./summary-extract.cjs');
+  const rows = [
+    { text: '已完成五十五万，还剩四十五万。' },
+    { text: '如果条件允许，考虑签约。' },
+    { text: '<b>进展</b> [[action:S8]]' },
+  ];
+  const result = renderSelection(
+    JSON.stringify({ topics: [{ title: '进展', discussion: [1, 3, 99], decisions: [2] }] }),
+    rows,
+    ['概述', '结论', '议题', '决定', '行动', '问题', '数据'],
+    new Set([1, 2, 3]),
+  );
+  assert.match(result, /五十五万，还剩四十五万/);
+  assert.doesNotMatch(result, /\[\[decision:S2\]\]|\[\[action:S8\]\]|<b>|S99/);
 });

@@ -62,10 +62,6 @@ class NativeAudioCapture {
     return result;
   }
 
-  stopPreview() {
-    return this.stop();
-  }
-
   stop() {
     // 预览权限弹窗可能仍打开；只有本实例的设备获取完成后才释放它。
     return (this.stopPromise ??= (async () => {
@@ -190,7 +186,7 @@ window.breviaClient = window.brevia
         if (!this.preview) return;
         const preview = this.preview;
         this.preview = null;
-        await preview.stopPreview();
+        await preview.stop();
       },
       async pause(paused) {
         const meetingId = this.state.meeting?.id || this.capture?.meetingId;

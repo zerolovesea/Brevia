@@ -775,6 +775,18 @@ textarea,
   width: 18px;
   height: 18px;
 }
+#desktop-app .sidebar .required-models-card .task-kind-icon {
+  position: static;
+  transform: none;
+  width: 22px;
+  height: 20px;
+}
+#desktop-app
+  .sidebar
+  .required-models-card:not(.is-minimized):not(.is-task-card-back)
+  > .processing-bar {
+  display: none;
+}
 #desktop-app .sidebar .task-cards > .task-card-stack-item > :is(strong, time) {
   display: block;
   margin-left: 26px;

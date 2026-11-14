@@ -1,6 +1,8 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod control;
+#[cfg(target_os = "linux")]
+mod linux;
 mod native;
 mod preferences;
 mod update;
@@ -22,6 +24,7 @@ struct Lifecycle {
 }
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
+#[cfg(any(windows, target_os = "macos"))]
 extern "C" fn will_sleep() {
     if let Some(app) = APP.get() {
         notify(app, json!({"host":"app.suspend"}));
@@ -121,6 +124,10 @@ fn main() {
         {
             windows::activate_peer(legacy_only)
         }
+        #[cfg(target_os = "linux")]
+        {
+            !legacy_only && linux::activate_peer()
+        }
     }
     if std::env::var_os("BREVIA_DATA_DIR").is_none() && activate_peer(true) {
         return;
@@ -183,6 +190,11 @@ fn main() {
             #[cfg(windows)]
             windows::watch_system(app.handle(), will_sleep)?;
             Control::start(app.handle())?;
+            #[cfg(target_os="linux")]
+            {
+                linux::watch_activation(app.handle())?;
+                linux::watch_sleep(app.handle());
+            }
             if let Ok(Some(m)) = app.primary_monitor() {
                 let pos=m.work_area().position.to_logical::<f64>(m.scale_factor());
                 let size=m.work_area().size.to_logical::<f64>(m.scale_factor());

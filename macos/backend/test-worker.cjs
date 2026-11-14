@@ -166,8 +166,8 @@ test('Lost phone chunk responses replay safely, including partial overlap and st
 });
 test('Phone chunks resume a legacy meeting with a model supported on this platform', async (t) => {
   const { w, events } = await setup(t);
-  const foreign = process.platform === 'darwin' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
-  const expected = process.platform === 'darwin' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
+  const foreign = process.platform !== 'win32' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
+  const expected = process.platform !== 'win32' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
   w.store.createMeeting({
     meeting_id: 'legacy-mobile',
     title: 'Phone',
@@ -195,8 +195,8 @@ test('Phone chunks resume a legacy meeting with a model supported on this platfo
 });
 test('Desktop resume and refinement preserve the model family across platforms', async (t) => {
   const { w } = await setup(t);
-  const foreign = process.platform === 'darwin' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
-  const expected = process.platform === 'darwin' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
+  const foreign = process.platform !== 'win32' ? 'qwen3-asr-0.6b-int8' : 'qwen3-asr-0.6b-mlx';
+  const expected = process.platform !== 'win32' ? 'qwen3-asr-0.6b-mlx' : 'qwen3-asr-0.6b-int8';
   w.store.createMeeting({
     meeting_id: 'legacy-qwen',
     title: 'Meeting',
@@ -241,6 +241,79 @@ test('Phone note proposals use optimistic updates and preserve pending conflicts
   assert.equal(result.state, 'accepted');
   assert.equal(w.store.getMeeting('session').notes, '手机笔记');
   assert.deepEqual(put('two', '新笔记'), { id: 'two', state: 'pending' });
+});
+test('Single sentence assignment and meeting-only merges retain identity across transcript versions', async (t) => {
+  const { w } = await setup(t);
+  const store = w.store;
+  const mid = 'merge-test';
+  store.createMeeting({
+    meeting_id: mid,
+    title: 'Meeting',
+    language: 'en',
+    refined_model_id: 'test',
+  });
+  const profile = store.ensureSpeakerProfile('Ada');
+  store.renameSpeaker(mid, 'target', 'Ada', true, profile.id);
+  for (const version of ['live', 'postprocess']) {
+    ['spk-1', 'spk-1', 'spk-2', 'target'].forEach((speaker, index) =>
+      store.saveSegment({
+        meeting_id: mid,
+        segment_id: 's' + index,
+        start_ms: index * 1000,
+        end_ms: (index + 1) * 1000,
+        text: 'Line ' + index,
+        version,
+        speaker,
+        word_timestamps: [
+          { text: 'Word', speaker, overlap_speakers: ['spk-1', 'target'], overlap: true },
+        ],
+      }),
+    );
+    store.replaceSpeakerTurns(
+      mid,
+      ['spk-1', 'target'].map((speaker) => ({ start_ms: 0, end_ms: 1000, speaker })),
+      version,
+    );
+  }
+  const change = await w.handlers['segment.speaker']({
+    meeting_id: mid,
+    segment_id: 's0',
+    name: 'spk-2',
+    target_speaker_id: 'spk-2',
+  });
+  assert.deepEqual(
+    change.current_segments.map((s) => s.speaker),
+    ['spk-2', 'spk-1', 'spk-2', 'target'],
+  );
+  assert.ok(
+    !change.speakers.some((person) => person.id === 'spk-2'),
+    'reassigning one sentence must not lock the other segments of an unregistered identity',
+  );
+  const merge = (source, name = 'Ada') =>
+    w.handlers['speaker.rename']({
+      meeting_id: mid,
+      speaker_id: source,
+      name,
+      merge_target_id: 'target',
+      meeting_only: true,
+    });
+  await assert.rejects(merge('spk-1', 'Renamed elsewhere'), { code: 'error.transcript_conflict' });
+  await merge('spk-1');
+  const saved = await merge('spk-2');
+  assert.ok(
+    saved.segments.every(
+      (s) =>
+        s.speaker === 'target' &&
+        s.word_timestamps[0].speaker === 'target' &&
+        !s.word_timestamps[0].overlap,
+    ),
+  );
+  assert.deepEqual(saved.speakers, [
+    { id: 'target', name: 'Ada', profile_id: profile.id, locked: 1 },
+  ]);
+  assert.equal(saved.speaker_turns.length, 2);
+  assert.ok(saved.speaker_turns.every((turn) => turn.speaker === 'target'));
+  assert.equal(store.listSpeakerProfiles().length, 1);
 });
 test('Refinement persists real decode output and revisions, retains manual speaker locks', async (t) => {
   const { w, events, calls } = await setup(t);
@@ -336,11 +409,16 @@ test('JSONL rejects malformed and non-object commands without losing subsequent 
     error = '';
   child.stdout.on('data', (chunk) => (output += chunk));
   child.stderr.on('data', (chunk) => (error += chunk));
-  child.stdin.end('null\n{bad\n{"id":"ok","type":"models.can-relocate"}\n');
+  child.stdin.write('null\n{bad\n{"id":"inherited","type":"constructor"}\n');
+  child.stdin.write(Buffer.alloc(32 * 1024 * 1024, 32));
+  child.stdin.write('x\n{"id":"ok",');
+  child.stdin.end('"type":"models.can-relocate"}');
   const code = await new Promise((resolve) => child.once('exit', resolve));
   assert.equal(code, 0, error);
   const rows = output.trim().split('\n').map(JSON.parse);
-  assert.equal(rows.filter((r) => !r.ok).length, 2);
+  assert.equal(rows.filter((r) => !r.ok).length, 4);
+  assert.equal(rows.find((r) => r.id === 'inherited').error, 'Unknown command: constructor');
+  assert.equal(rows.filter((r) => r.error === 'Command is too large').length, 1);
   assert.deepEqual(
     rows.find((r) => r.id === 'ok'),
     { id: 'ok', ok: true, result: true },

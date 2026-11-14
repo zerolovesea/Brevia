@@ -138,6 +138,115 @@ class _MeetingNoteImageState extends State<MeetingNoteImage> {
   }
 }
 
+String mobileSpeakerIdentity(Map segment) =>
+    (segment['speaker_id'] ??
+            segment['speaker'] ??
+            segment['speaker_name'] ??
+            '')
+        .toString();
+
+Map<String, int> mobileSpeakerPalette(Iterable<dynamic> segments) {
+  final speakers = <String, int>{};
+  for (final segment in segments) {
+    final identity = mobileSpeakerIdentity(segment);
+    if (identity.isEmpty || speakers.containsKey(identity)) continue;
+    var color =
+        identity.runes.fold(
+          0,
+          (hash, code) => (hash * 31 + code) & 0xffffffff,
+        ) %
+        6;
+    if (speakers.length >= 6) {
+      color = speakers.length;
+    } else {
+      while (speakers.containsValue(color)) {
+        color = (color + 1) % 6;
+      }
+    }
+    speakers[identity] = color;
+  }
+  return speakers;
+}
+
+class MobileSpeakerAvatar extends StatelessWidget {
+  const MobileSpeakerAvatar({super.key, required this.color});
+  final int? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = this.color;
+    const inks = [
+      Color(0xff006a9c),
+      Color(0xff883db3),
+      Color(0xff087346),
+      Color(0xff994d00),
+      Color(0xffb03062),
+      Color(0xff414cb6),
+    ];
+    const tints = [
+      Color(0xffcceeff),
+      Color(0xfff1dafa),
+      Color(0xffc9f3da),
+      Color(0xffffe4b8),
+      Color(0xffffdae9),
+      Color(0xffdfe4ff),
+    ];
+    final colors = Theme.of(context).colorScheme;
+    final hue = color == null ? 0.0 : (color * 137.508).round() % 360.0;
+    final ink = color == null
+        ? colors.onSurfaceVariant
+        : color < 6
+        ? inks[color]
+        : HSLColor.fromAHSL(1, hue, .66, .32).toColor();
+    final tint = color == null
+        ? colors.surfaceContainer
+        : color < 6
+        ? tints[color]
+        : HSLColor.fromAHSL(1, hue, .77, .90).toColor();
+    return ExcludeSemantics(
+      child: CircleAvatar(
+        radius: 12,
+        backgroundColor: tint,
+        foregroundColor: ink,
+        child: const BreviaIcon(Icons.person_outline, size: 15),
+      ),
+    );
+  }
+}
+
+class MeetingTaskProgress extends StatelessWidget {
+  const MeetingTaskProgress({super.key, required this.task});
+  final Map? task;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = task?['progress'];
+    final progress = raw is num && raw.isFinite
+        ? raw.toDouble().clamp(0.0, 1.0)
+        : null;
+    final label = tr(task?['state'] == 'queued' ? '等待电脑处理' : '电脑处理中');
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            progress == null ? label : '$label · ${(progress * 100).round()}%',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value:
+                progress ??
+                (MediaQuery.disableAnimationsOf(context) ? 0 : null),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class MeetingEvidenceTree extends StatelessWidget {
   const MeetingEvidenceTree({super.key, required this.snapshot, this.onSeek});
   final Map<String, dynamic> snapshot;
@@ -147,23 +256,14 @@ class MeetingEvidenceTree extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final inks = theme.brightness == Brightness.dark
-        ? const [
-            Color(0xff85bdaf),
-            Color(0xffcaa987),
-            Color(0xffa4acd5),
-            Color(0xffcb9bad),
-          ]
-        : const [
-            Color(0xff447c70),
-            Color(0xff986b45),
-            Color(0xff69729a),
-            Color(0xff965d77),
-          ];
+    final groups = _branches(snapshot);
+    if (groups.isEmpty) {
+      return Text(tr('暂无原因分析'), style: theme.textTheme.bodySmall);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final group in _branches(snapshot).entries)
+        for (final group in groups.entries)
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
             child: Column(
@@ -187,18 +287,15 @@ class MeetingEvidenceTree extends StatelessWidget {
                 ),
                 for (final (i, claim) in group.value.indexed)
                   CustomPaint(
-                    painter: _Fork(
-                      inks[i % inks.length],
-                      i == group.value.length - 1,
-                    ),
+                    painter: _Fork(colors.primary, i == group.value.length - 1),
                     child: Padding(
                       padding: const EdgeInsets.only(left: 30, top: 8),
                       child: Material(
-                        color: Color.alphaBlend(
-                          inks[i % inks.length].withValues(alpha: .07),
-                          colors.surface,
+                        color: colors.surfaceContainerLowest,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: colors.outlineVariant),
                         ),
-                        borderRadius: BorderRadius.circular(12),
                         clipBehavior: Clip.antiAlias,
                         child: Theme(
                           data: theme.copyWith(
@@ -648,4 +745,219 @@ class _MeetingExportButtonState extends State<MeetingExportButton> {
           : const BreviaIcon(Icons.ios_share_outlined),
     );
   }
+}
+
+/// 纪要正文常驻少量操作；重生成和精修在同一菜单中保留完整名称。
+class MeetingArtifactActions extends StatelessWidget {
+  const MeetingArtifactActions({
+    super.key,
+    required this.hasSummary,
+    required this.busy,
+    required this.onGenerate,
+    this.onRefine,
+  });
+  final bool hasSummary, busy;
+  final VoidCallback onGenerate;
+  final VoidCallback? onRefine;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(tr('会议纪要'), style: Theme.of(context).textTheme.titleMedium),
+      ),
+      if (busy)
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Semantics(
+            label: tr('电脑处理中'),
+            liveRegion: true,
+            child: const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      if (!hasSummary && !busy)
+        IconButton.filledTonal(
+          tooltip: tr('生成会议纪要'),
+          onPressed: onGenerate,
+          icon: const BreviaIcon(Icons.auto_awesome, size: 21),
+        ),
+      if (hasSummary || onRefine != null)
+        PopupMenuButton<String>(
+          tooltip: tr('更多'),
+          elevation: 0,
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          enabled: !busy,
+          icon: const BreviaIcon(Icons.more_horiz),
+          onSelected: (value) =>
+              value == 'summary' ? onGenerate() : onRefine?.call(),
+          itemBuilder: (_) => [
+            if (hasSummary)
+              PopupMenuItem(
+                value: 'summary',
+                child: Row(
+                  children: [
+                    const BreviaIcon(Icons.refresh, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(tr('重新生成纪要'))),
+                  ],
+                ),
+              ),
+            if (onRefine != null)
+              PopupMenuItem(
+                value: 'refine',
+                child: Row(
+                  children: [
+                    const BreviaIcon(Icons.tune, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(tr('重新精修'))),
+                  ],
+                ),
+              ),
+          ],
+        ),
+    ],
+  );
+}
+
+/// 保持 Markdown 文本格式和原有草稿保存流程，只修改当前选择。
+void insertNoteFormat(
+  TextEditingController editor,
+  String before, [
+  String after = '',
+]) {
+  final selection = editor.selection;
+  final start = selection.isValid ? selection.start : editor.text.length;
+  final end = selection.isValid ? selection.end : start;
+  final selected = editor.text.substring(start, end);
+  editor.value = TextEditingValue(
+    text: editor.text.replaceRange(start, end, '$before$selected$after'),
+    selection: TextSelection.collapsed(
+      offset: start + before.length + selected.length,
+    ),
+  );
+}
+
+class MinutesDocument extends StatelessWidget {
+  const MinutesDocument({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: TextButton.icon(
+          icon: const BreviaIcon(Icons.open_in_full, size: 16),
+          label: Text(tr('全屏阅读')),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              fullscreenDialog: true,
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: Text(tr('会议纪要'))),
+                body: SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      const Divider(height: 1),
+      Padding(padding: const EdgeInsets.symmetric(vertical: 18), child: child),
+    ],
+  );
+}
+
+class NoteComposer extends StatelessWidget {
+  const NoteComposer({
+    super.key,
+    required this.editor,
+    required this.onChanged,
+    this.expanded = false,
+  });
+  final TextEditingController editor;
+  final ValueChanged<String> onChanged;
+  final bool expanded;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final field = TextField(
+      controller: editor,
+      onChanged: onChanged,
+      expands: expanded,
+      minLines: expanded ? null : 7,
+      maxLines: expanded ? null : 14,
+      keyboardType: TextInputType.multiline,
+      textAlignVertical: TextAlignVertical.top,
+      style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+      decoration: InputDecoration(
+        hintText: tr('写笔记…'),
+        filled: false,
+        contentPadding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+      ),
+    );
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NoteFormatBar(editor: editor, onChanged: onChanged),
+          if (expanded) Expanded(child: field) else field,
+        ],
+      ),
+    );
+  }
+}
+
+class NoteFormatBar extends StatelessWidget {
+  const NoteFormatBar({
+    super.key,
+    required this.editor,
+    required this.onChanged,
+  });
+  final TextEditingController editor;
+  final ValueChanged<String> onChanged;
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final item in [
+            (Icons.format_bold, '加粗', '**', '**'),
+            (Icons.format_list_bulleted, '列表', '\n- ', ''),
+            (Icons.check_box_outlined, '待办', '\n- [ ] ', ''),
+          ])
+            IconButton(
+              tooltip: tr(item.$2),
+              icon: BreviaIcon(item.$1, size: 20),
+              onPressed: () {
+                insertNoteFormat(editor, item.$3, item.$4);
+                onChanged(editor.text);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 }

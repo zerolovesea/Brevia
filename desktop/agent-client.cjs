@@ -70,11 +70,13 @@ function launch() {
             '/Applications/Brevia.app/Contents/MacOS/Brevia',
             path.join(os.homedir(), 'Applications/Brevia.app/Contents/MacOS/Brevia'),
           ]
-        : [
-            path.resolve(__dirname, '../../Brevia.exe'),
-            path.join(process.env.LOCALAPPDATA || os.homedir(), 'Programs/Brevia/Brevia.exe'),
-            path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Brevia/Brevia.exe'),
-          ];
+        : process.platform === 'linux'
+          ? ['/usr/bin/brevia-desktop']
+          : [
+              path.resolve(__dirname, '../../Brevia.exe'),
+              path.join(process.env.LOCALAPPDATA || os.homedir(), 'Programs/Brevia/Brevia.exe'),
+              path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Brevia/Brevia.exe'),
+            ];
     binary = candidates.find((file) => fs.existsSync(file));
   }
   if (!binary || !path.isAbsolute(binary) || !fs.existsSync(binary))

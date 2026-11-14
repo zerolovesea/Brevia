@@ -62,7 +62,6 @@ const hostBin = process.execPath;
 const moduleProbes = [
   ['app-state.js', 'locale'],
   ['motion.js', 'window.BreviaMotion'],
-  ['app-actions.js', 'appActions'],
   ['app-utils.js', 'formatBytes'],
   ['backend-client.js', 'NativeAudioCapture'],
   ['ui-data.js', 'uiData'],
@@ -386,6 +385,7 @@ try {
       readyState: document.readyState,
       title: document.title,
       missing,
+      actions: Object.keys(appActions).filter(name => typeof appActions[name] === "function"),
       views: document.querySelectorAll('.view').length,
       scripts: document.querySelectorAll('script[src]').length,
       translated: typeof t === 'function' ? t(probeKey) : null,
@@ -449,6 +449,21 @@ try {
     (value.missing || []).length === 0,
     `脚本依赖链缺失全局：${(value.missing || []).join(', ')}`,
   );
+  for (const file of [
+    'app-meetings.js',
+    'app-meeting-detail.js',
+    'workspaces.js',
+    'ui-components.js',
+  ]) {
+    const source = readFileSync(path.join(root, 'frontend', file), 'utf8');
+    for (const [, name] of source.matchAll(/\bappActions\.(\w+)/g))
+      check(value.actions?.includes(name), file + ' uses missing app action ' + name);
+    for (const name of value.actions || [])
+      check(
+        !new RegExp('(^|[^\\w.$])' + name + '\\s*\\(', 'm').test(source),
+        file + ' directly calls ' + name,
+      );
+  }
   check(value.views >= 5, `视图数量 ${value.views} < 5`);
   check(
     value.scripts === moduleProbes.length,
@@ -1809,11 +1824,10 @@ try {
       for(let i=0;i<80&&!segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
       if(segmentSpeakerDraft?.speakerId!==person.speaker)return ['bulk rename scope not selected'];
       const taken=entries.find(s=>s.speaker && s.speaker!==person.speaker);
-      segmentSpeakerPicker.querySelector('[name=name]').value=taken.speaker_name;
-      segmentSpeakerPicker.querySelector('form').requestSubmit();
-      for(let i=0;i<80&&segmentSpeakerDraft?.saving;i++)await new Promise(r=>setTimeout(r,25));
-      if(!segmentSpeakerDraft || segmentSpeakerPicker.querySelector('[role=alert]').textContent!==t('error.speaker_name_taken'))return ['duplicate speaker rename did not fail with a recoverable error'];
-      segmentSpeakerPicker.querySelector('[name=name]').value='Batch Rename';
+      const renameInput=segmentSpeakerPicker.querySelector('[name=name]');
+      renameInput.value=taken.speaker_name;renameInput.dispatchEvent(new Event('input',{bubbles:true}));
+      if(segmentSpeakerDraft.mergeTarget?.[0]!==taken.speaker || segmentSpeakerPicker.querySelector('[data-speaker-merge-hint]').hidden)return ['missing merge target or consequence'];
+      renameInput.value='Batch Rename';renameInput.dispatchEvent(new Event('input',{bubbles:true}));
       segmentSpeakerPicker.querySelector('form').requestSubmit();
       for(let i=0;i<80&&segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
       const renamed=await window.brevia.meeting.get({meeting_id:meeting.id});
@@ -1830,7 +1844,8 @@ try {
       document.querySelector('[data-summary-participants-toggle]').click();await pendingRoster;
       if(segmentSpeakerPicker.matches(':popover-open')||!document.querySelector('.summary-participants-popover:popover-open'))errors.push('late speaker request replaced roster');
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
-      source.querySelector('[data-segment-tool="speaker"]').click();
+      source.querySelector('[data-speaker-menu]').click();
+      speakerMenu.querySelector('[data-rename-segment]').click();
       for(let i=0;i<80&&!segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
       if(!segmentSpeakerPicker.matches(':popover-open'))return ['speaker picker did not open'];
       if(playerAudio.currentTime!==time||!source.classList.contains('has-segment-menu'))errors.push('speaker action seeks or loses toolbar');
@@ -2104,8 +2119,8 @@ try {
     await submitCorrection();
     if(correctionPanel.hidden || (await window.brevia.meeting.get({meeting_id:meeting.id})).notes!==serverNotes.notes || !currentNotesMarkdown().includes('北威亚'))throw Error('live correction overwrote an unseen server note');
     closeCorrectionPanel();
-    // 模拟正常编辑器完成保存后，再从双方一致的笔记开始替换。
-    await persistNotes(meeting.id,currentNotesMarkdown());
+    // 用户核对了远端版本并选择保留本机稿，再从双方一致的笔记开始替换。
+    await persistNotes(meeting.id,currentNotesMarkdown(),serverNotes.notes);
     await openCorrection('北威亚',false,'notes');
     if(CSS.highlights.get('correction-search')?.size!==2)throw Error('live notes original highlight missing');
     const field=correctionPanel.querySelector('[data-correction-replacement]');field.value='Brevia';field.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2158,9 +2173,10 @@ try {
     delete orphan.line;
     const acceptance = {...cause,id:'check-acceptance',section:'内部验收安排',text:'产品与研发共同核对验收范围',line:'- 产品与研发共同核对验收范围'};
     const release = {...cause,id:'check-release',section:'小范围发布的前提',text:'验收通过后开始小范围发布',line:'- 验收通过后开始小范围发布'};
+    const extraCauses=['测试环境已经就绪','依赖版本已经锁定','回滚流程已经确认'].map((text,i)=>({...cause,id:'check-extra-'+i,text,line:'- '+text}));
     const newline=String.fromCharCode(10);
-    const markdown=['# 试点评审','## 交付准备',cause.line,...Array(6).fill('开发团队确认设计稿已完成，周四交付测试版本。保留会议原话，便于后续核对交付范围与负责人。'),'## 内部验收',acceptance.line,...Array(6).fill('产品和研发共同核对测试范围，记录未解决的问题；在完成内部验收后，确认是否进入下一步发布。'),'## 发布计划',release.line,...Array(6).fill('先进行小范围验证，再根据反馈调整发布安排。每个结论保留来源，原话发生变化时重新核对。')].join(newline+newline);
-    applyBackendDetail({...meeting,summary:{data:{markdown,claims:[claim,cause,acceptance,release,orphan]}}});
+    const markdown=['# 试点评审','## 交付准备',cause.line,...extraCauses.map(c=>c.line),...Array(6).fill('开发团队确认设计稿已完成，周四交付测试版本。保留会议原话，便于后续核对交付范围与负责人。'),'## 内部验收',acceptance.line,...Array(6).fill('产品和研发共同核对测试范围，记录未解决的问题；在完成内部验收后，确认是否进入下一步发布。'),'## 发布计划',release.line,...Array(6).fill('先进行小范围验证，再根据反馈调整发布安排。每个结论保留来源，原话发生变化时重新核对。')].join(newline+newline);
+    applyBackendDetail({...meeting,summary:{data:{markdown,claims:[claim,cause,...extraCauses,acceptance,release,orphan]}}});
     uiData.detail.refinedMode='timestamps';renderMeetingDetail();
     await showView('detail');
     openReviewDocument('summary');
@@ -2213,9 +2229,14 @@ try {
     const back=document.querySelector('.transcript-body [data-evidence-back="check-cause"]');
     if(!back)throw Error('cause reverse link missing');back.click();await settle();
     if(detailActiveTab!=='transcript'||!find().open)throw Error('cause backlink unnecessarily switches document');
+    const extra=()=>document.querySelector('.detail-cause-rail [data-evidence-id="check-extra-2"]');
+    const more=()=>extra().closest('.cause-tree-more');
+    if(more().open||extra().querySelector('summary').getBoundingClientRect().height)throw Error('extra causes must start collapsed');
+    document.querySelector('.transcript-body [data-evidence-back="check-extra-2"]').click();await settle();
+    if(!more().open||!extra().open||document.activeElement!==extra().querySelector('summary'))throw Error('backlink did not reveal and focus the folded cause');
     const rail=document.querySelector('.detail-cause-scroll');rail.scrollTop=30;
     renderMeetingDetail();await settle();
-    if(!find().open||Math.abs(document.querySelector('.detail-cause-scroll').scrollTop-30)>1)throw Error('same meeting refresh lost cause state');
+    if(!more().open||!extra().open||Math.abs(document.querySelector('.detail-cause-scroll').scrollTop-30)>1)throw Error('same meeting refresh lost cause state');
     const source=document.querySelector('.transcript-body [data-segment-tool="play"]')?.closest('[data-segment-id]');
     if(!source?.querySelector('[data-segment-tool="play"]')||!source.querySelector('[data-segment-tool="translate"]'))throw Error('single-segment controls missing');
     document.querySelector('[data-detail-tab="summary"]').click();await settle();
@@ -2288,6 +2309,31 @@ try {
     playerAudio.pause();
   })()`);
   await captureCorrection('summary-inline-citations');
+  await correctionEvaluate(`(async()=>{
+    const meeting=currentMeetingDetail;
+    const audio=playerAudio;
+    // 使用原生媒体时钟验证跨段跳转。自造两条短字幕，播放仍走正常录音 URL。
+    const clip=(id,start,end)=>({id,text:id,version:'live',speaker:'spk-test',speaker_name:'Speaker',start_ms:start,end_ms:end});
+    const segments=[clip('playback-earlier',1000,1850),clip('playback-later',5000,5850)];
+    applyBackendDetail({...meeting,transcript_revision:null,segments,current_segments:segments,original_segments:segments});
+    openReviewDocument('transcript');
+    const wait=async(test)=>{const until=Date.now()+4000;while(!test()){if(Date.now()>until)throw Error('录音跳转未完成 '+audio.currentTime+' / '+audio.seeking+' / '+audio.paused);await new Promise(r=>setTimeout(r,20));}};
+    const play=(id)=>{
+      const button=document.querySelector('[data-segment-id="'+id+'"] [data-segment-tool="play"]');
+      if(!button)throw Error('缺少带时间戳的字幕播放按钮 '+id);
+      button.click();
+    };
+    play('playback-later');
+    await wait(()=>!audio.paused&&!audio.seeking&&audio.currentTime>=5.1);
+    renderMeetingDetail();
+    if(document.querySelector('[data-segment-id="playback-later"] [data-segment-tool="play"]').getAttribute('aria-pressed')!=='true')throw Error('逐字稿重绘后播放状态丢失');
+    play('playback-earlier');
+    await wait(()=>!audio.paused&&!audio.seeking&&audio.currentTime>=1.1&&audio.currentTime<1.85);
+    await wait(()=>audio.paused);
+    if(audio.currentTime<1.8||audio.currentTime>2.12)throw Error('切段后未在新字幕边界暂停 '+audio.currentTime);
+    applyBackendDetail(meeting);
+  })()`);
+
   await correctionEvaluate(`(async()=>{
     const initialized=await window.brevia.initialize();
     const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
@@ -4144,7 +4190,17 @@ try {
     expression: `(async()=>{
       const errors=[];
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
-      meetingActive=false;await showView('detail');detailActiveTab='notes';setDetailLayoutMode('transcript');renderMeetingDetail();
+      meetingActive=false;await showView('detail');detailActiveTab='transcript';setDetailLayoutMode('transcript');renderMeetingDetail();
+      const transcript=document.querySelector('#detail-view .transcript-body');
+      const originalMaxWidth=transcript.style.maxWidth;
+      transcript.style.maxWidth='360px';
+      transcript.insertAdjacentHTML('afterbegin',renderTranscriptSegment({time:'01:05',startSeconds:65,endSeconds:70,segmentId:'overlap-layout',speaker:{id:'host',name:'Hannah Fry',overlapNames:['Hannah Fry','ConferenceParticipantWithAVeryLongUnbrokenName']},text:'This sentence follows the overlap note.',translation:'译文保留在原文下方。'}));
+      const overlapRow=transcript.firstElementChild;
+      const overlap=overlapRow.querySelector('.overlap-speakers').getBoundingClientRect();
+      const original=overlapRow.querySelector('.segment-copy > p').getBoundingClientRect();
+      if(original.top-overlap.bottom<3||overlap.right>original.right+1||Math.abs(overlap.left-original.left)>1)errors.push('overlapping speaker note collides with the transcript in a narrow pane');
+      overlapRow.remove();transcript.style.maxWidth=originalMaxWidth;
+      detailActiveTab='notes';renderMeetingDetail();
       document.querySelector('[data-edit-notes]').click();
       const toolbar=document.querySelector('#detail-view .detail-notes-edit .notes-toolbar');
       const first=document.querySelector('#detail-view .notes-editor > :first-child');
@@ -4213,6 +4269,68 @@ try {
     Array.isArray(detailExportStates.result?.value) && !detailExportStates.result.value.length,
     `详情几何、八语言导出选项与通知操作：${JSON.stringify(detailExportStates.result?.value || detailExportStates.exceptionDetails)}`,
   );
+  const cloudShareStates = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      for(const code of ['zh','en','es','ja','ko','fr','de','ru']) {
+        applyLanguage(code); await openModal('share');
+        document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        const panel=settingsModal.querySelector('.modal-panel'),p=panel.getBoundingClientRect(),trigger=document.querySelector('[data-share-detail]').getBoundingClientRect();
+        const protect=panel.querySelector('[data-cloud-protect]'),password=panel.querySelector('[data-cloud-password]'),link=panel.querySelector('[data-cloud-link]'),result=panel.querySelector('.cloud-share-result');
+        if(!protect||panel.querySelector('select')||panel.querySelector('[data-export-item]'))throw Error('cloud share must have independent controls');
+        if(Math.abs(p.right-trigger.right)>2||p.bottom>innerHeight+1)errors.push(code+': share anchor or bounds');
+        if(JSON.stringify([...panel.querySelectorAll('[data-cloud-days]')].map(o=>o.value))!==JSON.stringify(['3','7','15','30']))errors.push(code+': expiry choices');
+        link.value='https://share.brevia.work/s/'+'a'.repeat(32);result.hidden=false;
+        protect.click();
+        if(password.hidden||!result.hidden||link.value||protect.getAttribute('aria-checked')!=='true')errors.push(code+': protection retained old link');
+        password.value='test-pass';password.dispatchEvent(new Event('input',{bubbles:true}));
+        const r=password.getBoundingClientRect();if(r.width<1||r.right>p.right+1||r.left<p.left-1)errors.push(code+': password overflow');
+        protect.click();
+        if(!password.hidden||password.value)errors.push(code+': protection off');
+        link.value='old';result.hidden=false;panel.querySelector('[data-cloud-days][value="30"]').click();
+        if(!result.hidden||link.value)errors.push(code+': expiry retained old link');
+        closeModal();
+        if(document.querySelector('[data-share-detail]').getAttribute('aria-expanded')!=='false')errors.push(code+': share trigger stayed open');
+      }
+      applyLanguage('zh');return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(cloudShareStates.result?.value) && !cloudShareStates.result.value.length,
+    `云端分享独立浮窗：${JSON.stringify(cloudShareStates.result?.value || cloudShareStates.exceptionDetails)}`,
+  );
+  if (process.env.BREVIA_SHARE_CAPTURE_DIR) {
+    const output = path.resolve(process.env.BREVIA_SHARE_CAPTURE_DIR);
+    mkdirSync(output, { recursive: true });
+    for (const theme of ['light', 'dark'])
+      for (const width of [1280, 800]) {
+        await client.send('Emulation.setDeviceMetricsOverride', {
+          width,
+          height: 900,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        const capture = await client.send('Runtime.evaluate', {
+          expression: `(async()=>{closeModal();applyTheme('${theme}');await openModal('share');settingsModal.querySelector('[data-cloud-protect]').click();const input=settingsModal.querySelector('[data-cloud-password]');input.value='example-pass';settingsModal.querySelector('[data-cloud-link]').value='https://share.brevia.work/s/0123456789abcdef0123456789abcdef';settingsModal.querySelector('.cloud-share-result').hidden=false;settingsModal.querySelector('[data-cloud-share]').hidden=true;const status=settingsModal.querySelector('[data-cloud-status]');status.hidden=false;status.textContent=t('有效期至')+' 2026/11/17 20:00';document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return settingsModal.getBoundingClientRect().toJSON();})()`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const bounds = capture.result.value;
+        const shot = await client.send('Page.captureScreenshot', {
+          format: 'png',
+          clip: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, scale: 1 },
+        });
+        writeFileSync(
+          path.join(output, `share-${theme}-${width}.png`),
+          Buffer.from(shot.data, 'base64'),
+        );
+      }
+    await client.send('Emulation.clearDeviceMetricsOverride');
+    await client.send('Runtime.evaluate', { expression: "closeModal();applyTheme('light');" });
+  }
   const originalViewport = await client.send('Runtime.evaluate', {
     expression: `({width:innerWidth,height:innerHeight})`,
     returnByValue: true,
@@ -4331,6 +4449,13 @@ try {
       modelDownloads.set(model.id,{received:model.size_bytes*.42,total:model.size_bytes,paused:false});
       renderModelDownloadQueue();
       const queue=document.querySelector('#model-download-queue');
+      syncTaskCardStack(queue);
+      await new Promise(resolve=>setTimeout(resolve,300));
+      const queueHeading=queue.querySelector('header').getBoundingClientRect();
+      const queueIcon=queue.querySelector('.task-kind-icon').getBoundingClientRect();
+      const queueTitle=queue.querySelector('header p').getBoundingClientRect();
+      if(queueIcon.top<queueHeading.top-1||queueIcon.bottom>queueHeading.bottom+1||queueIcon.right>queueTitle.left+1)errors.push('download icon is outside heading or overlaps title');
+      if(queue.querySelector(':scope > .processing-bar').getBoundingClientRect().height)errors.push('expanded download queue duplicates aggregate progress');
       const pause=queue.querySelector('[data-pause-required]');
       modelDownloads.get(model.id).received=model.size_bytes*.56;renderModelDownloadQueue();
       if(queue.querySelector('[data-pause-required]')!==pause)errors.push('download updates replace live controls');
@@ -4436,7 +4561,17 @@ try {
       uiData.meetings=[backendMeeting(actual)];activeLibraryNav='all-meetings';activeWorkspaceId=uiData.meetings[0].workspaceId||'';renderMeetingList();
       document.querySelector('[data-meeting-menu]').click();
       document.querySelector('[data-meeting-action=workspace]').click();
-      if(document.querySelector('.meeting-menu').hidden||!document.querySelector('.meeting-workspace-menu'))errors.push('destination menu hides parent');
+      const parentMenu=document.querySelector('.meeting-menu:not([hidden])'),destinationMenu=document.querySelector('.meeting-workspace-menu');
+      if(!parentMenu||!destinationMenu)errors.push('destination menu hides parent');
+      else {
+        const bounds=destinationMenu.getBoundingClientRect(),parentBounds=parentMenu.getBoundingClientRect();
+        const density=(button)=>[getComputedStyle(button).fontSize,button.getBoundingClientRect().height,button.querySelector('svg').getBoundingClientRect().width];
+        const parentDensity=density(parentMenu.querySelector('[data-meeting-action=workspace]'));
+        if(Math.abs(bounds.width-parentBounds.width)>1||bounds.right>innerWidth-7||bounds.bottom>innerHeight-7)errors.push('destination menu size or viewport bounds');
+        for(const button of destinationMenu.querySelectorAll('button')){
+          if(JSON.stringify(density(button))!==JSON.stringify(parentDensity))errors.push('destination menu row density differs from parent');
+        }
+      }
       if([...document.querySelectorAll('.meeting-menu button')].some(b=>!b.querySelector('svg')))errors.push('legacy menu icon');
       closeMeetingMenus();
       document.querySelector('[data-meeting-menu]').click();document.querySelector('[data-meeting-action=rename]').click();

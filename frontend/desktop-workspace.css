@@ -933,6 +933,8 @@
   inset: auto 2% 7% auto;
   width: 23%;
   aspect-ratio: 0.48;
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 1.1%;
   border-radius: 19% / 9%;
   background: #202123;
@@ -941,13 +943,16 @@
     0 9px 14px -6px #0005;
 }
 .mobile-handset-face {
+  position: absolute;
+  inset: 2.4% 4.8%;
+  min-height: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: stretch;
-  gap: 4px;
-  height: 100%;
-  padding-inline: 9%;
+  gap: 1.2cqw;
+  padding: 2cqw 2%;
   overflow: hidden;
   border-radius: 15% / 7%;
   background: var(--color-surface);
@@ -2629,6 +2634,18 @@ brevia-cause-tree {
   display: grid;
   gap: 10px;
 }
+.cause-tree-more > summary {
+  width: fit-content;
+  padding: 4px 8px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.cause-tree-more:not([open]) > .cause-tree-branches {
+  display: none;
+}
+.cause-tree-more > .cause-tree-branches {
+  margin-top: 8px;
+}
 #detail-view .summary-reading-section {
   scroll-margin-top: 24px;
 }
@@ -2949,4 +2966,38 @@ brevia-cause-tree [data-ink="3"] {
   width: 32px;
   height: 32px;
   opacity: 0.4;
+}
+
+.summary-in-progress {
+  padding: 20px 24px;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-line);
+}
+.summary-in-progress:empty {
+  display: none;
+}
+.summary-in-progress header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.summary-in-progress h3 {
+  margin: 18px 0 8px;
+  font-size: 16px;
+}
+.summary-in-progress ul {
+  padding-inline-start: 1.25em;
+  margin: 0;
+}
+.summary-in-progress li {
+  margin-block: 6px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .summary-in-progress {
+    animation: overlay-in 180ms ease-out both;
+  }
 }
