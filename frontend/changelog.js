@@ -1,4 +1,4 @@
-/* 应用内更新日志；按版本倒序维护，界面文案保留在 i18n-data.js。 */
+/* 应用内更新日志。按版本倒序维护，界面文案保留在 i18n-data.js。 */
 (() => {
   const releases = [
     {
@@ -8,20 +8,36 @@
       'previousVersion': '2.0.3',
       'contributors': [],
       'zh': {
-        'summary': '新增限时会议分享，改进长会议纪要，Windows 和 Linux 提供 CPU 与 CUDA 安装包。',
+        'summary':
+          '新增云端会议分享和 OpenCode Go 支持，完善手机与电脑协作，扩展跨平台语音推理，并改进长会议纪要。',
         'what': [
           {
             'text':
-              'Windows 和 Linux 首次安装时可按设备选择 CPU 或 NVIDIA CUDA 版。应用内更新沿用已安装的版本，并在安装前校验签名。',
-            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+              '云端会议分享支持将会后纪要、原因图、逐字稿和已保存的译文生成只读网页，支持 3／7／15／30 天有效期、可选密码、说话人筛选和浏览次数。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
           {
             'text':
-              '桌面端可分享只读会议快照，选择有效期、设置密码，让读者按说话人查看原文和已保存的译文。',
+              '手机与电脑协作支持手机端可编辑电脑会议的共享笔记、查看转写、纪要与原因图，并同步纪要生成进度。完善断线草稿恢复与并发编辑冲突保护。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+          {
+            'text':
+              '跨平台语音推理新增支持。新增 Ubuntu 24.04 x86-64 桌面版，macOS 与 Linux 使用 MLX 转写，Windows 使用 ONNX。Windows 和 Linux 分别提供 CPU 与 NVIDIA CUDA 安装包。',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+          {
+            'text':
+              '新增 OpenCode Go 在线模型服务商预设，可在 AI 设置中配置 API Key 和模型，用于会议纪要、智能笔记等功能。',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
         ],
         'improved': [
+          {
+            'text':
+              'Windows 和 Linux 的应用内更新沿用已安装的 CPU／CUDA 版本，并在安装前校验签名。GitHub 不可达时可从 ModelScope 获取更新。',
+            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+          },
           {
             'text': '长会议纪要可引用逐字稿原话，并复用已完成的分段结果。',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
@@ -36,20 +52,35 @@
       },
       'en': {
         'summary':
-          'Share expiring meeting snapshots, generate improved long meeting minutes, and choose CPU or CUDA installers for Windows and Linux.',
+          'Add cloud meeting sharing and OpenCode Go support, improve phone–computer collaboration, expand cross-platform speech inference, and improve long meeting minutes.',
         'what': [
           {
             'text':
-              'Choose CPU or NVIDIA CUDA when installing Brevia on Windows or Linux. In-app updates keep the installed variant and verify the package signature before installation.',
-            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+              'Cloud meeting sharing lets you publish meeting minutes, the cause diagram, transcripts and saved translations as a read-only web page, with a 3-, 7-, 15- or 30-day expiry, optional password, speaker filters and view counts.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
           {
             'text':
-              'Share a read-only meeting snapshot with an expiry date and optional password. Readers can filter by speaker and view saved translations.',
+              'Phone–computer collaboration lets you edit shared notes for computer meetings from your phone, view transcripts, minutes and the cause diagram, and follow minutes-generation progress, with draft recovery after disconnection and protection against conflicting edits.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+          {
+            'text':
+              'Cross-platform speech inference adds an Ubuntu 24.04 x86-64 desktop app, with MLX transcription on macOS and Linux and ONNX on Windows. Windows and Linux each offer CPU and NVIDIA CUDA installers.',
+            'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
+          },
+          {
+            'text':
+              'Add an OpenCode Go online model provider preset. Configure an API key and model in AI settings for meeting minutes, smart notes and related features.',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
         ],
         'improved': [
+          {
+            'text':
+              'In-app updates on Windows and Linux preserve the installed CPU or CUDA variant and verify package signatures before installation, with ModelScope as a fallback when GitHub is unavailable.',
+            'commit': 'aaeba28e846c1e80e39325f995f3f252b36a5384',
+          },
           {
             'text':
               'Long meeting minutes can cite original transcript excerpts and reuse completed sections.',
