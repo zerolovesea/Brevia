@@ -83,6 +83,7 @@ const moduleProbes = [
   ['transcript-corrections.js', 'correctionMatches'],
   ['summary-providers.js', 'configuredSummaryProvider'],
   ['app.js', 't'],
+  ['glossary-markdown.js', 'replaceGlossaryMarkdown'],
   ['glossary.js', 'glossaryUI'],
   ['mobile-connection.js', "document.getElementById('mobile-pair').onclick"],
   [
