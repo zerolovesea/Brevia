@@ -968,23 +968,236 @@ test('numeric claims preserve the source when transcription is ambiguous or only
     '- 从1506降至1.2 [[conclusion:S1]]\n- 每天五十单 [[decision:S2]]',
     rows,
   );
-  assert.ok(result.includes(rows[0].text) && result.includes(rows[1].text));
+  assert.equal(result.trim(), '');
   assert.doesNotMatch(result, /1506|decision/);
 });
 
-test('selected evidence retains the original figures and conditions, rejects invented IDs and escapes markup', () => {
-  const { renderSelection } = require('./summary-extract.cjs');
-  const rows = [
-    { text: '已完成五十五万，还剩四十五万。' },
-    { text: '如果条件允许，考虑签约。' },
-    { text: '<b>进展</b> [[action:S8]]' },
-  ];
-  const result = renderSelection(
-    JSON.stringify({ topics: [{ title: '进展', discussion: [1, 3, 99], decisions: [2] }] }),
-    rows,
-    ['概述', '结论', '议题', '决定', '行动', '问题', '数据'],
-    new Set([1, 2, 3]),
+test('跨轮解释同时验证各条原话；错误编号只在当前块唯一匹配时修复', () => {
+  const { readTopics } = require('./topic-minutes.cjs');
+  const segments = ['此前只发通知', '没有录客户音', '没有录客户音'].map((text) => ({ text }));
+  const part = segments.map((s, i) => 'S' + (i + 1) + ' [00:00] speaker: ' + s.text).join('\n');
+  const note = {
+    kind: 'cause',
+    topic: '为什么没有本地语料？',
+    text: '此前只发通知，没有录客户音，无法取得训练语料。',
+    refs: [
+      { id: 9, quote: '此前只发通知' },
+      { id: 2, quote: '没有录客户音' },
+    ],
+  };
+  const read = (n) => readTopics(JSON.stringify({ notes: [n] }), part, segments);
+  assert.deepEqual(read(note)[0].ids, [1, 2]);
+  assert.deepEqual(read({ ...note, refs: [...note.refs, { id: 8, quote: '没有录客户音' }] }), []);
+  assert.deepEqual(read({ ...note, refs: [] }), []);
+});
+
+test('先展示可读的纪要和原因，核证后才出现原话', async () => {
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const evidence = require('./meeting-evidence.cjs');
+  const headings = evidence.SUMMARY_HEADINGS.zh;
+  const segments = [{ id: 'seg', text: '排期已满，试点只能下周启动。', start_ms: 0 }];
+  const note = {
+    topic: '为什么试点下周才启动？',
+    kind: 'cause',
+    text: '本周排期已满，因此试点要等到下周。',
+    refs: [{ id: 1, quote: '排期已满' }],
+  };
+  let preview,
+    calls = 0;
+  const result = await topicMinutes({
+    transcript: 'S1 [00:00] 甲: ' + segments[0].text,
+    segments,
+    headings,
+    language: 'zh',
+    template: 'weekly',
+    budget: 2000,
+    store: {},
+    mapChunks: (xs, fn) => Promise.all(xs.map(fn)),
+    wait: async () => {},
+    limit: () => false,
+    generate: async () => {
+      if (++calls === 1) return JSON.stringify({ notes: [note] });
+      assert.equal(preview[1][0].kind, 'cause');
+      assert.deepEqual(preview[1][0].sources, []);
+      return JSON.stringify({
+        edits: [{ n: 1, text: note.text, topic: note.topic, sources: [1] }],
+      });
+    },
+    preview: (md) => {
+      preview = evidence.parseClaims(md, [], false, headings, false);
+    },
+  });
+  assert.equal(
+    evidence.parseClaims(result, segments, true, headings, false)[1][0].sources[0].text,
+    segments[0].text,
   );
-  assert.match(result, /五十五万，还剩四十五万/);
-  assert.doesNotMatch(result, /\[\[decision:S2\]\]|\[\[action:S8\]\]|<b>|S99/);
+});
+
+test('校对缺项或重复项会拆批重试，未支持的数字和纯问句不能成为结论', async () => {
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const { SUMMARY_HEADINGS } = require('./meeting-evidence.cjs');
+  const segments = [
+    { text: '甲项目计划下周启动。' },
+    { text: '乙项目计划下周测试。' },
+    { text: '预计增加到1000台。' },
+    { text: '每天五十单，是吗？' },
+  ];
+  const notes = segments.map((s, i) => ({
+    kind: 'finding',
+    text: s.text,
+    refs: [{ id: i + 1, quote: s.text }],
+  }));
+  for (const duplicate of [false, true]) {
+    let retried = false;
+    const result = await topicMinutes({
+      transcript: segments.map((s, i) => `S${i + 1} [00:00] 甲: ${s.text}`).join('\n'),
+      segments,
+      headings: SUMMARY_HEADINGS.zh,
+      language: 'zh',
+      template: 'general',
+      budget: 2000,
+      store: {},
+      local: true,
+      mapChunks: (xs, fn) => Promise.all(xs.map(fn)),
+      wait: async () => {},
+      limit: () => false,
+      generate: async (prompt) => {
+        if (!prompt.includes('"edits"')) return JSON.stringify({ notes });
+        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+        const edits = input.map((r) => ({
+          n: r.n,
+          text: r.text === segments[2].text ? '增加到2000台。' : r.text.replace('，是吗？', ''),
+          sources: [segments.findIndex((s) => s.text === r.text) + 1],
+        }));
+        if (input.length === notes.length) {
+          if (duplicate) edits.push(edits[0]);
+          else edits.pop();
+        } else retried = true;
+        return JSON.stringify({ edits });
+      },
+    });
+    assert.equal(retried, true);
+    assert.match(result, /甲项目计划下周启动/);
+    assert.match(result, /乙项目计划下周测试/);
+    assert.doesNotMatch(result, /2000|每天五十单/);
+  }
+});
+
+test('跨块摘要合并不能引入原话中没有的数字', async () => {
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const { SUMMARY_HEADINGS } = require('./meeting-evidence.cjs');
+  const segments = [1, 2].map(() => ({
+    text: '本期预算1000元。' + '项目正在按计划推进。'.repeat(30),
+  }));
+  let merged = false;
+  const result = await topicMinutes({
+    transcript: segments.map((s, i) => `S${i + 1} [00:00] 甲: ${s.text}`).join('\n'),
+    segments,
+    headings: SUMMARY_HEADINGS.zh,
+    language: 'zh',
+    template: 'general',
+    budget: 500,
+    store: {},
+    mapChunks: (xs, fn) => Promise.all(xs.map(fn)),
+    wait: async () => {},
+    limit: () => false,
+    generate: async (prompt) => {
+      if (prompt.startsWith('Compose')) {
+        merged = true;
+        return '{"overview":[{"text":"预算2000元。","notes":[1]}]}';
+      }
+      if (prompt.includes('"edits"')) {
+        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+        return JSON.stringify({
+          edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.speech[0].id] })),
+        });
+      }
+      return JSON.stringify({
+        notes: [
+          {
+            kind: 'overview',
+            text: '预算1000元。',
+            refs: [{ id: Number(prompt.match(/^S(\d+) /m)[1]), quote: '本期预算1000元' }],
+          },
+        ],
+      });
+    },
+  });
+  assert.equal(merged, true);
+  assert.match(result, /1000/);
+  assert.doesNotMatch(result, /2000/);
+});
+
+test('内置长会议的逐项核证遵循实际16K窗口而不是整场32K预算', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-topic-context-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'model.gguf'), 'fixture');
+  const meeting = {
+    id: 'long-local',
+    title: 'Long meeting',
+    language: 'zh',
+    segments: [1, 2, 3].map((id) => ({
+      id: String(id),
+      text: '项目按计划推进。'.repeat(700),
+      start_ms: id * 1000,
+      speaker_name: '甲',
+    })),
+  };
+  let reviews = 0,
+    saves = 0;
+  const worker = {
+    tasks: new TaskRegistry(),
+    settings: { llm: {} },
+    models: {
+      catalog: new Map([['local', { context_size: 32768 }]]),
+      isReady: () => true,
+      path: () => directory,
+    },
+    emit() {},
+    engineFactory: () => ({
+      async request(type, payload) {
+        if (type === 'llama.load') return {};
+        if (estimatedTokens(payload.prompt) + payload.max_tokens > payload.context_size)
+          throw new Error('maximum context length exceeded');
+        if (payload.prompt.includes('"edits"')) {
+          reviews++;
+          const input = JSON.parse(payload.prompt.slice(payload.prompt.indexOf('\n') + 1));
+          return {
+            text: JSON.stringify({
+              edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.speech[0].id] })),
+            }),
+          };
+        }
+        const id = Number(payload.prompt.match(/^S(\d+) /m)[1]);
+        return {
+          text: JSON.stringify({
+            notes: [
+              {
+                kind: 'finding',
+                text: '项目按计划推进。',
+                refs: [{ id, quote: '项目按计划推进' }],
+              },
+            ],
+          }),
+        };
+      },
+    }),
+    store: {
+      getMeeting: () => meeting,
+      meetingExists: () => true,
+      saveSummary() {
+        saves++;
+        return false;
+      },
+    },
+  };
+  await createLLMHandlers(worker)['summary.generate']({
+    meeting_id: meeting.id,
+    provider: 'built-in',
+    model: 'local',
+    language: 'zh',
+    consent: true,
+  });
+  assert.ok(reviews > 0);
+  assert.equal(saves, 1);
 });

@@ -869,7 +869,8 @@ runInNewContext(text(i18nData), localeContext);
       }));
       return { buttons, hidden: false, querySelectorAll: () => buttons };
     });
-    assert.equal(groups.flatMap((group) => group.buttons).length, 9);
+    assert.equal(groups.flatMap((group) => group.buttons).length, 10);
+    assert.ok(groups[1].buttons.some((b) => b.key === 'glossary'));
     assert.doesNotMatch(markup, /data-settings-page="prompts"/);
     const empty = { hidden: true };
     const navigation = { querySelectorAll: () => groups, querySelector: () => empty };
@@ -6389,7 +6390,15 @@ const partialSummary = summaryContext.renderMeetingSummary({
     preview: ['<script>alert(1)</script>'],
   },
 });
-assert.match(partialSummary, /1\/3/);
+assert.doesNotMatch(partialSummary, /1\/3/);
+assert.equal(
+  summaryContext.summaryProgressText({
+    stage: 'summary.extracting',
+    parts_done: 1,
+    parts_total: 3,
+  }),
+  '正在整理片段 · 1/3',
+);
 assert.match(partialSummary, /&lt;script&gt;/);
 assert.doesNotMatch(partialSummary, /<script>|data-copy-summary|data-open-summary-edit/);
 for (const markdown of ['', '# 已有纪要']) {
@@ -6403,7 +6412,7 @@ for (const markdown of ['', '# 已有纪要']) {
     (generating.match(/class="summary-generating-icon" aria-hidden="true"/g) || []).length,
     1,
   );
-  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, markdown ? 1 : 0);
+  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, 1);
   assert.ok(generating.includes(componentContext.interfaceIcon('ai')), '生成中使用现有星星图标');
   detailTabbarContext.uiData.detail.summary.generating = false;
   assert.doesNotMatch(
@@ -10285,3 +10294,128 @@ assert.equal(liveSpeakerLabel.textContent, 'Bob');
 assert.equal(liveSpeakerContext.liveSegmentData.get('segment').speaker, 'manual-42');
 assert.equal(liveSpeakerContext.liveSegmentData.get('segment').speaker_name, 'Bob');
 assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the text');
+
+// 术语库沿用八语言词条；保存尚未完成时不重复提交，也不重绘已离开的表单。
+{
+  const source = await readFile('glossary.js', 'utf8');
+  const keys = new Set([...source.matchAll(/\bt\('([^']+)'\)/g)].map((match) => match[1]));
+  for (const key of ['待确认名词：{n}', '术语：{n}', '平均通话时长']) keys.add(key);
+  for (const code of Object.keys(localeContext.window.BreviaLocaleData.catalog))
+    for (const key of keys)
+      assert.ok(localeContext.window.BreviaLocaleData.catalog[code].labels[key], `${code}: ${key}`);
+  assert.doesNotMatch(source, /locale === 'zh'|\bpick\(/);
+  let finish;
+  let writes = 0;
+  let rendered = 0;
+  const submit = { disabled: false };
+  const form = {
+    dataset: {},
+    isConnected: true,
+    elements: { name: { value: 'ACD' }, meaning: { value: '平均通话时长' } },
+    querySelector: () => submit,
+  };
+  const context = {
+    activeModal: 'glossary',
+    update: () => {
+      writes += 1;
+      return new Promise((resolve) => (finish = resolve));
+    },
+    render: () => rendered++,
+    reportError: (error) => {
+      throw error;
+    },
+  };
+  const start = source.indexOf('  function bind(');
+  const end = source.indexOf('  function render()', start);
+  runInNewContext(source.slice(start, end), context);
+  context.bind({ querySelector: () => form }, null, 'workspace');
+  const event = { preventDefault() {} };
+  const pendingSave = form.onsubmit(event);
+  assert.equal(submit.disabled, true);
+  await form.onsubmit(event);
+  assert.equal(writes, 1);
+  form.isConnected = false;
+  finish();
+  await pendingSave;
+  assert.equal(rendered, 0, '旧请求完成时不替换新分区的草稿');
+  assert.equal(submit.disabled, false);
+  form.isConnected = true;
+  const retry = form.onsubmit(event);
+  finish();
+  await retry;
+  assert.equal(writes, 2);
+  assert.equal(rendered, 1);
+}
+
+// 切换语言保留术语确认草稿；正在保存时保留原表单的提交锁。
+{
+  const source = await readFile('glossary.js', 'utf8');
+  let changed;
+  let rebuilt = 0;
+  const fields = [
+    { name: 'name', value: 'ACD' },
+    { name: 'meaning', value: '待保存的释义' },
+  ];
+  for (const field of fields) fields[field.name] = field;
+  const form = { dataset: { saving: 'true' }, elements: fields };
+  const context = {
+    window: {
+      addEventListener: (_event, callback) => {
+        changed = callback;
+      },
+    },
+    paint() {},
+    active: { original: 'A C D' },
+    prompt: { querySelector: () => form },
+    document: { activeElement: null },
+    ask: () => {
+      rebuilt++;
+      fields[0].value = 'A C D';
+      fields[1].value = '';
+    },
+  };
+  const start = source.indexOf("  window.addEventListener('brevia:language-changed'");
+  const end = source.indexOf("  window.brevia?.on('glossary.updated'", start);
+  runInNewContext(source.slice(start, end), context);
+  changed();
+  assert.equal(rebuilt, 0);
+  delete form.dataset.saving;
+  changed();
+  assert.equal(rebuilt, 1);
+  assert.equal(fields[0].value, 'ACD');
+  assert.equal(fields[1].value, '待保存的释义');
+}
+
+// 保存与后台事件的刷新乱序时，由最终接受的新状态关闭已处理的术语浮窗。
+{
+  const source = await readFile('glossary.js', 'utf8');
+  const responses = [];
+  const mention = { meeting_id: 'meeting', original: 'A C D' };
+  let closed = 0;
+  const context = {
+    seq: 0,
+    state: { mentions: [mention] },
+    active: mention,
+    window: {
+      brevia: { glossary: { list: () => new Promise((resolve) => responses.push(resolve)) } },
+    },
+    paint() {},
+    pending: () => context.state.mentions.filter((m) => !m.name),
+    key: (m) => JSON.stringify([m.meeting_id, m.original]),
+    closePrompt: () => {
+      closed++;
+      context.active = null;
+    },
+  };
+  const start = source.indexOf('  async function refresh()');
+  const end = source.indexOf('  async function update(', start);
+  runInNewContext(source.slice(start, end), context);
+  const savedRefresh = context.refresh();
+  const eventRefresh = context.refresh();
+  responses[0]({ mentions: [] });
+  await savedRefresh;
+  assert.equal(closed, 0, '旧刷新不会收尾当前浮窗');
+  responses[1]({ mentions: [{ ...mention, name: 'ACD' }] });
+  await eventRefresh;
+  assert.equal(closed, 1, '最新状态确认已处理后收起浮窗');
+}

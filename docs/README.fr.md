@@ -44,7 +44,9 @@ Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo su
 
 [![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-Le compte rendu comporte sept rubriques. Le diagramme des causes permet de vérifier les citations et de réécouter les interventions. Le compte rendu et l’analyse sont exportables séparément. Filtrez la transcription par intervenant ou modifiez son nom pour toute la réunion.
+Les longues réunions en chinois ou en anglais peuvent produire un compte rendu thématique, vérifié point par point dans les propos d’origine ; les autres cas conservent sept rubriques. Le diagramme des causes permet de vérifier les citations et de réécouter les interventions. Le compte rendu et l’analyse sont exportables séparément. Filtrez la transcription par intervenant ou modifiez son nom pour toute la réunion.
+
+Le glossaire conserve les termes communs ou propres à un espace de travail et permet de confirmer les termes, définitions et remplacements proposés par l’IA. Consultez une définition ou rétablissez le terme d’origine dans le compte rendu ; la transcription reste inchangée.
 
 ### Notes IA
 

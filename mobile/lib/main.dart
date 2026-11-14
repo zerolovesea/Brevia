@@ -1279,11 +1279,13 @@ class ConnectionPage extends StatefulWidget {
   final AppModel model;
   final VoidCallback? onConnected;
   final bool initialScan;
+  final Widget? camera;
   const ConnectionPage({
     super.key,
     required this.model,
     this.onConnected,
     this.initialScan = false,
+    this.camera,
   });
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -1574,6 +1576,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     height: 260,
                     child: ScannerPage(
                       key: cameraKey,
+                      camera: widget.camera,
                       embedded: true,
                       onResult: (raw) async {
                         if (raw == 'manual') {
@@ -3512,8 +3515,15 @@ class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
   void initState() {
     super.initState();
     widget.model.editingPhoneNotes.add(widget.id);
+    widget.model.addListener(saveInBackground);
     unawaited(load());
     poll = Timer.periodic(const Duration(seconds: 2), (_) => sync());
+  }
+
+  void saveInBackground() {
+    if (!widget.model.foreground && debounce?.isActive == true) {
+      unawaited(report(context, flush));
+    }
   }
 
   Future<void> load() async {
@@ -3689,6 +3699,7 @@ class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
 
   @override
   void dispose() {
+    widget.model.removeListener(saveInBackground);
     widget.model.editingPhoneNotes.remove(widget.id);
     debounce?.cancel();
     poll?.cancel();

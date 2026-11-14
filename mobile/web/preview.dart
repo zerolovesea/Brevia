@@ -37,11 +37,14 @@ Future<void> main() async {
           'state': 'recording',
           'connected': true,
           'samples': 16000 * seconds,
+          'count': seconds,
+          'uploaded': seconds,
           'snapshot': {
             'segments': [
               if (caption.isNotEmpty)
                 {
                   'start_ms': 0,
+                  'speaker': 'speaker-1',
                   'speaker_name': uiLanguage == 'en' ? 'Alex' : '林晓',
                   'text': caption,
                   if (uiLanguage == 'en') 'translation': translation,
@@ -68,7 +71,8 @@ Future<void> main() async {
       home: ValueListenableBuilder(
         valueListenable: stage,
         builder: (_, screen, _) => switch (screen) {
-          'scan' => ScannerPage(
+          'scan' => ConnectionPage(
+            model: model,
             camera: Center(
               child: Image.network(
                 Uri.base.resolve('../assets/pair-demo.png').toString(),

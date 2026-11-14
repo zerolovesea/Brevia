@@ -1,7 +1,100 @@
 const { randomUUID } = require('node:crypto');
 const { utcNow } = require('./store-base.cjs');
+const { replaceGlossaryMarkdown } = require('../../frontend/glossary-markdown.js');
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 module.exports = {
+  glossaryDocument(meeting) {
+    const summary = meeting.summary?.data;
+    if (!summary) return meeting;
+    const mentions = this.query(
+      "SELECT original,name FROM glossary_mentions WHERE meeting_id=? AND dismissed=0 AND name IS NOT NULL AND (scope='' OR scope=?) ORDER BY length(original) DESC",
+      meeting.id,
+      meeting.workspace_id || 'public',
+    );
+    if (!mentions.length) return meeting;
+    const names = new Map(mentions.map((m) => [m.original, m.name]));
+    const re = new RegExp(
+      mentions
+        .map(
+          (m) =>
+            (/^[a-z0-9]/i.test(m.original) ? '(?<![A-Za-z0-9_])' : '') +
+            escapeRegExp(m.original) +
+            (/[a-z0-9]$/i.test(m.original) ? '(?![A-Za-z0-9_])' : ''),
+        )
+        .join('|'),
+      'gu',
+    );
+    const replace = (value) =>
+      typeof value === 'string' ? value.replace(re, (m) => names.get(m)) : value;
+    return {
+      ...meeting,
+      summary: {
+        ...meeting.summary,
+        data: {
+          ...summary,
+          markdown: replaceGlossaryMarkdown(summary.markdown, mentions),
+          claims: (summary.claims || []).map((c) => ({
+            ...c,
+            text: replace(c.text),
+            section: replace(c.section),
+            line: replaceGlossaryMarkdown(c.line, mentions),
+          })),
+        },
+      },
+    };
+  },
+  glossarySource({ meeting_id, original }) {
+    const source = this.currentSegments(meeting_id).find((segment) =>
+      segment.text.includes(original),
+    );
+    return source ? { text: source.text, start_ms: source.start_ms } : null;
+  },
+  glossary() {
+    return {
+      entries: this.query('SELECT * FROM glossary_entries ORDER BY name'),
+      mentions: this.query(
+        'SELECT g.*,m.title,m.workspace_id,e.meaning FROM glossary_mentions g JOIN meetings m ON m.id=g.meeting_id LEFT JOIN glossary_entries e ON e.scope=g.scope AND e.name=g.name WHERE m.deleted_at IS NULL AND dismissed=0 ORDER BY g.rowid DESC',
+      ),
+    };
+  },
+  updateGlossary(p) {
+    return this.transaction(() => {
+      if (p.action === 'clear')
+        this.run('UPDATE glossary_mentions SET dismissed=1 WHERE name IS NULL');
+      else if (p.action === 'dismiss')
+        this.run(
+          'UPDATE glossary_mentions SET dismissed=1 WHERE meeting_id=? AND original=?',
+          p.meeting_id,
+          p.original,
+        );
+      else {
+        if (p.workspace_id && p.workspace_id !== 'public' && !this.getWorkspace(p.workspace_id))
+          throw new Error('Workspace unavailable');
+        this.run(
+          'INSERT INTO glossary_entries VALUES(?,?,?) ON CONFLICT(scope,name) DO UPDATE SET meaning=excluded.meaning',
+          p.workspace_id,
+          p.name,
+          p.meaning,
+        );
+        if (p.action === 'resolve')
+          this.run(
+            'INSERT INTO glossary_aliases VALUES(?,?,?) ON CONFLICT(scope,original) DO UPDATE SET name=excluded.name',
+            p.workspace_id,
+            p.original,
+            p.name,
+          );
+        if (p.action === 'resolve')
+          this.run(
+            'UPDATE glossary_mentions SET name=?,scope=? WHERE meeting_id=? AND original=?',
+            p.name,
+            p.workspace_id,
+            p.meeting_id,
+            p.original,
+          );
+      }
+      return this.glossary();
+    });
+  },
   listWorkspaces() {
     return this.query(
       'SELECT w.*,(SELECT COUNT(*) FROM meetings m WHERE m.workspace_id=w.id AND m.deleted_at IS NULL) AS meeting_count FROM workspaces w WHERE w.deleted_at IS NULL ORDER BY w.position,w.created_at',

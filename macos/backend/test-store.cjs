@@ -259,6 +259,22 @@ test('Structured causes require both sides of a stated relation in the cited spe
   ])
     assert.equal(parse(speech, row).kind, 'conclusion');
 });
+test('Result headings accept a reason after a speech pause and reject reversed or speculative edges', () => {
+  const headings = evidence.SUMMARY_HEADINGS.zh;
+  const kind = (speech, outcome, reason) =>
+    evidence
+      .parseClaims(
+        '## ' + headings[2] + '\n### ' + outcome + '\n- ' + reason + ' [[cause:S1]]',
+        [{ id: 'x', start_ms: 0, text: speech }],
+        true,
+        headings,
+      )[1]
+      .at(-1).kind;
+  assert.equal(kind('整体还是收缩了。因为预算有限。', '整体收缩', '预算有限'), 'cause');
+  assert.equal(kind('整体还是收缩了。因为预算有限。', '预算有限', '整体收缩'), 'conclusion');
+  assert.equal(kind('整体还是收缩了。可能因为预算有限。', '整体收缩', '预算有限'), 'conclusion');
+  assert.equal(kind('整体还是收缩了？因为预算有限？', '整体收缩', '预算有限'), 'conclusion');
+});
 test('Recover a cited cause only for a unique matching discussion, preserving uncertainty', () => {
   const headings = evidence.SUMMARY_HEADINGS.zh;
   const source = { id: 's', text: '资源可能不足，导致交付延期。', start_ms: 0 };
@@ -687,4 +703,112 @@ test('WAV parsing accepts system extensible PCM16 and rejects malformed or float
   floating.writeUInt16LE(3, 20);
   fs.writeFileSync(file, floating);
   assert.throws(() => wavInfo(file), /Expected PCM WAV/);
+});
+
+test('默认术语只补齐一次，保留自定义释义', (t) => {
+  const { store } = setup(t);
+  assert.deepEqual(
+    store.glossary().entries.map((entry) => entry.name),
+    ['ASR', 'LLM', 'RAG'],
+  );
+  store.updateGlossary({ action: 'save', workspace_id: '', name: 'LLM', meaning: '自定义释义' });
+  store.run("DELETE FROM app_meta WHERE key='glossary_examples_v1'");
+  store.transaction(() => store.migrate());
+  assert.equal(
+    store.glossary().entries.find((entry) => entry.name === 'LLM').meaning,
+    '自定义释义',
+  );
+  assert.equal(store.glossary().entries.length, 3);
+});
+
+test('术语匹配仅使用本工作区和全局定义，挂起词可确认、恢复及清空', async (t) => {
+  const { store } = setup(t);
+  const ws = store.createWorkspace({ name: '术语验证' });
+  const m = store.createMeeting({
+    title: 'test',
+    workspace_id: ws.id,
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  store.updateGlossary({ action: 'save', workspace_id: '', name: 'ACD', meaning: '平均通话时长' });
+  const source = 'A C D 和小蓝盒';
+  store.saveSegment({
+    meeting_id: m.id,
+    segment_id: 'glossary-source',
+    start_ms: 3100,
+    end_ms: 5100,
+    text: source,
+  });
+  assert.deepEqual(store.glossarySource({ meeting_id: m.id, original: '小蓝盒' }), {
+    text: source,
+    start_ms: 3100,
+  });
+  assert.equal(store.glossarySource({ meeting_id: m.id, original: '不存在' }), null);
+  const run = () =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...m, segments: [{ text: source }] },
+      source,
+      { context_size: 8192 },
+      async () =>
+        JSON.stringify({
+          terms: [
+            { original: 'A C D', match: 'ACD' },
+            { original: '小蓝盒', match: null },
+            { original: '不存在', match: null },
+          ],
+        }),
+      new TaskControl(),
+    );
+  await run();
+  let mentions = store.glossary().mentions;
+  assert.equal(mentions.length, 2);
+  assert.equal(mentions.find((x) => x.original === 'A C D').name, 'ACD');
+  assert.equal(
+    store.glossaryDocument({ ...m, summary: { data: { markdown: 'A C D；XA C DY' } } }).summary.data
+      .markdown,
+    'ACD；XA C DY',
+  );
+  const markdown =
+    'A C D [A C D](https://example.com/A C D) `A C D` ``A C D`` https://example.com/A%20C%20D\n[id]: https://example.com/A C D\n```\nA C D\n```';
+  assert.equal(
+    store.glossaryDocument({ ...m, summary: { data: { markdown } } }).summary.data.markdown,
+    markdown.replace(/^A C D/, 'ACD'),
+  );
+  const { replaceGlossaryMarkdown } = require('../../frontend/glossary-markdown.js');
+  assert.equal(
+    replaceGlossaryMarkdown('ACD https://example.com/ACD', [{ original: 'ACD', name: '新名' }]),
+    '新名 https://example.com/ACD',
+  );
+  assert.equal(
+    replaceGlossaryMarkdown('旧词', [{ original: '旧词', name: 'A*[B](C)<D>&E' }]),
+    'A\\*\\[B\\]\\(C\\)\\<D\\>&amp;E',
+  );
+  for (const [name, escaped] of [
+    ['---', '\\-\\-\\-'],
+    ['1. item', '1\\. item'],
+    ['+ item', '\\+ item'],
+    ['===', '\\=\\=\\='],
+  ])
+    assert.equal(replaceGlossaryMarkdown('旧词', [{ original: '旧词', name }]), escaped);
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: '小蓝盒',
+    name: '蓝盒',
+    meaning: '项目代号',
+    workspace_id: ws.id,
+  });
+  store.updateGlossary({ action: 'dismiss', meeting_id: m.id, original: 'A C D' });
+  await run();
+  assert.deepEqual(
+    store.glossary().mentions.map((x) => x.name),
+    ['蓝盒'],
+  );
+  store.run('INSERT INTO glossary_mentions(meeting_id,original) VALUES(?,?)', m.id, '待确认');
+  store.updateGlossary({ action: 'clear' });
+  assert.deepEqual(
+    store.glossary().mentions.map((x) => x.original),
+    ['小蓝盒'],
+  );
 });

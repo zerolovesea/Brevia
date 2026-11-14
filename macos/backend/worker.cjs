@@ -195,6 +195,7 @@ class Worker {
       },
       'meeting.list': (p) => store.listMeetings(p),
       'meeting.search': (p) => store.searchMeetings(p.query || ''),
+      'meeting.share-document': (p) => store.glossaryDocument(store.getMeeting(p.meeting_id, true)),
       'meeting.get': (p) => store.getMeeting(p.meeting_id, true),
       'meeting.update': (p) => store.updateMeeting(p.meeting_id, p.updates, p.expected_notes),
       'meeting.delete': (p) => deleted(p),
@@ -261,6 +262,9 @@ class Worker {
           freed_bytes: models.freed_bytes + meetings.freed_bytes,
         };
       },
+      'glossary.list': () => store.glossary(),
+      'glossary.source': (p) => store.glossarySource(p),
+      'glossary.update': (p) => store.updateGlossary(p),
       'workspace.terms': (p) => store.workspaceTerms(p.workspace_id),
       'workspace.term.save': (p) => store.writeWorkspaceTerm(p),
       'workspace.list': () => store.listWorkspaces(),

@@ -1,6 +1,6 @@
 <h1 align="center"><img src="assets/brevia-hero.gif" width="100%" alt="Brevia" /></h1>
 
-<p align="center"><strong>Brevia 2.0 · Local AI meeting assistant</strong><br />Follow bilingual captions, capture decisions, and jump from meeting minutes back to the original conversation.</p>
+<p align="center"><strong>Brevia 2.1 · Local AI meeting assistant</strong><br />Follow bilingual captions, capture decisions, and jump from meeting minutes back to the original conversation.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases/latest"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Latest release" /></a>
@@ -40,7 +40,9 @@ The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **
 
 ### Minutes and fishbone diagrams
 
-Generate minutes with seven sections. Use the cause diagram to check transcript quotes and replay the recording. Export the minutes and cause analysis separately. Filter the transcript by speaker or rename a speaker throughout one meeting.
+Longer Chinese and English meetings can produce topic-based minutes with each item checked against the source; other cases retain seven sections. Use the cause diagram to check transcript quotes and replay the recording. Export the minutes and cause analysis separately. Filter the transcript by speaker or rename a speaker throughout one meeting.
+
+Save shared or workspace-specific terms in the glossary, and confirm AI-suggested terms, definitions and replacements. In minutes, view definitions or restore the original wording; the source transcript stays unchanged.
 
 [![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 

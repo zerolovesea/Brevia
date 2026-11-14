@@ -44,7 +44,9 @@ El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos
 
 [![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-El acta tiene siete secciones. El diagrama de causas permite comprobar las citas y escuchar la grabación. El acta y el análisis se exportan por separado. Puedes filtrar la transcripción por hablante o cambiar su nombre en toda la reunión.
+Las reuniones largas en chino o inglés pueden generar actas por temas, verificadas con las intervenciones originales; los demás casos mantienen siete secciones. El diagrama de causas permite comprobar las citas y escuchar la grabación. El acta y el análisis se exportan por separado. Puedes filtrar la transcripción por hablante o cambiar su nombre en toda la reunión.
+
+Guarda términos generales o del espacio de trabajo en el glosario y confirma términos, definiciones y sustituciones sugeridos por la IA. En el acta puedes consultar definiciones o restaurar el término original; la transcripción no cambia.
 
 ### Notas con IA
 

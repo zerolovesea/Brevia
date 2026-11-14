@@ -46,6 +46,10 @@ function transcriptEvidenceLinks(claims, accepted, historicalRows) {
 }
 const claimKindLabels = { decision: '决定', action: '待办', cause: '原因分析', conclusion: '结论' };
 function renderEvidenceClaim(claim, accepted, branch = null, inline = false, readOnly = false) {
+  if (claim.status === 'pending') {
+    if (inline) return '';
+    return `<details class="evidence-claim" data-ink="${Number(branch?.index || 0) % 4}"><summary><span class="claim-reading"><strong>${escapeHtml(evidenceDisplayText(claim))}</strong></span></summary><small>${escapeHtml(t('正在核对引用'))}</small></details>`;
+  }
   const sourceLabel = { changed: '原文已变化', thin: '依据较少', missing: '缺少原文依据' }[
     claim.status
   ];
@@ -95,8 +99,10 @@ function renderEvidenceClaim(claim, accepted, branch = null, inline = false, rea
       if (reason) label = readableCauseLabel(reason);
     }
   }
+  const quotes = `<div class="evidence-quotes">${history}${quoteRows}${edit}</div>`;
+  const body = inline && !readOnly ? `<template>${quotes}</template>` : quotes;
   const stem = branch || inline ? '' : '<span class="claim-stem" aria-hidden="true"></span>';
-  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}"${readOnly ? ' data-evidence-readonly' : ''} data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(label)}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
+  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}"${readOnly ? ' data-evidence-readonly' : ''} data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(label)}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary>${body}</details>`;
 }
 
 // 使用实际排版后的端点。长段落换行、展开引文和窗口缩放都可能改变相邻分支的位置。
@@ -380,7 +386,20 @@ function editEvidenceClaim(claim, meetingId) {
   dialog.showModal();
   input.focus();
 }
+function mountInlineQuote(card) {
+  const template = card.querySelector(':scope > template');
+  if (template) template.replaceWith(template.content);
+}
+document.addEventListener(
+  'toggle',
+  (event) => {
+    if (event.target.matches?.('details.evidence-inline[open]')) mountInlineQuote(event.target);
+  },
+  true,
+);
 document.addEventListener('click', (event) => {
+  const disclosure = event.target.closest('.evidence-inline > summary');
+  if (disclosure && !disclosure.parentElement.open) mountInlineQuote(disclosure.parentElement);
   const timestamp = event.target.closest('[data-summary-seek]');
   if (timestamp)
     return seekEvidence({ start_ms: Number(timestamp.dataset.summarySeek) * 1000 }, true);
@@ -416,6 +435,9 @@ document.addEventListener('click', (event) => {
   }
   const card = event.target.closest('[data-evidence-id]');
   if (!card || card.hasAttribute('data-evidence-readonly')) return;
+  // Opening a citation is a reading action. Only playback and locate controls seek audio.
+  if (!event.target.closest('[data-edit-evidence], [data-play-evidence], [data-locate-evidence]'))
+    return;
   const claims =
     card.dataset.evidenceDocument === 'notes'
       ? uiData.detail.acceptedClaims
@@ -448,8 +470,6 @@ document.addEventListener('click', (event) => {
   }
   const play = event.target.closest('[data-play-evidence]');
   if (play) seekEvidence(claim.sources[Number(play.dataset.playEvidence)], true);
-  else if (event.target.closest('summary') && !card.open)
-    seekEvidence(claim.sources.find((source) => source.seekable !== false));
 });
 
 document.addEventListener('change', async (event) => {

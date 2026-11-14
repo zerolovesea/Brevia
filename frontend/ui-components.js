@@ -145,6 +145,7 @@ function renderSettingsNavigation(kind) {
         ['models', '模型库', 'model'],
         ['ai-features', 'AI 功能', 'ai'],
         ['agent-settings', 'Agent 与 MCP', 'advanced'],
+        ['glossary', '术语库', 'notebook'],
         ['speaker-profiles', '声纹管理', 'microphone'],
       ],
     ],
@@ -1790,18 +1791,27 @@ function renderSummaryDocument(markdown, summarySources = new Map()) {
     )
     .join('');
 }
-function renderSummaryProgressBody(progress, hasDocument = false) {
-  if (hasDocument && !progress?.parts_total && !progress?.preview?.length) return '';
-  const stage =
-    progress?.stage === 'summary.assembling'
-      ? '正在汇总纪要'
-      : progress?.stage === 'summary.saving'
-        ? '正在保存…'
-        : progress?.parts_total
-          ? '正在整理片段'
-          : '正在生成会议纪要';
-  const count = progress?.parts_total ? ` · ${progress.parts_done}/${progress.parts_total}` : '';
-  return `${hasDocument && !progress?.parts_total ? '' : `<header role="status">${hasDocument ? '' : `<span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span>`}${escapeHtml(t(stage) + count)}</header>`}${progress?.preview?.length ? `<h3>${escapeHtml(t('阶段要点'))}</h3><ul>${progress.preview.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>` : ''}`;
+function summaryProgressText(progress) {
+  const labels = {
+    'summary.verifying': '正在核对引用',
+    'summary.saving': '正在保存…',
+    'summary.assembling': '正在汇总纪要',
+    'summary.extracting': '正在整理片段',
+    'summary.prepare': '准备中',
+  };
+  const stage = progress?.stage;
+  const count =
+    stage === 'summary.extracting' && progress.parts_total
+      ? ` · ${progress.parts_done}/${progress.parts_total}`
+      : '';
+  return t(labels[stage] || '正在生成会议纪要') + count;
+}
+function renderSummaryProgressBody(progress) {
+  return progress?.preview?.length &&
+    !progress.draft_summary &&
+    progress.stage !== 'summary.verifying'
+    ? `<h3>${escapeHtml(t('阶段要点'))}</h3><ul>${progress.preview.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>`
+    : '';
 }
 /** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
@@ -1823,7 +1833,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="summary-participant-list">${participants.map((person) => speakerMenuTrigger(person, palette, 'summary-participant-person')).join('')}</div></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${generating && !editing ? `<section class="summary-in-progress" data-summary-in-progress>${renderSummaryProgressBody(progress, Boolean(markdown))}</section>` : ''}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? '' : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${generating && !editing ? `<section class="summary-in-progress" data-summary-in-progress>${renderSummaryProgressBody(progress)}</section>` : ''}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? '' : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1920,9 +1930,9 @@ function renderDetailTabbar() {
       : `<button class="tabbar-action" data-open-summary-edit type="button"${!summary.markdown || summary.generating ? ' disabled' : ''} aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
     if (
       !editing &&
-      (summary.markdown || (!summary.generating && (summary.blocked || summary.waitingModels)))
+      (summary.markdown || summary.generating || summary.blocked || summary.waitingModels)
     )
-      context = `${summary.markdown ? `<button class="tabbar-action" data-copy-summary type="button" aria-label="${t('复制会议纪要')}">${interfaceIcon('copy')}${t('复制')}</button>` : ''}<button class="tabbar-action" ${summary.markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${disabled}${blocked}${summary.generating ? ' aria-busy="true"' : ''}>${generationIcon}${t(summary.generating ? '正在生成会议纪要' : summary.markdown ? '重新生成' : '生成纪要')}</button>`;
+      context = `${summary.markdown ? `<button class="tabbar-action" data-copy-summary type="button" aria-label="${t('复制会议纪要')}">${interfaceIcon('copy')}${t('复制')}</button>` : ''}<button class="tabbar-action" ${summary.markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${disabled}${blocked}${summary.generating ? ' aria-busy="true"' : ''}>${generationIcon}${summary.generating ? `<span data-summary-stage role="status">${escapeHtml(summaryProgressText(summary.progress))}</span>` : t(summary.markdown ? '重新生成' : '生成纪要')}</button>`;
   } else {
     status = editing
       ? `<span class="save-state" data-transcript-save-status role="status">${escapeHtml(t({ unchanged: '未修改', dirty: '已修改 · 尚未保存', saving: '正在保存…', failed: '保存失败，修改仍保留', saved: '已保存' }[saveState] || '未修改'))}</span>`
@@ -2096,6 +2106,7 @@ function renderMeetingDetail() {
     palette,
   });
   syncDetailSummaryPanel();
+  if (typeof glossaryUI !== 'undefined') glossaryUI.paint();
   const summaryBody = reading.querySelector('.summary-body');
   if (railState && summaryBody) summaryBody.scrollTop = railState.summaryScroll;
   const summaryPreview = document.querySelector('#detail-view .summary-preview');

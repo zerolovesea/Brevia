@@ -141,7 +141,7 @@ function annotateDates(text, meetingDate) {
 function evidenceInstructions(template, language) {
   if (!Object.hasOwn(TEMPLATES, template)) throw new Error('Unknown meeting template');
   if (language === 'zh')
-    return `按所选模板组织议题讨论（${TEMPLATES[template]}）。每个议题用三级标题，发生了什么、有哪些观点写在正文中。如果发言明确解释了原因，把问题作为三级标题，在该标题下单列“- 原因说明 [[cause:S2,S4]]”。原话必须明确连接该问题和原因。关键数字、开放问题和时间先后不能用 cause 标记，不能从资料缺失推断待办或待确认事项。结论、决定、行动项分别使用 [[conclusion:S1]]、[[decision:S2]]、[[action:S3]]；段号必须来自对应原话。合并时保留事实、数据、来源标记、明确的术语修订、原相对日期及所附日历注释，不自行换算日期。`;
+    return `按业务议题组织（${TEMPLATES[template]}）。摘要综合整场会议，每条用自己的话说明一个业务主题、重要变化及其意义。议题讨论展开方案、比较依据、限制和未定事项；发言解释了原因时，以包含具体主体和结果的独立问题作三级标题，下面每条用完整句解释背景、机制、如何影响该结果，保留推测与分歧。只将明确拍板的选择列为决定，试验结果列为结论。每条正文末尾附支撑整条总结的原始段号，如 [[conclusion:S1,S5]]；决定、行动、因果解释分别用 decision、action、cause。用多段发言共同支撑跨轮总结；不要另抄逐字稿，应用会按段号展示原话。保留原文的数字、专名及日期表述。`;
   return `Write in ${language}. ${TEMPLATES[template]} Preserve facts, decisions, actions, open questions, figures and explicitly stated causes during compression. End each substantive bullet with its supporting transcript IDs, e.g. [[decision:S1,S3]]. Use conclusion, decision, action or cause. Never guess IDs. Under Topic Discussion use a level-three problem heading and a distinct [[cause:...]] bullet only when the source explicitly connects that problem and cause. Preserve uncertainty, relative date wording and supplied calendar annotations. Never infer deadlines or causes from chronology. Preserve explicit terminology corrections.`;
 }
 function snapshot(row, seekable = true) {
@@ -180,7 +180,7 @@ function restrictSources(markdown, allowed) {
         .join(',')}]]`,
   );
 }
-// Compare both sides within the same source sentence so a nearby, unrelated cause cannot qualify.
+// Match reason and outcome on their respective sides of a spoken causal connection.
 const causalLink =
   /导致|造成|致使|因此|从而|所以(?:嗯)?(?:导致)?|因为|是由于|原因是|缘于|のため|によって|때문에|из-за|поэтому|привело к|\b(?:because(?: of)?|due to|led to|resulted in|therefore|caused|debido a|por eso|provocó|à cause de|entraîné|car|deshalb|wegen|verursachte)\b/iu;
 const reverseLink = /因为|是由于|原因是|缘于|because|due to|debido a|à cause de|car|wegen|из-за/iu;
@@ -248,6 +248,76 @@ function supportedRelation(statement, heading, sources, marked) {
     /并非|并不是|不是.{0,16}(?:导致|造成)|不会导致|未导致|没有导致|not (?:because|due to)|did not cause/iu;
   const uncertain =
     /可能|怀疑|猜测|是不是|是否|并非|并不是|不一定|未必|might|perhaps|possibly|not because|did not cause/iu;
+  if (marked) {
+    const attributed = statement.match(/^(?:因为|由于)([^，,。]{2,})[，,]/u)?.[1];
+    if (attributed) {
+      const predicate = (value) => normalize(value).replace(/比较|相对|较为|较/gu, '');
+      if (
+        predicate(attributed).length >= 4 &&
+        (predicate(heading).endsWith(predicate(attributed)) ||
+          (predicate(heading).slice(-3) === predicate(attributed).slice(-3) &&
+            anchored(attributed, heading) &&
+            anchored(heading, attributed)))
+      )
+        return;
+      const subject = attributed.match(
+        /^([\p{L}]{2,6})(?:太|过于|非常|特别|十分)[\p{L}]{1,2}$/u,
+      )?.[1];
+      if (
+        sources.every((source) => !anchored(attributed, source.text)) ||
+        (subject && sources.every((source) => !normalize(source.text).includes(normalize(subject))))
+      )
+        return;
+    }
+  }
+  // A speaker can finish the outcome, pause, then explain it with “因为…”.
+  if (
+    marked &&
+    !(split(statement).length && sources.some((source) => source.text.includes(statement.trim())))
+  ) {
+    for (const source of sources) {
+      const sentences = source.text.match(/[^。！？.!?]+[。！？.!?]?/gu) || [];
+      for (let i = 0; i < sentences.length; i++) {
+        const sentence = sentences[i];
+        const previous = sentences[i - 1];
+        for (const connector of sentence.matchAll(new RegExp(causalLink, 'giu'))) {
+          const prefix = sentence.slice(0, connector.index);
+          const before = /[\p{L}\p{N}]/u.test(prefix.replace(/可能|也许|[嗯呃啊哦]/gu, ''))
+            ? prefix
+            : previous;
+          if (!before || /[？?]/u.test(before + sentence)) continue;
+          const after = sentence.slice(connector.index + connector[0].length);
+          const near = (value, end) => {
+            const clauses = value
+              .split(/[，,；;]/u)
+              .map((item) => item.trim())
+              .filter(Boolean);
+            return (end ? clauses.slice(-2) : clauses.slice(0, 2)).join(' ');
+          };
+          const [reason, outcome] = reverseLink.test(connector[0])
+            ? [near(after, false), near(before, true)]
+            : [near(before, true), near(after, false)];
+          if (
+            negative.test(before + sentence) ||
+            (uncertain.test(before + sentence) && !uncertain.test(statement + heading))
+          )
+            continue;
+          const ownPair = pairs.filter((pair) => pair[0] !== statement || pair[1] !== heading);
+          if (
+            ownPair.length &&
+            ownPair.every((pair) => !anchored(heading, pair[1]) || !anchored(pair[1], outcome))
+          )
+            continue;
+          if (
+            anchored(statement.replace(causalLink, ''), reason) &&
+            anchored(heading.replace(causalLink, ''), outcome) &&
+            !(anchored(statement, outcome) && anchored(heading, reason))
+          )
+            return heading.replace(/^(?:导致|造成|致使|因为)\s*/u, '') || heading;
+        }
+      }
+    }
+  }
   for (const source of sources) {
     for (const match of source.text.matchAll(/[^。！？.!?]+[。！？.!?]?/gu)) {
       const sentence = match[0];
@@ -281,6 +351,13 @@ function supportedRelation(statement, heading, sources, marked) {
       )
         continue;
       if (pair[0] === pair[1]) continue;
+      if (
+        marked &&
+        split(statement).length &&
+        !anchored(heading, pair[1]) &&
+        !source.text.includes(statement.trim())
+      )
+        continue;
       return pair[1].replace(/^[\s，,:：]+|[。.,，\s]+$/gu, '');
     }
   }
@@ -358,14 +435,16 @@ function restoreCitedCauses(markdown, segments, headings) {
     lines.splice(item.index, 0, item.line);
   return lines.join('\n');
 }
-function parseClaims(markdown, segments, seekable = true, headings) {
+function parseClaims(markdown, segments, seekable = true, headings, recover = true) {
   const output = [],
     claims = [],
     byLabel = new Map(segments.map((s, i) => ['S' + (i + 1), s]));
   let section = '',
     mainSection = '',
     fence = '';
-  const lines = splitLines(headings ? restoreCitedCauses(markdown, segments, headings) : markdown);
+  const lines = splitLines(
+    headings && recover ? restoreCitedCauses(markdown, segments, headings) : markdown,
+  );
   for (const [index, original] of lines.entries()) {
     const stripped = original.trim(),
       delimiter = stripped.match(/^(`{3,}|~{3,})/);
@@ -458,12 +537,23 @@ function parseClaims(markdown, segments, seekable = true, headings) {
           .at(-1)
           .replace(/^[ ：:，,。.]+|[ ：:，,。.]+$/g, '') || section;
     }
-    if (headings && mainSection === headings[2] && ['cause', 'conclusion'].includes(kind)) {
+    if (
+      headings &&
+      mainSection === headings[2] &&
+      recover &&
+      ['cause', 'conclusion'].includes(kind)
+    ) {
       const marked = kind === 'cause' && section !== mainSection;
       const result = supportedRelation(text, section, sources, marked);
       if (result) {
         kind = 'cause';
-        problem = result;
+        problem = result.split(/[,，；;]\s*(?:并且|并按|同时|另有|also\b)/iu)[0];
+        const contrasted = problem.match(/[,，]\s*(?:但|但是|然而)(.{3,})$/u);
+        if (
+          contrasted &&
+          sources.some((source) => source.text.includes(contrasted[1].replace(/了$/, '')))
+        )
+          problem = contrasted[1];
       } else {
         kind = 'conclusion';
       }
@@ -612,6 +702,7 @@ function normalizeSummaryMarkdown(markdown) {
     .join('');
 }
 module.exports = {
+  supportedRelation,
   TEMPLATES,
   SUMMARY_HEADINGS,
   clock,

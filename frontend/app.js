@@ -755,6 +755,7 @@ function configureSettingsPage(kind) {
       'ai-assist',
       'advanced-settings',
       'speaker-profiles',
+      'glossary',
       'device-connection',
       'agent-settings',
       'whats-new',
@@ -1940,6 +1941,7 @@ function summaryTaskLabel(stage) {
       'summary.prepare': copy[1],
       'summary.generating': copy[2],
       'summary.saving': copy[3],
+      'summary.verifying': t('正在核对引用'),
       'summary.extracting': t('正在整理片段'),
       'summary.assembling': t('正在汇总纪要'),
       'summary.complete': copy[4],
@@ -1948,10 +1950,118 @@ function summaryTaskLabel(stage) {
     t('准备中')
   );
 }
+// 分批快照会替换 DOM，保留每条内容的动画起点以免反复播放。
+let summaryRevealTimes = new Map();
+function revealSummaryUpdates(final = false, root = document.querySelector('#detail-view')) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const now = performance.now();
+  const counts = new Map();
+  let next = now;
+  const entries = root.querySelectorAll(
+    '.summary-body :is(li,p,h1,h2,h3,td,th), .summary-in-progress li, .detail-cause-rail :is(h4,.evidence-claim)',
+  );
+  const interval = Math.min(60, 850 / Math.max(1, entries.length));
+  for (const el of entries) {
+    if (
+      el.closest('details:not([open]) .evidence-quotes, .cause-tree-more:not([open]), [hidden]') ||
+      el.closest('.summary-body details')
+    )
+      continue;
+    const bubble = !!el.closest('.detail-cause-rail');
+    const walker = document.createTreeWalker(
+      bubble ? el.querySelector('summary strong') || el : el,
+      NodeFilter.SHOW_TEXT,
+    );
+    const nodes = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (
+        node.data.trim() &&
+        (bubble || node.parentElement.closest('li,p,h1,h2,h3,td,th') === el) &&
+        !node.parentElement.closest('.summary-time, .evidence-inline, .glossary-term-info')
+      )
+        nodes.push(node);
+    }
+    const text = nodes.map((n) => n.data).join('');
+    if (!text) continue;
+    const label = el.tagName + ':' + text;
+    const n = counts.get(label) || 0;
+    counts.set(label, n + 1);
+    const key = label + ':' + n;
+    let start = summaryRevealTimes.get(key);
+    if (start === undefined) {
+      start = next;
+      next += interval;
+      summaryRevealTimes.set(key, start);
+    }
+    const duration = bubble ? 350 : 220;
+    const sweep = bubble ? 0 : Math.min(750, text.length * 12);
+    if (now >= start + duration + sweep) continue;
+    function animate(node, frames, at) {
+      if (now >= at + duration) return;
+      const effect = node.animate(frames, {
+        duration,
+        delay: Math.max(0, at - now),
+        easing: 'cubic-bezier(.2,.7,.3,1)',
+        fill: 'backwards',
+      });
+      effect.currentTime = Math.max(0, now - at);
+      return effect;
+    }
+    if (bubble) {
+      animate(
+        el,
+        [
+          { opacity: 0, clipPath: 'inset(7% 12% 7% 0 round 12px)' },
+          { opacity: 1, clipPath: 'inset(0% 0% 0% 0 round 6px)' },
+        ],
+        start,
+      );
+    } else {
+      let offset = 0;
+      let lastEffect;
+      const wrappers = [];
+      for (const node of nodes) {
+        const fragment = document.createDocumentFragment();
+        const chars = Array.from(node.data);
+        const size = Math.max(3, Math.ceil(text.length / 24));
+        for (let i = 0; i < chars.length; i += size) {
+          const chunk = chars.slice(i, i + size).join('');
+          const span = document.createElement('span');
+          span.textContent = chunk;
+          fragment.append(span);
+          lastEffect =
+            animate(
+              span,
+              [{ opacity: 0 }, { opacity: 1 }],
+              start + (sweep * offset) / text.length,
+            ) || lastEffect;
+          wrappers.push(span);
+          offset += chunk.length;
+        }
+        node.replaceWith(fragment);
+      }
+      const unwrap = () => {
+        if (!el.isConnected) return;
+        for (const span of wrappers) span.replaceWith(...span.childNodes);
+        el.normalize();
+        if (el.closest('.summary-body')) glossaryUI.paint(el);
+      };
+      if (lastEffect) lastEffect.onfinish = unwrap;
+      else unwrap();
+    }
+  }
+  if (final)
+    for (const stamp of root.querySelectorAll(
+      '.summary-body .summary-time, .summary-body .evidence-inline, .detail-cause-rail .claim-reading small',
+    ))
+      stamp.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 340, easing: 'ease-out' });
+}
 function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepare', meetingId) {
   clearTimeout(summaryDismissTimer);
   if (meetingId) {
     summaryDraftProgress = undefined;
+    summaryRevealTimes.clear();
     summaryGeneratingMeetingId = meetingId;
     if (meetingId === currentMeetingDetail?.id) applyBackendDetail(currentMeetingDetail);
   }
@@ -3458,6 +3568,10 @@ function renderModal(kind) {
     renderAiAssistModal();
     return;
   }
+  if (kind === 'glossary') {
+    glossaryUI.render();
+    return;
+  }
   if (kind === 'speaker-profiles') {
     renderSpeakerProfileModal();
     return;
@@ -3918,6 +4032,10 @@ async function openModal(kind) {
     settingsModal.querySelector('.modal-body').dataset.contentKind === kind &&
     !settingsModal.classList.contains('modal-leave');
   if (same) return;
+  if (kind === 'glossary') {
+    await glossaryUI.refresh();
+    if (revision !== modalRequestRevision) return;
+  }
   if (kind === 'agent-settings') {
     try {
       const value = await window.brevia.agent.settings.get();
@@ -4703,6 +4821,7 @@ function openOnboardingAi(settingsMode = false) {
         ${settingsMode ? `<button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button>` : ''}
       </div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div>
     </section>
+    <section class="onboarding-section"><h2>${escapeHtml(t('术语库'))}</h2><div class="glossary-sample"><span>A C D</span><span>ACD · ${escapeHtml(t('平均通话时长'))}</span></div></section>
     ${settingsMode ? '' : `<div class="onboarding-shared-service"><span>${interfaceIcon('model')}<b>${escapeHtml(copy.serviceTitle)}</b><small>${escapeHtml(copy.serviceHint)}</small></span><button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button></div>`}
     ${settingsMode ? `<p class="onboarding-privacy-hint">${interfaceIcon('info')}${escapeHtml(t('在线 AI 会将相关文字发送至所选服务商。'))}</p>` : ''}</div>
     <footer class="onboarding-ai-footer">${settingsMode ? '' : `<p>${escapeHtml(copy.adjustHint)}</p>`}<div class="onboarding-actions">${settingsMode ? '' : `<button class="secondary onboarding-previous" data-onboarding-back-language type="button">${escapeHtml(t('上一步'))}</button>`}<button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : t('下一步'))}${settingsMode ? '' : interfaceIcon('arrow-right')}</button></div></footer>
@@ -11975,24 +12094,67 @@ if (window.brevia) {
     );
     summaryDraftProgress = { ...summaryDraftProgress, ...payload };
     if (currentMeetingDetail?.id !== payload.meeting_id) return;
+    if (payload.draft_summary && !uiData.detail.summaryEditing) {
+      const detail = document.querySelector('#detail-view');
+      const panel = detail.querySelector('[data-detail-panel="summary"] .summary-preview');
+      const rail = detail.querySelector('.detail-cause-rail');
+      if (!panel || !rail) applyBackendDetail(currentMeetingDetail);
+      else {
+        const summary = {
+          ...uiData.detail.summary,
+          ...payload.draft_summary,
+          generating: true,
+          progress: summaryDraftProgress,
+        };
+        uiData.detail.summary = summary;
+        const scroll = panel.querySelector('.summary-body')?.scrollTop || 0;
+        const railScroll = rail.querySelector('.detail-cause-scroll').scrollTop;
+        const opened = new Set(
+          [...rail.querySelectorAll('[data-cause-more][open]')].map((el) => el.dataset.causeMore),
+        );
+        panel.outerHTML = renderMeetingSummary(summary);
+        rail.outerHTML = renderDetailCauseRail(
+          summary.claims || [],
+          summary.markdown,
+          currentMeetingDetail.id,
+        );
+        for (const more of detail.querySelectorAll('[data-cause-more]'))
+          more.open = opened.has(more.dataset.causeMore);
+        const header = detail.querySelector('.detail-content-header');
+        if (header && detailActiveTab === 'summary') header.outerHTML = renderDetailTabbar();
+        glossaryUI.paint();
+        const body = detail.querySelector('.summary-body');
+        if (body) body.scrollTop = scroll;
+        detail.querySelector('.detail-cause-scroll').scrollTop = railScroll;
+        syncEvidenceReading();
+        syncSummaryFeedback();
+      }
+      revealSummaryUpdates();
+      return;
+    }
     uiData.detail.summary.progress = summaryDraftProgress;
+    const status = document.querySelector('#detail-view [data-summary-stage]');
+    if (status) status.textContent = summaryProgressText(summaryDraftProgress);
     const panel = document.querySelector('#detail-view [data-summary-in-progress]');
-    if (panel)
-      panel.innerHTML = renderSummaryProgressBody(
-        summaryDraftProgress,
-        Boolean(uiData.detail.summary.markdown),
-      );
+    const preview = renderSummaryProgressBody(summaryDraftProgress);
+    if (panel && panel._previewMarkup !== preview) {
+      panel._previewMarkup = preview;
+      panel.innerHTML = preview;
+      if (preview) revealSummaryUpdates(false, panel);
+    }
   });
   window.brevia.on('summary.ready', ({ meeting_id, summary, summary_stale }) => {
     if (summaryGeneratingMeetingId && summaryGeneratingMeetingId !== meeting_id) return;
     summaryDraftProgress = undefined;
     summaryGeneratingMeetingId = undefined;
-    if (currentMeetingDetail?.id === meeting_id)
+    if (currentMeetingDetail?.id === meeting_id) {
       applyBackendDetail({
         ...currentMeetingDetail,
         summary: { data: summary },
         correction: { ...currentMeetingDetail.correction, summary_stale },
       });
+      revealSummaryUpdates(true);
+    }
     showSummaryComplete();
   });
   window.brevia.on('summary.finished', ({ meeting_id }) => {
@@ -12137,10 +12299,10 @@ if (window.brevia) {
       return;
     }
     if (event.target.closest('[data-copy-summary]')) {
-      const markdown = currentMeetingDetail?.summary?.data?.markdown;
+      const markdown = uiData.detail.summary?.markdown;
       if (markdown)
         void window.brevia?.share
-          .copyText({ text: markdown })
+          .copyText({ text: glossaryUI.copy(markdown) })
           .then(() => showToast(t('已复制到剪贴板'), undefined, 'success'))
           .catch((error) => showToast(error.message, undefined, 'error'));
       return;

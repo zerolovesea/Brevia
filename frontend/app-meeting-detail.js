@@ -150,7 +150,9 @@ function applyBackendDetail(meeting) {
   uiData.detail.translationPending = isMeetingTranslationPending(meeting.id);
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
-  const summary = meeting.summary?.data;
+  const summary =
+    (summaryGeneratingMeetingId === meeting.id && summaryDraftProgress?.draft_summary) ||
+    meeting.summary?.data;
   uiData.detail.acceptedClaims = meeting.accepted_claims || [];
   const summaryBlocked = meetingActive;
   const summaryGenerating = summaryGeneratingMeetingId === meeting.id;

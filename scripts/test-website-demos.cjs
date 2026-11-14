@@ -28,8 +28,9 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
   const win = await context.newPage();
   let cdp;
   const errors = [];
+  win.on('pageerror', (error) => errors.push(error.message));
   win.on('console', (event) => {
-    if (event.type() === 'error') errors.push(event.text());
+    if (event.type() === 'error') errors.push(event.location().url + ' ' + event.text());
   });
   async function capture(file) {
     await wait(350);
@@ -404,7 +405,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
                   progress:Number(task.querySelector('[role=progressbar]').getAttribute('aria-valuenow')),
                   step:task.dataset.stage, canGenerate:!!document.querySelector('[data-generate-summary]:not([disabled])'),
                   canCopy:!!document.querySelector('[data-copy-summary]'),
-                  pending:!!document.querySelector('[data-summary-in-progress] [role=status] .summary-generating-icon')};
+                  pending:!!document.querySelector('.detail-content-toolbar [aria-busy=true] [data-summary-stage]')};
               });
             })()`);
           assert.equal(generation[0].taskVisible, false);
@@ -676,7 +677,10 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         assert.equal(layout.stars, '1.2K');
         assert.equal(layout.media, 0, 'Application renders live DOM, not screenshots');
         assert.equal(layout.controls, 0);
-        assert.ok(layout.currentStyles && layout.fits && layout.canvas >= 150);
+        assert.ok(
+          layout.currentStyles && layout.fits && layout.canvas >= 150,
+          JSON.stringify({ locale, width, height, layout }),
+        );
         if (width >= 1000)
           assert.ok(layout.frameWidth >= 840 - 1, 'The laptop preview stays readable');
         assert.equal(layout.backend, false, 'Demonstration has no native backend');
@@ -723,12 +727,14 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       '转写与 AI 笔记',
       '鱼骨图',
       '手机协作',
+      '术语库',
       'Agent 与 MCP',
       '会议胶囊',
     ]);
     for (const [feature, phase] of [
       ['live', 1],
       ['fishbone', 3],
+      ['glossary', 5],
       ['capsule', 2],
       ['agent', 4],
       ['phone', 0],
@@ -748,13 +754,37 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       const doc = frame.contentDocument;
       const capsule = doc.querySelector('iframe:not(.pair-phone)').contentDocument;
       const seek = (time) => frame.contentWindow.appMotion.render(time);
+      const phoneSizes = [];
       const steps = [33000, 35000, 38900].map((time) => {
         seek(time);
+        const bounds = doc.querySelector('.pair-shared-preview .dmp-phone').getBoundingClientRect();
+        phoneSizes.push([bounds.width, bounds.height]);
         return doc.querySelector('.pair-scene').dataset.step;
       });
       const phoneUI =
         !!doc.querySelector('#mobile-pair-dialog[open] #mobile-qr') &&
         !!doc.querySelector('.pair-phone').contentWindow.showMeetingPreview;
+      seek(37000);
+      const pairedCaption =
+        doc.querySelector('#transcript-scroll .segment-copy > p').textContent ===
+        doc.querySelector('.pair-shared-preview [data-preview-transcript="0"]').textContent;
+      const sharedPhone = !!doc.querySelector('.pair-shared-preview .dmp-phone')?.checkVisibility();
+      seek(9900);
+      const completeSources = [...doc.querySelectorAll('#transcript-scroll .segment')].map(
+        (row) => row.querySelector('.segment-copy > p').textContent,
+      );
+      const translationFollowsSource = [0, 3500, 4400, 4800, 5800, 7000, 9800].every((time) => {
+        seek(time);
+        return [...doc.querySelectorAll('#transcript-scroll .segment')].every((row, i) => {
+          const translation = row.querySelector('.translation');
+          return (
+            !translation ||
+            translation.hidden ||
+            row.hidden ||
+            row.querySelector('.segment-copy > p').textContent === completeSources[i]
+          );
+        });
+      });
       seek(200);
       const identifying = doc.querySelector('.segment-speaker').textContent;
       seek(4800);
@@ -793,17 +823,38 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       const pauseIcon = capsule.querySelector('.capsule-pause svg');
       seek(18100);
       const stableCapsule = pauseIcon === capsule.querySelector('.capsule-pause svg');
+      seek(20100);
+      const topic = doc.querySelector('.cause-tree-topic');
+      const hiddenTopic = topic.style.opacity === '0';
+      seek(60500);
+      const prompt = doc.querySelector('#glossary-prompt');
+      const termEntry =
+        prompt.matches(':popover-open') && prompt.querySelector('[name=name]').value === 'LLM';
+      seek(63000);
+      const corrected = doc.querySelector('.summary-body .glossary-mark')?.textContent;
       seek(28000);
       return {
         steps,
+        pairedCaption,
+        samePhoneSize: phoneSizes.every(
+          ([width, height]) =>
+            Math.abs(width - phoneSizes[0][0]) < 1 &&
+            Math.abs(height - phoneSizes[0][1]) < 1 &&
+            Math.abs(width / height - 9 / 19.5) < 0.002,
+        ),
+        sharedPhone,
         phoneUI,
         readable,
         fullColor,
         metrics,
         stableCard,
         stableCapsule,
+        hiddenTopic,
+        termEntry,
+        corrected,
         identifying,
         recognized,
+        translationFollowsSource,
         translated,
         aiVisible,
         expanded,
@@ -812,14 +863,21 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     });
     assert.deepEqual(feature, {
       steps: ['scan', 'start', 'record'],
+      pairedCaption: true,
+      samePhoneSize: true,
+      sharedPhone: true,
       phoneUI: true,
       readable: true,
       fullColor: true,
       metrics: 4,
       stableCard: true,
       stableCapsule: true,
+      hiddenTopic: true,
+      termEntry: true,
+      corrected: 'LLM',
       identifying: '识别中…',
       recognized: '林晓',
+      translationFollowsSource: true,
       translated: true,
       aiVisible: true,
       expanded: true,
@@ -833,7 +891,10 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       ),
     );
     await win.clock.runFor(4000);
-    assert.equal(await win.locator('.demo').getAttribute('data-phase'), '1');
+    assert.ok(await win.locator('#feature-live').isChecked());
+    await win.clock.runFor(14800);
+    assert.ok(await win.locator('#feature-fishbone').isChecked());
+    await win.locator('label[for="feature-live"]').click();
     await win.locator('.demo').click();
     await win.clock.runFor(11000);
     assert.equal(await win.locator('.demo').getAttribute('data-phase'), '1');
@@ -893,7 +954,10 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     ]);
     await agent.locator('.agent-reply').waitFor();
     await win.clock.runFor(3000);
-    assert.equal(await agent.getAttribute('data-screen'), 'settings');
+    assert.ok(await win.locator('#feature-agent').isChecked());
+    await win.clock.runFor(16000);
+    assert.ok(await win.locator('#feature-capsule').isChecked());
+    await win.locator('label[for="feature-agent"]').click();
     await win.emulateMedia({ reducedMotion: 'reduce' });
     await win.locator('.demo.is-paused').waitFor();
     await agent.locator('.agent-reply').waitFor();

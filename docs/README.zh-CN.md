@@ -1,6 +1,6 @@
 <h1 align="center"><img src="assets/brevia-hero.gif" width="100%" alt="Brevia · 言录" /></h1>
 
-<p align="center"><strong>Brevia 2.0 · 本地 AI 会议助手</strong><br />会中看双语字幕、记下决定，会后从纪要回到每一句原话。</p>
+<p align="center"><strong>Brevia 2.1 · 本地 AI 会议助手</strong><br />会中看双语字幕、记下决定，会后从纪要回到每一句原话。</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases/latest"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Latest release" /></a>
@@ -40,7 +40,9 @@ Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次�
 
 ### 会议纪要与鱼骨图
 
-生成七章会议纪要，在右侧原因图核对字幕原话并回听录音。纪要和原因分析可以分别导出。逐字稿支持按说话人筛选，也可以一次修改该说话人在本场会议中的名字。
+较长的中英文会议可按业务议题生成纪要，并逐项核对原话；其他情况保留七章结构。在右侧原因图核对字幕原话并回听录音。纪要和原因分析可以分别导出。逐字稿支持按说话人筛选，也可以一次修改该说话人在本场会议中的名字。
+
+术语库保存工作区或通用词条，可确认 AI 发现的名词、释义与替换词。纪要中的术语可查看释义或恢复原词；原始逐字稿保持不变。
 
 [![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](assets/showcase/desktop/zh/summary.png)](assets/showcase/desktop/zh/summary.gif)
 

@@ -97,6 +97,22 @@ class StoreBase {
     this.db.close();
   }
   migrate() {
+    if (!this.one("SELECT 1 FROM app_meta WHERE key='glossary_examples_v1'")) {
+      for (const [name, meaning] of [
+        ['LLM', '大语言模型（Large Language Model），通过大量文本训练，可用于生成和理解语言。'],
+        [
+          'RAG',
+          '检索增强生成（Retrieval-Augmented Generation），先检索相关资料，再用资料支持模型生成回答。',
+        ],
+        ['ASR', '自动语音识别（Automatic Speech Recognition），将语音转换为文字。'],
+      ])
+        this.run(
+          "INSERT OR IGNORE INTO glossary_entries(scope,name,meaning) VALUES('',?,?)",
+          name,
+          meaning,
+        );
+      this.run("INSERT INTO app_meta(key,value) VALUES('glossary_examples_v1','1')");
+    }
     const oldMeetings = new Set(this.query('PRAGMA table_info(meetings)').map((r) => r.name));
     const columns = {
       meetings: {

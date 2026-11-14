@@ -1,6 +1,8 @@
 // 只加载当前应用的视图层；不加载宿主桥，不读取用户数据或申请设备权限。
 const locale = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh';
 const uiData = { detail: { summary: {} } };
+const workspaces = [{ id: 'product', name: locale === 'zh' ? '产品团队' : 'Product team' }];
+const currentMeetingDetail = { id: 'demo', workspace_id: workspaces[0].id };
 const detailActiveTab = 'summary';
 const editingMeetingIndex = null;
 (async () => {
@@ -23,6 +25,12 @@ const editingMeetingIndex = null;
         }),
     ),
   );
+  const shell = template.querySelector('.app-shell');
+  shell.removeAttribute('aria-live');
+  shell.querySelectorAll('img[src]').forEach((img) => {
+    img.src = new URL(img.getAttribute('src'), templateURL).href;
+  });
+  document.body.append(shell, template.querySelector('#glossary-prompt'));
   const scriptsReady = Promise.all(
     [
       'i18n-data.js',
@@ -32,6 +40,9 @@ const editingMeetingIndex = null;
       'motion.js',
       'ui-components.js',
       'meeting-evidence.js',
+      'glossary-markdown.js',
+      'glossary.js',
+      'desktop-mobile-preview.js',
     ].map(
       (name) =>
         new Promise((resolve, reject) => {
@@ -45,12 +56,6 @@ const editingMeetingIndex = null;
     ),
   );
   await Promise.all([stylesReady, scriptsReady]);
-  const shell = template.querySelector('.app-shell');
-  shell.removeAttribute('aria-live');
-  document.body.append(shell);
-  document.querySelectorAll('img[src]').forEach((img) => {
-    img.src = new URL(img.getAttribute('src'), templateURL).href;
-  });
   function localize(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
@@ -158,8 +163,21 @@ const editingMeetingIndex = null;
   handset.className = 'pair-phone';
   handset.title = pick('Brevia 手机版', 'Brevia mobile');
   handset.setAttribute('allow', "camera 'none'; microphone 'none'");
-  phoneScene.append(pairing, handset);
+  const phoneFrame = document.createElement('div');
+  phoneFrame.className = 'pair-handset';
+  phoneScene.append(pairing, phoneFrame);
   document.body.append(phoneScene);
+  const phoneDemo = document.createElement('section');
+  phoneDemo.id = 'mobile-dialog';
+  phoneDemo.className = 'pair-shared-preview';
+  phoneDemo.dataset.mobilePageState = 'intro';
+  phoneDemo.innerHTML =
+    '<div class="mobile-page-content"><div class="mobile-page-preview"></div></div>';
+  phoneFrame.append(phoneDemo);
+  const phoneController = BreviaDesktopMobilePreview.init(phoneDemo);
+  phoneController.setPaused(true);
+  phoneController.select(1);
+  phoneDemo.querySelector('.dmp-screen').append(handset);
   let phoneState = '';
   const decisions = [
     pick(
@@ -218,14 +236,28 @@ const editingMeetingIndex = null;
       ),
     ],
   ];
+  const discussion = [
+    pick(
+      '第一次开会先录音吧。模型和语言用默认值就够了，一开始选太多会打断对话。',
+      'Let people record first. Default model and language settings cover most meetings, and too many choices interrupt the conversation.',
+    ),
+    pick(
+      '手机放在发言人旁边会听得清楚些。就用手机收音，通过局域网传到电脑转写，电脑还能继续工作。',
+      'The phone is clearer when placed by the speakers. Let it record and send audio over the local network for desktop transcription while we keep working.',
+    ),
+    pick(
+      '纪要是 AI 整理的。每条结论留个原话入口，大家才能回听，核对具体措辞和谁负责。',
+      'AI drafts the minutes. Keep a link from each conclusion to the recording so we can check the exact wording and who owns it.',
+    ),
+  ];
   const claims = [];
   decisions.forEach((text, i) => {
     const source = {
-      segment_id: `demo-${i}`,
-      current_segment_id: `demo-${i}`,
-      start_ms: (i * 4 + 4) * 1000,
-      end_ms: (i * 4 + 8) * 1000,
-      text: lines[i][1],
+      segment_id: `discussion-${i}`,
+      current_segment_id: `discussion-${i}`,
+      start_ms: (i * 35 + 50) * 1000,
+      end_ms: (i * 35 + 64) * 1000,
+      text: discussion[i],
       speaker: lines[i][0],
     };
     claims.push({
@@ -298,7 +330,30 @@ const editingMeetingIndex = null;
     capsule.src = new URL(`./capsule-preview.html?lang=${locale}`, location.href).href;
     document.body.append(capsule);
   });
+  const mention = {
+    meeting_id: currentMeetingDetail.id,
+    workspace_id: currentMeetingDetail.workspace_id,
+    title,
+    original: 'L L M',
+  };
+  const meaning = pick('大语言模型', 'Large language model');
+  const termQuote = pick(
+    '纪要整理用的是 L L M，也就是能理解和生成文字的大语言模型。',
+    'We use an L L M, a large language model that understands and generates text, to organize the minutes.',
+  );
+  const termMarkdown =
+    '## ' +
+    t('会议摘要') +
+    '\n\n- ' +
+    pick(
+      '团队将使用 L L M 整理会议纪要，并为结论保留原话引用。',
+      'The team will use an L L M to organize meeting minutes and retain source quotes.',
+    );
+  const prompt = document.querySelector('#glossary-prompt');
   let summaryStage = '';
+  let reveals = [];
+  let textReveals = [];
+
   let noteSaved = false;
   let phaseBefore = -1;
   let capsuleShown = false;
@@ -337,12 +392,25 @@ const editingMeetingIndex = null;
   };
   function render(time) {
     latestTime = time;
-    const clock = ((time % 56000) + 56000) % 56000;
-    const phase = clock < 10000 ? 1 : clock < 20000 ? 2 : clock < 32000 ? 3 : clock < 40000 ? 0 : 4;
-    const local = clock - [32000, 0, 10000, 20000, 40000][phase];
+    const clock = ((time % 65000) + 65000) % 65000;
+    const phase =
+      clock < 10000
+        ? 1
+        : clock < 20000
+          ? 2
+          : clock < 32000
+            ? 3
+            : clock < 40000
+              ? 0
+              : clock < 56000
+                ? 4
+                : 5;
+    const local = clock - [32000, 0, 10000, 20000, 40000, 56000][phase];
     const step = Math.floor(local / 1750);
-    const view = phase === 3 ? 'detail-view' : 'live-view';
+    const reviewing = phase === 3 || phase === 5;
+    const view = reviewing ? 'detail-view' : 'live-view';
     if (phase !== phaseBefore) {
+      if (phaseBefore === 5) glossaryUI.closePrompt();
       document.body.dataset.phase = phase;
       shell
         .querySelectorAll('.workspace > .view')
@@ -351,8 +419,11 @@ const editingMeetingIndex = null;
       shell.classList.toggle('is-library-hidden', innerWidth <= 740);
       shell.classList.toggle('is-settings-view', phase === 4);
       shell.querySelector('#crumb').textContent =
-        phase === 4 ? t('设置') : phase === 3 ? t('会议详情') : title;
+        phase === 4 ? t('设置') : reviewing ? t('会议详情') : title;
     }
+    const sideBySide = phase === 0 && innerWidth > 740;
+    shell.style.width = sideBySide ? 'calc(100% - 380px)' : '';
+    shell.classList.toggle('is-library-hidden', innerWidth <= 740 || sideBySide);
     agentScene(phase === 4 ? local : null);
     phoneScene.classList.toggle('is-away', phase !== 0);
     const connected = phase === 0 && local >= 2400;
@@ -362,10 +433,31 @@ const editingMeetingIndex = null;
       handset.src = `./mobile-preview/index.html?lang=${locale}`;
     if (phase === 0) {
       const screen = local < 2400 ? 'scan' : local < 4700 ? 'start' : 'record';
-      if (phoneScene.dataset.step !== screen) phoneScene.dataset.step = screen;
+      if (phoneScene.dataset.step !== screen) {
+        phoneScene.dataset.step = screen;
+        phoneController.select(screen === 'record' ? 1 : 0);
+        phoneController.setPaused(true);
+      }
       phoneScene.toggleAttribute('data-show-code', local < 1100);
+      phoneFrame.classList.toggle('is-recording', screen === 'record');
+      handset.hidden = screen === 'record';
       const caption = lines[0][1].slice(0, Math.max(0, Math.floor((local - 4800) / 45)));
       const seconds = Math.max(0, Math.floor((local - 4700) / 1000));
+      if (screen === 'record') phoneController.seekLive(local - 4700, [caption, '', '']);
+      const phoneSpeaker = phoneDemo.querySelector('.dmp-transcript header');
+      write(
+        phoneSpeaker.querySelector('span'),
+        local < 5500 ? pick('识别中…', 'Identifying…') : lines[0][0],
+      );
+      write(phoneSpeaker.querySelector('time'), '00:04');
+      segments.forEach(({ row, label, text, translation }, i) => {
+        row.hidden = screen !== 'record' || i !== 0;
+        translation.hidden = caption !== lines[0][1];
+        if (i === 0) {
+          write(text, caption);
+          write(label, local < 5500 ? pick('识别中…', 'Identifying…') : lines[0][0]);
+        }
+      });
       const state = `${screen}:${caption}:${seconds}`;
       if (handset.contentWindow.showMeetingPreview && phoneState !== state) {
         handset.contentWindow.playMobilePreview(!paused);
@@ -383,9 +475,11 @@ const editingMeetingIndex = null;
     }
     write(
       shell.querySelector('#timer'),
-      `00:00:${String(Math.floor(clock / 1000) + 4).padStart(2, '0')}`,
+      phase === 0
+        ? `00:00:${String(42 + Math.max(0, Math.floor((local - 4700) / 1000))).padStart(2, '0')}`
+        : `00:00:${String(Math.floor(clock / 1000) + 4).padStart(2, '0')}`,
     );
-    if (phase === 1 || phaseBefore !== phase) {
+    if (phase === 1 || (phase !== 0 && phaseBefore !== phase)) {
       segments.forEach(({ row, label, text, translation }, i) => {
         row.hidden = phase === 1 && local < i * 2200;
         write(
@@ -398,7 +492,8 @@ const editingMeetingIndex = null;
             ? lines[i][1].slice(0, Math.max(0, Math.floor((local - i * 2200) / 35)))
             : lines[i][1],
         );
-        translation.hidden = phase === 1 && step < 2;
+        const sourceCompleteAt = i * 2200 + lines[i][1].length * 35;
+        translation.hidden = phase === 1 && (step < 2 || local < sourceCompleteAt + 350);
       });
     }
     suggestion.hidden = phase !== 2 || step >= 2;
@@ -411,23 +506,117 @@ const editingMeetingIndex = null;
           : '',
       );
     }
-    if (phase === 3) {
-      const generated = local >= 2200;
-      const nextStage = generated ? 'complete' : 'generating';
-      if (summaryStage !== nextStage) {
-        summaryStage = nextStage;
-        uiData.detail.summary = { markdown: generated ? markdown : '', generating: !generated };
-        detail.classList.toggle('has-cause-rail', generated);
-        detail.innerHTML = `${renderDetailTabbar()}<div class="detail-summary-panel" data-detail-panel="summary">${renderMeetingSummary({ markdown: generated ? markdown : '', claims: generated ? claims : [], generating: !generated })}</div>${generated ? renderDetailCauseRail(claims, markdown, 'demo') : ''}`;
-        if (generated) BreviaMotion.enter(detail.querySelector('.summary-preview'), 'content');
+    if (reviewing) {
+      const glossary = phase === 5;
+      const done = local >= (glossary ? 6200 : 8200);
+      const stage = phase + ':' + done;
+      if (stage !== summaryStage) {
+        const entering = !summaryStage.startsWith(phase + ':');
+        summaryStage = stage;
+        uiData.detail.summary = { markdown: glossary ? termMarkdown : markdown, generating: !done };
+        if (entering) {
+          detail.classList.toggle('has-cause-rail', !glossary);
+          detail.innerHTML =
+            renderDetailTabbar() +
+            '<div class="detail-summary-panel" data-detail-panel="summary">' +
+            renderMeetingSummary({
+              markdown: uiData.detail.summary.markdown,
+              claims: glossary ? [] : claims,
+            }) +
+            '</div>' +
+            (glossary ? '' : renderDetailCauseRail(claims, markdown, 'demo'));
+          reveals = glossary
+            ? []
+            : [
+                ...Array.from(detail.querySelectorAll('.summary-reading-section'), (el, i) => [
+                  el,
+                  200 + i * 680,
+                ]),
+                ...Array.from(detail.querySelectorAll('.cause-tree-topic'), (el, i) => [
+                  el,
+                  1200 + i * 1700,
+                ]),
+                ...Array.from(
+                  detail.querySelectorAll('.cause-tree-topic .evidence-claim'),
+                  (el, i) => [el, 1600 + i * 920],
+                ),
+                ...Array.from(detail.querySelectorAll('.cause-tree-links > g'), (el, i) => [
+                  el,
+                  1600 + i * 920,
+                ]),
+                ...Array.from(detail.querySelectorAll('.cause-tree-spine'), (el) => [el, 1200]),
+                ...Array.from(detail.querySelectorAll('.evidence-inline'), (el) => [el, 7200]),
+              ];
+          textReveals = [];
+          if (!glossary)
+            for (const [section, start] of reveals.filter(([el]) =>
+              el.matches('.summary-reading-section'),
+            )) {
+              const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+              const nodes = [];
+              while (walker.nextNode())
+                if (
+                  walker.currentNode.data.trim() &&
+                  !walker.currentNode.parentElement.closest('details')
+                )
+                  nodes.push(walker.currentNode);
+              let offset = 0;
+              for (const node of nodes) {
+                const chars = Array.from(node.data);
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < chars.length; i += 3) {
+                  const span = document.createElement('span');
+                  span.textContent = chars.slice(i, i + 3).join('');
+                  textReveals.push([span, start + Math.min(750, offset * 12)]);
+                  fragment.append(span);
+                  offset += 3;
+                }
+                node.replaceWith(fragment);
+              }
+            }
+        } else {
+          detail.querySelector('.detail-content-header').outerHTML = renderDetailTabbar();
+        }
+        if (glossary)
+          glossaryUI.paint(
+            detail.querySelector('.summary-body'),
+            done ? [{ ...mention, name: 'LLM', meaning }] : [],
+          );
       }
-      const source = detail.querySelector('details.evidence-claim');
-      if (source) source.open = local >= 6500 && local < 11000;
-      const rail = detail.querySelector('.detail-cause-scroll');
-      if (rail)
-        rail.scrollTop =
-          (Math.max(0, local - 10000) / 4000) *
-          Math.min(240, rail.scrollHeight - rail.clientHeight);
+      if (glossary) {
+        const open = local >= 1200 && !done;
+        if (open && !prompt.matches(':popover-open'))
+          glossaryUI.ask(mention, false, async () => ({ text: termQuote, start_ms: 24000 }));
+        if (!open && prompt.matches(':popover-open')) glossaryUI.closePrompt();
+        if (open) {
+          const fields = prompt.querySelector('form').elements;
+          fields.name.value =
+            local < 2300 ? mention.original : 'LLM'.slice(0, Math.max(0, (local - 2300) / 150));
+          fields.meaning.value = meaning.slice(0, Math.max(0, (local - 3200) / 85));
+          fields.meaning
+            .closest('form')
+            .querySelector('.modal-action')
+            .classList.toggle('demo-save', local >= 5600);
+        }
+      } else {
+        for (const [el, start] of reveals) {
+          const bubble = el.matches('.evidence-claim,.cause-tree-topic');
+          const fraction = Math.max(0, Math.min(1, (local - start) / (bubble ? 350 : 220)));
+          el.style.display = local < start ? 'none' : '';
+          el.style.opacity = String(fraction);
+          if (bubble)
+            el.style.clipPath =
+              'inset(' +
+              (1 - fraction) * 7 +
+              '% ' +
+              (1 - fraction) * 12 +
+              '% ' +
+              (1 - fraction) * 7 +
+              '% 0 round 12px)';
+        }
+        for (const [span, start] of textReveals)
+          span.style.opacity = String(Math.max(0, Math.min(1, (local - start) / 220)));
+      }
     } else summaryStage = '';
     const capsuleRequested = phase === 2 && local >= 4800;
     capsuleError.hidden = !capsuleRequested || capsule.dataset.failed !== 'true';
@@ -483,6 +672,7 @@ const editingMeetingIndex = null;
   addEventListener('resize', () => shell.classList.toggle('is-library-hidden', innerWidth <= 740));
   function syncAnimations(settle) {
     handset.contentWindow.playMobilePreview?.(!paused && phaseBefore === 0);
+    phoneController.setPaused(true);
     for (const animation of [
       ...document.getAnimations(),
       ...(capsuleReady ? capsule.contentDocument.getAnimations() : []),

@@ -317,9 +317,12 @@ function createExportHandlers(worker) {
         )
         .join('\n\n');
     else if (['notes', 'mynotes'].includes(contentType)) {
-      content = noteBody(meeting, contentType);
+      content = noteBody(
+        contentType === 'notes' ? store.glossaryDocument(meeting) : meeting,
+        contentType,
+      );
     } else if (contentType === 'analysis') {
-      content = causeAppendix(meeting, '', format === 'md');
+      content = causeAppendix(store.glossaryDocument(meeting), '', format === 'md');
       if (!content) throw new Error('No cause analysis available');
     } else {
       const lines = segments.map(
@@ -409,7 +412,7 @@ function createExportHandlers(worker) {
   }
   return {
     'meeting.markdown-note': (payload) => {
-      const meeting = store.getMeeting(payload.meeting_id, true),
+      const meeting = store.glossaryDocument(store.getMeeting(payload.meeting_id, true)),
         body = noteBody(meeting, 'notes'),
         appendix = causeAppendix(meeting, body, true);
       return {

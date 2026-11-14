@@ -1034,7 +1034,7 @@ body:has(.onboarding-page) #desktop-statusbar {
 #desktop-statusbar .task-summary[aria-expanded="true"] > :last-child {
   transform: rotate(180deg);
 }
-#desktop-app .window-actions .window-settings {
+#desktop-app .window-actions :is(.window-settings, #open-glossary) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1048,7 +1048,7 @@ body:has(.onboarding-page) #desktop-statusbar {
   font-size: 12px;
   -webkit-app-region: no-drag;
 }
-#desktop-app .window-actions .window-settings:hover {
+#desktop-app .window-actions :is(.window-settings, #open-glossary):hover {
   background: var(--color-selected);
 }
 #desktop-app .window-settings .interface-icon {

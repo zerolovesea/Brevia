@@ -44,7 +44,9 @@ Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat herunterge
 
 [![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
-Das Protokoll hat sieben Abschnitte. Über das Ursachendiagramm können Sie Aussagen im Transkript prüfen und anhören. Protokoll und Ursachenanalyse lassen sich getrennt exportieren. Sie können nach Sprechern filtern und Namen für eine ganze Besprechung ändern.
+Längere chinesische und englische Meetings können thematische Protokolle mit Quellenprüfung je Eintrag erzeugen; sonst bleiben die sieben Abschnitte erhalten. Über das Ursachendiagramm können Sie Aussagen im Transkript prüfen und anhören. Protokoll und Ursachenanalyse lassen sich getrennt exportieren. Sie können nach Sprechern filtern und Namen für eine ganze Besprechung ändern.
+
+Im Glossar speichern Sie allgemeine oder arbeitsbereichsspezifische Begriffe und bestätigen KI-Vorschläge, Definitionen und Ersetzungen. Im Protokoll lassen sich Definitionen anzeigen und Originalbegriffe wiederherstellen; das Transkript bleibt unverändert.
 
 ### KI-Notizen
 

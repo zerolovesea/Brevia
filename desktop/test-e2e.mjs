@@ -83,6 +83,7 @@ const moduleProbes = [
   ['transcript-corrections.js', 'correctionMatches'],
   ['summary-providers.js', 'configuredSummaryProvider'],
   ['app.js', 't'],
+  ['glossary.js', 'glossaryUI'],
   ['mobile-connection.js', "document.getElementById('mobile-pair').onclick"],
   [
     'mobile-note-review.js',
@@ -476,6 +477,25 @@ try {
   check(value.locales === 8, `i18n 词条语言数 ${value.locales} != 8`);
   check(value.navItems > 0, '[data-view] 导航项为 0');
   check(pageErrors.length === 0, `渲染进程加载期异常：\n  ${pageErrors.join('\n  ')}`);
+
+  const glossary = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      await document.querySelector('#open-glossary').onclick();
+      const dialog = document.querySelector('#glossary-library');
+      dialog.querySelector('[data-action]').click();
+      const form = dialog.querySelector('form');
+      form.elements.name.value = 'ACD';
+      form.elements.meaning.value = '平均通话时长';
+      await form.onsubmit(new Event('submit', { cancelable: true }));
+      const saved = activeView === 'settings' && activeModal === 'glossary' && settingsModal.querySelector('dt')?.textContent === 'ACD' &&
+        settingsModal.querySelector('dd')?.textContent === '平均通话时长';
+      closeModal(); await showView('home');
+      return saved;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(glossary.result?.value === true, '顶部术语库可打开并持久化术语定义');
 
   const storageRows = await client.send('Runtime.evaluate', {
     expression: `[...document.querySelectorAll('.settings-folder-paths [data-settings-path]')].map((row) => row.dataset.settingsPath).join(',')`,
@@ -992,6 +1012,24 @@ try {
           return {selector,visible:el.checkVisibility(),top:Math.round(rect.top),bottom:Math.round(rect.bottom),fits:rect.top>=bounds.top-1&&rect.bottom<=bounds.bottom+1&&rect.left>=bounds.left-1&&rect.right<=bounds.right+1};
         });
         if(body.scrollHeight>body.clientHeight+1||body.scrollWidth>body.clientWidth+1||elements.some(el=>!el.visible||!el.fits))errors.push(language+': device introduction does not fit '+JSON.stringify({window:[innerWidth,innerHeight],client:[body.clientWidth,body.clientHeight],scroll:[body.scrollWidth,body.scrollHeight],elements}));
+        const preview=BreviaDesktopMobilePreview.init();
+        preview.setPaused(true);
+        for(const scene of [0,1,2]){
+          preview.select(scene);
+          await new Promise(resolve=>setTimeout(resolve,350));
+          const screen=phone.querySelector('.dmp-scene.is-active');
+          const outer=screen.getBoundingClientRect();
+          for(const element of screen.querySelectorAll('.dmp-meeting-tabs > *, .dmp-brand img, .dmp-task, .dmp-create')){
+            const rect=element.getBoundingClientRect();
+            if(rect.left<outer.left-1||rect.right>outer.right+1||element.scrollWidth>element.clientWidth+1)
+              errors.push(language+': mobile preview overflow '+element.className);
+          }
+          const task=screen.querySelector('.dmp-task');
+          if(task && (getComputedStyle(task).display!=='flex'||task.querySelector('input').getBoundingClientRect().width>16))
+            errors.push(language+': mobile preview task layout');
+        }
+        preview.select(0);
+        preview.setPaused(false);
         phone.querySelector('[data-mobile-page-step=install]').click();
         if(phone.dataset.mobilePageState!=='install'||!phone.querySelector('[data-mobile-panel=install]').checkVisibility()||!phone.querySelector('.mobile-install').open)errors.push(language+': install step inaccessible');
       }
@@ -2299,7 +2337,10 @@ try {
     const times=[...notebook.querySelectorAll('[data-summary-seek]')];
     if(times.map(button=>Number(button.dataset.summarySeek)).join(',')!=='2,3,4,5')throw Error('正文时间戳格式、普通方括号或代码链接识别错误');
     if(!notebook.textContent.includes('[待确认]')||notebook.querySelector('a [data-summary-seek],code [data-summary-seek]'))throw Error('普通正文或链接被播放按钮破坏');
+    if(item.querySelector('.evidence-quotes'))throw Error('折叠引用提前挂载了原文');
+    const initialTime=playerAudio.currentTime;
     item.querySelector('summary').click();
+    if(playerAudio.currentTime!==initialTime)throw Error('展开引用改变播放位置');
     if(!item.open||!item.querySelector('.evidence-quotes').textContent.includes(source.text))throw Error('行内引用未展开对应原话');
     const deadline=Date.now()+6000;
     while(playerAudio.readyState<1){if(Date.now()>deadline)throw Error('样例录音元数据未加载');await new Promise(r=>setTimeout(r,25));}
@@ -4074,7 +4115,7 @@ try {
       await showView('settings');
       const navigation=document.querySelector('#settings-view .settings-navigation');
       const settingPages=[...navigation.querySelectorAll('[data-settings-page]')].map(button=>button.dataset.settingsPage).sort();
-      const expectedPages=['general','advanced-settings','whats-new','models','ai-features','speaker-profiles','device-connection','agent-settings','storage'].sort();
+      const expectedPages=['general','advanced-settings','whats-new','models','ai-features','glossary','speaker-profiles','device-connection','agent-settings','storage'].sort();
       if(JSON.stringify(settingPages)!==JSON.stringify(expectedPages)) errors.push('general navigation '+JSON.stringify(settingPages));
       const search=navigation.querySelector('[data-settings-search]');
       search.value=t('模型库');search.dispatchEvent(new Event('input',{bubbles:true}));

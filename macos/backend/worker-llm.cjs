@@ -12,7 +12,8 @@ const {
   emptySummaryLine,
 } = require('./summary-facts.cjs');
 const evidence = require('./meeting-evidence.cjs');
-const { evidencePrompt, renderSelection } = require('./summary-extract.cjs');
+
+const { topicMinutes } = require('./topic-minutes.cjs');
 
 const languages = {
   zh: 'Chinese',
@@ -59,9 +60,17 @@ function summaryReferences(text) {
 
 function createLLMHandlers(worker) {
   const queues = new Map();
-  async function generate(payload, prompt, { signal, channel = 'assistant', chat = true } = {}) {
+  async function generate(
+    payload,
+    prompt,
+    { signal, channel = 'assistant', chat = true, jsonMode = false } = {},
+  ) {
     if (!local(payload))
-      return complete(payload, prompt, { signal, timeout: worker.settings.llm.timeout_seconds });
+      return complete(payload, prompt, {
+        signal,
+        jsonMode,
+        timeout: worker.settings.llm.timeout_seconds,
+      });
     const modelId = payload.model_id || payload.model;
     if (typeof modelId !== 'string' || !modelId.trim()) throw new Error('Model is required');
     if (!worker.models.isReady(modelId)) throw new ModelNotInstalled([modelId]);
@@ -240,7 +249,7 @@ function createLLMHandlers(worker) {
         const transcriptCost = estimatedTokens(transcript);
         const localWindow = transcriptCost + 6144 > 16384 ? 32768 : 16384;
         const preference = worker.prompts?.apply('summary', '') || '';
-        const selectEvidence =
+        const citedTopics =
           (local(payload) || deepseek) &&
           meeting.language === language &&
           /^(zh|en)(?:-|$)/i.test(language) &&
@@ -259,7 +268,8 @@ function createLLMHandlers(worker) {
           disable_thinking: deepseek,
           summaryPreference: preference,
           max_tokens: Math.min(
-            payload.max_tokens ?? (local(payload) && context >= 32768 ? 4608 : 3072),
+            payload.max_tokens ??
+              (deepseek ? 8192 : local(payload) && context >= 32768 ? 4608 : 3072),
             Math.floor(context / 3),
           ),
         };
@@ -289,10 +299,37 @@ function createLLMHandlers(worker) {
             'error.summary.failed',
             'Summary prompt exceeds the available model context',
           );
+        const thematic = citedTopics && transcriptCost > 1500;
+        const scanTerms = () => {
+          const task = 'glossary.analyze';
+          if (worker.tasks.controls.has(worker.tasks.key(task, meeting.id))) return;
+          void worker.tasks
+            .running(task, meeting.id, async (scanner) => {
+              const cancel = () => scanner.cancel();
+              control.signal.addEventListener('abort', cancel, { once: true });
+              try {
+                await require('./glossary-analysis.cjs').analyzeTerms(
+                  worker,
+                  meeting,
+                  transcript,
+                  options,
+                  generate,
+                  scanner,
+                );
+              } finally {
+                control.signal.removeEventListener('abort', cancel);
+              }
+            })
+            .catch(() => {
+              if (!control.signal.aborted && worker.store.meetingExists(meeting.id))
+                worker.emit('glossary.failed', { meeting_id: meeting.id });
+            });
+        };
+        if (payload.analyze_terms && !local(options)) scanTerms();
         let markdown;
         try {
           await control.wait();
-          progress(meeting.id, 60);
+          progress(meeting.id, thematic ? 10 : 60);
           // 先完成的请求可立即处理下一段；失败后等待在途请求结束，再向调用方报告。
           const mapChunks = async (chunks, summarize) => {
             const results = new Array(chunks.length);
@@ -316,32 +353,75 @@ function createLLMHandlers(worker) {
             if (failure) throw failure;
             return results;
           };
-          if (transcriptCost <= budget) {
-            try {
-              if (selectEvidence && transcriptCost > 1500) {
-                const ids = new Set(segments.map((_, i) => i + 1));
-                const prompt = evidencePrompt(
-                  language,
-                  template,
-                  options.summaryPreference,
-                  transcript,
-                );
-                const result = await generate({ ...options, temperature: 0 }, prompt, {
-                  signal: control.signal,
+          if (thematic) {
+            markdown = await topicMinutes({
+              transcript,
+              segments,
+              headings,
+              language,
+              template,
+              // 逐项核证固定使用 16K，不能沿用整场会议可能选出的 32K 输入预算。
+              budget: local(options)
+                ? Math.min(
+                    budget,
+                    Math.min(16384, context) - Math.min(3072, options.max_tokens) - 768,
+                  )
+                : budget,
+              store: worker.store,
+              meetingId: meeting.id,
+              modelKey: [
+                options.provider,
+                options.model_id || options.model,
+                options.endpoint,
+                options.format,
+                options.max_tokens,
+              ],
+              preview: (draft, done, total) => {
+                const [markdown, claims] = evidence.parseClaims(draft, [], false, headings, false);
+                worker.emit('summary.progress', {
+                  meeting_id: meeting.id,
+                  stage: done === total ? 'summary.verifying' : 'summary.extracting',
+                  completed: 10 + Math.round((65 * done) / total),
+                  total: 100,
+                  parts_done: done,
+                  parts_total: total,
+                  draft_summary: {
+                    markdown,
+                    claims: claims.map((c) => ({ ...c, status: 'pending' })),
+                  },
                 });
-                try {
-                  markdown = renderSelection(result, segments, headings, ids);
-                } catch (error) {
-                  if (control.signal.aborted) throw error;
-                }
-              }
-              if (!markdown)
-                markdown = await structuredMinutes(
-                  options,
-                  `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
-                  language,
-                  control.signal,
-                );
+              },
+              local: local(options),
+              mapChunks,
+              limit: summaryLimit,
+              wait: () => control.wait(),
+              generate: (prompt) =>
+                generate(
+                  {
+                    ...options,
+                    ...(local(options)
+                      ? {
+                          context_size: Math.min(16384, context),
+                          max_tokens: Math.min(3072, options.max_tokens),
+                        }
+                      : {}),
+                    temperature: 0,
+                  },
+                  prompt,
+                  {
+                    signal: control.signal,
+                    jsonMode: true,
+                  },
+                ),
+            });
+          } else if (transcriptCost <= budget) {
+            try {
+              markdown = await structuredMinutes(
+                options,
+                `${instructions}\n\n# ${meeting.title}\n${rules}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n${transcript}\n</transcript>`,
+                language,
+                control.signal,
+              );
             } catch (error) {
               if (control.signal.aborted || !summaryLimit(error)) throw error;
             }
@@ -364,13 +444,11 @@ function createLLMHandlers(worker) {
               const contextLine = previous && estimatedTokens(previous) <= 120 ? previous : '';
               const factPrompt = (part, previousLine) =>
                 `${prompts.chunk[language] || prompts.chunk.en}\nEnd each fact with [[kind:source]], replacing kind with action, decision, conclusion or cause, and source with the actual segment ID from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
-              const prompt = selectEvidence
-                ? evidencePrompt(language, template, '', chunk)
-                : factPrompt(chunk, contextLine);
+              const prompt = factPrompt(chunk, contextLine);
               const fingerprint = createHash('sha256')
                 .update(
                   JSON.stringify([
-                    3,
+                    4,
                     language,
                     options.provider,
                     options.endpoint,
@@ -397,21 +475,6 @@ function createLLMHandlers(worker) {
                   await control.wait();
                   const visible = new Set([...part.matchAll(/^(S[1-9]\d*) \[/gm)].map((m) => m[1]));
                   try {
-                    if (selectEvidence) {
-                      const selected = await generate(
-                        { ...options, temperature: 0 },
-                        evidencePrompt(language, template, '', part),
-                        { signal: control.signal },
-                      );
-                      try {
-                        const selectedIds = new Set(
-                          [...visible].map((value) => Number(value.slice(1))),
-                        );
-                        return renderSelection(selected, segments, headings, selectedIds);
-                      } catch (error) {
-                        if (control.signal.aborted) throw error;
-                      }
-                    }
                     return evidence.restrictSources(
                       await response(
                         {
@@ -450,22 +513,7 @@ function createLLMHandlers(worker) {
               progress(meeting.id, 60 + Math.floor((30 * ++completed) / chunks.length));
               return summary;
             });
-            if (
-              selectEvidence &&
-              summaries.every((item) => item.startsWith('## ' + headings[0] + '\n'))
-            ) {
-              const bodies = headings.map(() => []);
-              for (const summary of summaries) {
-                let chapter = -1;
-                for (const line of summary.split('\n')) {
-                  if (line.startsWith('## ')) chapter = headings.indexOf(line.slice(3));
-                  else if (chapter >= 0 && line.trim() && line !== '—') bodies[chapter].push(line);
-                }
-              }
-              markdown = headings
-                .map((h, i) => '## ' + h + '\n' + (bodies[i].join('\n') || '—'))
-                .join('\n\n');
-            } else {
+            {
               let blocks = summaries.join('\n\n---\n\n');
               const writeMinutes = async (facts) =>
                 evidence.restrictSources(
@@ -561,12 +609,13 @@ function createLLMHandlers(worker) {
         const timed =
           meeting.transcript_revision == null ||
           (model?.stages?.includes('refined') && !model.retired);
-        markdown = verifyFactSources(markdown, segments);
+        if (!thematic) markdown = verifyFactSources(markdown, segments);
         const [rendered, claims] = evidence.parseClaims(
           markdown,
           segments,
           timed,
-          evidence.SUMMARY_HEADINGS[language] || evidence.SUMMARY_HEADINGS.en,
+          headings,
+          !thematic,
         );
         const data = {
           markdown: rendered,
@@ -590,6 +639,7 @@ function createLLMHandlers(worker) {
           summary: saved,
           summary_stale: Boolean(current.correction?.summary_stale),
         });
+        if (payload.analyze_terms && local(options)) scanTerms();
         return saved;
       });
       return task.finally(() => {

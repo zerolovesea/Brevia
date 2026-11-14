@@ -37,12 +37,14 @@
 
   const features = [
     ['live', pick('转写与 AI 笔记', 'Transcription & AI notes'), 0, 14800, 11200],
-    ['fishbone', pick('鱼骨图', 'Fishbone diagram'), 22200, 32000, 28000],
+    ['fishbone', pick('鱼骨图', 'Fishbone diagram'), 20000, 32000, 28000],
     ['phone', pick('手机协作', 'Phone pairing'), 32000, 40000, 32500],
+    ['glossary', pick('术语库', 'Glossary'), 56000, 65000, 63200],
     ['agent', pick('Agent 与 MCP', 'Agent & MCP'), 40000, 56000, 54500],
     ['capsule', pick('会议胶囊', 'Meeting capsule'), 14800, 20000, 17500],
   ];
   let clip = features[0];
+  let plays = 0;
   const tabs = document.createElement('fieldset');
   tabs.className = 'feature-tabs';
   const legend = document.createElement('legend');
@@ -51,6 +53,7 @@
   tabs.append(legend);
   function select(feature) {
     clip = feature;
+    plays = 0;
     elapsed = paused ? clip[4] : clip[2];
     previous = null;
     render();
@@ -96,7 +99,15 @@
   function tick(now) {
     if (previous !== null) elapsed += now - previous;
     previous = now;
-    if (elapsed >= clip[3]) elapsed = clip[2] + ((elapsed - clip[2]) % (clip[3] - clip[2]));
+    if (elapsed >= clip[3]) {
+      plays += 1;
+      if (plays === 2) {
+        clip = features[(features.indexOf(clip) + 1) % features.length];
+        plays = 0;
+      }
+      document.getElementById('feature-' + clip[0]).checked = true;
+      elapsed = clip[2];
+    }
     render();
     animation = requestAnimationFrame(tick);
   }

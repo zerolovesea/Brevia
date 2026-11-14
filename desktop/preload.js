@@ -108,6 +108,11 @@ contextBridge.exposeInMainWorld('brevia', {
     system: invoke('share.system'),
   },
   speaker: { rename: invoke('speaker.rename') },
+  glossary: {
+    list: invoke('glossary.list'),
+    source: invoke('glossary.source'),
+    update: invoke('glossary.update'),
+  },
   workspace: {
     list: invoke('workspace.list'),
     get: invoke('workspace.get'),

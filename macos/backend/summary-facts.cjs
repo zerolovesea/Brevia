@@ -58,6 +58,17 @@ function splitByBudget(text, budget, preserveSources = false) {
   return chunks;
 }
 
+function unsupportedFact(fact, quotes) {
+  const numbers = fact.match(/\d+[.,]\d+|\d{3,}/g) || [];
+  const invented = numbers.some(
+    (n) => !quotes.some((q) => (q.match(/\d+(?:[.,]\d+)?/g) || []).includes(n)),
+  );
+  const asked =
+    quotes.every((q) => /[?？]\s*$/.test(q) && !/[。.!！]/.test(q)) &&
+    !/[?？]|待确认|是否|尚未|不确定|unconfirmed/i.test(fact);
+  return invented || asked;
+}
+
 // 限于模型已经引用的字幕，不以内容相似为由跨段移动时间戳。
 function verifyFactSources(markdown, segments) {
   const plain = (text) =>
@@ -75,24 +86,14 @@ function verifyFactSources(markdown, segments) {
         .replace(/\[\[(?:cause|action|decision|conclusion):[^\]]*\]\]/g, '')
         .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, '')
         .trim();
-      // 数字被改写、或唯一依据是问句时，展示有来源的原话，避免把转写疑点变成实绩。
+      // 数字被改写、或唯一依据是问句时，略去没有依据的总结，避免用整段逐字稿替代总结。
       const marks = [...line.matchAll(/\[\[(?:cause|action|decision|conclusion):([^\]]+)\]\]/g)];
       const ids = [...new Set(marks.flatMap((mark) => mark[1].split(',').map((id) => id.trim())))];
       const quotes = ids.map(
         (id) => /^S[1-9]\d*$/.test(id) && segments[Number(id.slice(1)) - 1]?.text,
       );
       if (quotes.length && quotes.every(Boolean)) {
-        const numbers = fact.match(/\d{3,}(?:[.,]\d+)?/g) || [];
-        const invented = numbers.some(
-          (n) => !quotes.some((q) => (q.match(/\d+(?:[.,]\d+)?/g) || []).includes(n)),
-        );
-        const asked =
-          quotes.every((q) => /[?？]\s*$/.test(q) && !/[。.!！]/.test(q)) &&
-          !/[?？]|待确认|是否|尚未|不确定|unconfirmed/i.test(fact);
-        if (invented || asked)
-          return quotes
-            .map((q, i) => '- ' + q.replace(/[\r\n]+/g, ' ') + ' [[conclusion:' + ids[i] + ']]')
-            .join('\n');
+        if (unsupportedFact(fact, quotes)) return '';
       }
       return line.replace(
         /\[\[(cause|conclusion|decision|action):([^\]]*)\]\]/g,
@@ -216,5 +217,6 @@ module.exports = {
   splitByBudget,
   coverFacts,
   verifyFactSources,
+  unsupportedFact,
   emptySummaryLine,
 };

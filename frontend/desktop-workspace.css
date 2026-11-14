@@ -2976,13 +2976,6 @@ brevia-cause-tree [data-ink="3"] {
 .summary-in-progress:empty {
   display: none;
 }
-.summary-in-progress header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
 .summary-in-progress h3 {
   margin: 18px 0 8px;
   font-size: 16px;
@@ -2999,5 +2992,298 @@ brevia-cause-tree [data-ink="3"] {
 @media (prefers-reduced-motion: no-preference) {
   .summary-in-progress {
     animation: overlay-in 180ms ease-out both;
+  }
+}
+#glossary-prompt {
+  position: fixed;
+  inset: auto 16px 40px auto;
+  margin: 0;
+  width: min(310px, calc(100vw - 32px));
+  max-height: calc(100dvh - 60px);
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--color-overlay);
+  color: var(--color-text);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px #0002;
+}
+.glossary-source {
+  margin: 6px 0 10px;
+  padding: 5px 9px;
+  border-inline-start: 2px solid var(--color-line);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.glossary-source small {
+  font-size: 11px;
+}
+.glossary-source mark {
+  background: var(--color-selected);
+  color: var(--color-text);
+  font-weight: 600;
+}
+#glossary-prompt:popover-open {
+  animation: surface-in 0.2s ease-out both;
+}
+#glossary-prompt header,
+#glossary-prompt header span,
+#glossary-prompt footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#glossary-prompt header {
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+#glossary-prompt header button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+#glossary-prompt h3 {
+  margin: 2px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+#glossary-prompt small,
+.glossary-row small,
+.glossary-list dd {
+  color: var(--color-text-muted);
+}
+#glossary-prompt footer {
+  margin-top: 14px;
+}
+#glossary-prompt button,
+.glossary-form button {
+  margin-top: 0;
+}
+.glossary-form,
+.glossary-form label {
+  display: grid;
+  gap: 6px;
+}
+.glossary-form {
+  gap: 12px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.glossary-form input,
+.glossary-form textarea,
+.glossary-form select {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 7px 10px;
+  border-radius: 7px;
+  width: 100%;
+}
+#glossary-prompt header span {
+  min-width: 0;
+  gap: 5px;
+  white-space: nowrap;
+}
+#glossary-prompt header small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+#glossary-prompt .glossary-form {
+  margin: 0;
+  gap: 6px;
+}
+#glossary-prompt .glossary-form > label {
+  grid-template-columns: 4em minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+#glossary-prompt .glossary-form input,
+#glossary-prompt .glossary-form textarea {
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+#glossary-prompt .glossary-form footer {
+  margin-top: 4px;
+  gap: 6px;
+}
+#glossary-prompt footer button {
+  padding: 4px 9px;
+  min-height: 26px;
+  font-size: 12px;
+}
+#glossary-prompt footer [data-dismiss] {
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+#glossary-prompt .glossary-scope {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 47%;
+  margin-right: auto;
+  color: var(--color-text-muted);
+}
+#glossary-prompt .glossary-scope .interface-icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  pointer-events: none;
+}
+#glossary-prompt .glossary-scope select {
+  appearance: none;
+  max-width: 100%;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px 15px 4px 2px;
+  font-size: 11px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+#glossary-prompt .glossary-scope .interface-icon:last-child {
+  position: absolute;
+  right: 0;
+}
+#glossary-prompt .glossary-scope select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.glossary-form button {
+  justify-self: start;
+}
+#glossary-library .glossary-list dl {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  gap: 14px 18px;
+  margin: 0;
+  padding: 6px 0 14px;
+}
+#glossary-library .glossary-list dl > div {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  border: 0;
+  padding: 0;
+}
+#glossary-library .glossary-list dt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+#glossary-library .glossary-list dd {
+  min-width: 0;
+  margin: 0;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.glossary-row {
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.glossary-row + .glossary-row {
+  border-top: 1px solid var(--color-line);
+}
+.glossary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+.glossary-row small {
+  flex: 1;
+}
+.glossary-mark {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  color: #155b71;
+  background: #ddf3f7;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+html[data-theme="dark"] .glossary-mark {
+  color: #a6e4ee;
+  background: #233f49;
+}
+.glossary-term {
+  position: relative;
+}
+.glossary-term-info {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: min(240px, 55vw);
+  padding: 8px 12px;
+  background: var(--color-overlay);
+  color: var(--color-text);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.glossary-term-info button {
+  display: block;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: #25292d;
+  color: #fff;
+  border: 1px solid #64686b;
+  margin-top: 6px;
+}
+.glossary-term:hover .glossary-term-info,
+.glossary-term:focus-within .glossary-term-info {
+  display: block;
+}
+.glossary-sample {
+  display: grid;
+  align-items: center;
+  min-height: 48px;
+}
+.glossary-sample span {
+  grid-area: 1/1;
+  animation: glossary-spelling 6s ease-in-out infinite;
+}
+.glossary-sample span + span {
+  animation-direction: reverse;
+  color: var(--accent);
+}
+@keyframes glossary-spelling {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glossary-sample span {
+    animation: none;
+    opacity: 0;
+  }
+  .glossary-sample span + span {
+    opacity: 1;
   }
 }

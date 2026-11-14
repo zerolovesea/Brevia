@@ -396,3 +396,25 @@ h1 {
     justify-self: center;
   }
 }
+@media (max-width: 640px) {
+  .feature-tabs {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .feature-tabs label {
+    flex: none;
+  }
+}
+@media (max-width: 640px) {
+  main,
+  .intro {
+    min-width: 0;
+  }
+  .intro .feature-tabs {
+    width: min(100%, calc(100vw - 48px));
+  }
+}

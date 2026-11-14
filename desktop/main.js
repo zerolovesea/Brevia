@@ -314,6 +314,8 @@ const workerEvent = z
       'refinement.started',
       'speaker-profile.deleted',
       'speaker-profile.updated',
+      'glossary.failed',
+      'glossary.updated',
       'summary.finished',
       'summary.progress',
       'summary.ready',
@@ -1756,6 +1758,24 @@ function registerIpc() {
   const termScope = z.object({ workspace_id: z.union([z.literal(''), z.string().uuid()]) });
   const termFlags = z.object({ post_replace: z.boolean(), hotword: z.boolean() });
   const termText = z.string().trim().min(1).max(80);
+  handle('glossary.list', z.object({}), 'glossary.list');
+  const glossaryEntry = termScope.extend({
+    workspace_id: z.union([z.literal(''), z.literal('public'), z.string().uuid()]),
+    name: termText,
+    meaning: z.string().trim().min(1).max(1000),
+  });
+  const mention = z.object({ meeting_id: z.string().uuid(), original: termText });
+  handle('glossary.source', mention, 'glossary.source');
+  handle(
+    'glossary.update',
+    z.discriminatedUnion('action', [
+      glossaryEntry.extend({ action: z.literal('save') }),
+      glossaryEntry.merge(mention).extend({ action: z.literal('resolve') }),
+      mention.extend({ action: z.literal('dismiss') }),
+      z.object({ action: z.literal('clear') }),
+    ]),
+    'glossary.update',
+  );
   handle('workspace.terms', termScope, 'workspace.terms');
   handle(
     'workspace.term.save',
@@ -2043,7 +2063,7 @@ function registerIpc() {
       .parse(payload);
     const api_key = await getSecret(value.key_reference);
     if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
-    return worker.request('summary.generate', { ...value, api_key });
+    return worker.request('summary.generate', { ...value, api_key, analyze_terms: true });
   });
   handleIpc('summary.save', async (_, payload) =>
     worker.request(
@@ -2132,7 +2152,7 @@ function registerIpc() {
       })
       .parse(payload);
     return uploadShare(
-      await worker.request('meeting.get', { meeting_id }),
+      await worker.request('meeting.share-document', { meeting_id }),
       days,
       language,
       password,

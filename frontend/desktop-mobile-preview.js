@@ -15,49 +15,54 @@
     `<${tag} data-preview-copy="${escape(key)}">${escape(translate(key))}</${tag}>`;
   const icon = (name) => interfaceIcon(name);
 
+  function meetingTabs(summary) {
+    const tabs = [
+      ['document', '会议纪要'],
+      ['list', '鱼骨图'],
+      ['waveform', '转写'],
+      ['notes', '笔记'],
+      ...(summary ? [['bookmark', '重点']] : []),
+    ];
+    return (
+      '<div class="dmp-meeting-tabs">' +
+      tabs
+        .map(([glyph, label], i) => {
+          const body = icon(glyph) + copy(label);
+          return i === 0 || i === 2
+            ? `<button type="button" data-preview-select="${i === 0 ? 2 : 1}" aria-pressed="${i === (summary ? 0 : 2)}">${body}</button>`
+            : `<span>${body}</span>`;
+        })
+        .join('') +
+      '</div>'
+    );
+  }
   function markup() {
     return `<div class="dmp-phone" role="group" data-preview-label="交互预览">
       <div class="dmp-screen">
-        <div class="dmp-statusbar"><b aria-hidden="true">9:41</b><span class="dmp-island"></span><button type="button" class="dmp-pause" data-preview-pause aria-pressed="false">${icon('pause')}</button></div>
+        <div class="dmp-statusbar"><b aria-hidden="true">9:41</b><span class="dmp-island"></span><span class="dmp-status-icons" aria-hidden="true"><svg viewBox="0 0 52 16"><path d="M1 11h3v4H1zm5-3h3v7H6zm5-3h3v10h-3zm5-3h3v13h-3z" fill="currentColor"/><path d="M23 6q6-6 12 0m-10 3q4-4 8 0m-6 3q2-2 4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><rect x="39" y="4" width="10" height="9" rx="2" fill="none" stroke="currentColor"/><path d="M41 6h6v5h-6zm9 1h2v3h-2z" fill="currentColor"/></svg></span><button type="button" class="dmp-pause" data-preview-pause aria-pressed="false">${icon('pause')}</button></div>
         <section class="dmp-scene is-active" data-preview-scene="0" role="group" tabindex="-1" data-preview-label="会议列表">
-          <header class="dmp-header"><img src="./assets/brevia-logo.svg" alt="Brevia"/><strong>Brevia</strong><span class="dmp-computer" role="img" aria-label="${escape(translate('连接电脑') + ' · ' + translate('演示'))}" title="${escape(translate('连接电脑') + ' · ' + translate('演示'))}">${icon('laptop')}</span></header>
-          <div class="dmp-scroll">
-            <div class="dmp-page-heading">${copy('会议', 'h2')}<span>03</span></div>
-            <div class="dmp-search">${icon('search')}${copy('会议列表')}</div>
-            ${copy('今天', 'h3')}
-            <button class="dmp-meeting dmp-featured" type="button" data-preview-select="1"><span class="dmp-meeting-icon">${icon('waveform')}</span><span><strong>${copy('产品讨论')}</strong><small>14:30 · 12:08</small></span>${icon('chevron-right')}</button>
-            <div class="dmp-meeting"><span class="dmp-meeting-icon">${icon('document')}</span><span><strong>${copy('项目周会')}</strong><small>10:00 · 28:16</small></span>${icon('chevron-right')}</div>
-            ${copy('昨天', 'h3')}
-            <div class="dmp-meeting"><span class="dmp-meeting-icon">${icon('notes')}</span><span><strong>${copy('设计评审')}</strong><small>16:00 · 36:42</small></span>${icon('chevron-right')}</div>
-            <div class="dmp-list-footnote">${icon('check')}${copy('转写完成')}</div>
-          </div>
-          <div class="dmp-home-actions"><button class="dmp-record" data-preview-select="1" type="button">${icon('microphone')}${copy('开始录音')}</button></div>
-          <nav class="dmp-phone-nav" aria-hidden="true"><span class="is-selected">${icon('list')}${copy('会议')}</span><span>${icon('notes')}${copy('笔记')}</span><span>${icon('settings')}${copy('设置')}</span></nav>
+          <header class="dmp-brand"><img src="./assets/brevia-mark.svg" alt="Brevia"/><span>${icon('laptop')}${copy('连接电脑')}${icon('chevron-right')}</span></header>
+          <div class="dmp-create"><div class="dmp-library-sources"><button type="button" data-preview-library="phone" aria-pressed="true" data-preview-label="手机会议">${icon('phone')}</button><button type="button" data-preview-library="computer" aria-pressed="false" data-preview-label="电脑会议">${icon('laptop')}</button></div>${icon('search')}<button type="button" data-preview-select="1">${icon('microphone')}${copy('新建录音')}</button></div>
+          <div class="dmp-scroll">${copy('今天', 'small')}${['产品讨论', '项目周会'].map((name, i) => `<${i ? 'div' : 'button type="button" data-preview-select="2"'} class="dmp-meeting"><span>${copy(name, 'strong')}<small>${i ? '10:00 · 28:16' : '14:30 · 12:08'} · ${copy('已完成')}</small></span>${icon('more')}</${i ? 'div' : 'button'}>`).join('')}</div>
+          <nav class="dmp-phone-nav"><span>${icon('waveform')}${copy('会议')}</span><span>${icon('notes')}${copy('笔记')}</span><span>${icon('settings')}${copy('设置')}</span></nav>
         </section>
         <section class="dmp-scene" data-preview-scene="1" role="group" tabindex="-1" data-preview-label="实时转写" aria-hidden="true" inert>
           <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="0" data-preview-label="返回">${icon('back')}</button><strong>${copy('产品讨论')}</strong></header>
-          <div class="dmp-live-meta"><span><i></i>${copy('录音中')}</span><time data-preview-timer>00:42</time></div>
-          <div class="dmp-waveform" aria-hidden="true">${Array.from({ length: 29 }, (_, index) => `<i style="--bar-level:${0.2 + Math.abs(Math.sin(index * 1.7)) * 0.65}"></i>`).join('')}</div>
-          <div class="dmp-live-tabs"><span>${copy('实时转写')}</span><span>${copy('笔记')}</span></div>
+          ${meetingTabs(false)}
           <div class="dmp-transcript">
             ${transcript.map((text, index) => `<article data-preview-utterance="${index}"><header><i>${index === 1 ? '2' : '1'}</i>${copy(index === 1 ? '发言人 2' : '发言人 1')}<time>00:${['36', '42', '48'][index]}</time></header><p data-preview-transcript="${index}">${escape(translate(text))}</p></article>`).join('')}
           </div>
-          <div class="dmp-live-footer"><span class="dmp-record-indicator">${icon('recording')}</span><button data-preview-select="2" type="button">${copy('查看纪要')}${icon('arrow-right')}</button></div>
+          <div class="dmp-controls">
+          <div class="dmp-live-meta"><span><i></i>${copy('录音中')}</span><time data-preview-timer>00:42</time></div>
+          <div class="dmp-waveform" aria-hidden="true">${Array.from({ length: 29 }, (_, index) => `<i style="--bar-level:${0.2 + Math.abs(Math.sin(index * 1.7)) * 0.65}"></i>`).join('')}</div>
+          <div class="dmp-control-row"><span>${icon('bookmark')}</span><span>${icon('pause')}</span><button type="button" data-preview-select="2" data-preview-label="查看纪要">${icon('stop')}</button></div></div>
         </section>
         <section class="dmp-scene" data-preview-scene="2" role="group" tabindex="-1" data-preview-label="会议纪要" aria-hidden="true" inert>
-          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="1" data-preview-label="返回">${icon('back')}</button><strong>${copy('会议纪要')}</strong></header>
-          <div class="dmp-scroll dmp-summary">
-            <div class="dmp-summary-heading">${copy('产品讨论', 'h2')}<small>14:30 · 12:08</small></div>
-            <div class="dmp-summary-status">${icon('ai')}${copy('会议总结')}<span>${icon('check')}<span data-preview-summary-state>${escape(translate('已完成'))}</span></span></div>
-            <div class="dmp-summary-progress" aria-hidden="true"><i></i></div>
-            ${copy('本次讨论明确了目标、负责人和交付时间。', 'p')}
-            <div class="dmp-summary-lines" aria-hidden="true"><i></i><i></i><i></i></div>
-            ${copy('行动项', 'h3')}
-            <label class="dmp-task"><input type="checkbox" data-preview-task="0"/><span>${copy('整理下一步行动项')}</span></label>
-            <label class="dmp-task"><input type="checkbox" data-preview-task="1"/><span>${copy('确认负责人和时间')}</span></label>
-            <div class="dmp-summary-note">${icon('notes')}${copy('把讨论变成清晰、可执行的下一步。')}</div>
-          </div>
-          <div class="dmp-summary-footer">${icon('check')}${copy('转写完成')}</div>
+          <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="1" data-preview-label="返回">${icon('back')}</button><strong>${copy('产品讨论')}</strong></header>
+          ${meetingTabs(true)}
+          <div class="dmp-scroll dmp-summary"><small data-preview-summary-state></small><article>${copy('会议摘要', 'h3')}${copy('本次讨论明确了目标、负责人和交付时间。', 'p')}${copy('行动项', 'h3')}
+          <label class="dmp-task"><input type="checkbox" data-preview-task="0"/>${copy('确认负责人和时间')}</label></article></div>
+          <div class="dmp-playback">${icon('play')}<small>00:00 / 12:08</small><i></i>1×</div>
         </section>
         <div class="dmp-home-indicator" aria-hidden="true"></div>
       </div>
@@ -87,6 +92,7 @@
     const pause = preview.querySelector('[data-preview-pause]');
     const timer = preview.querySelector('[data-preview-timer]');
     const summaryState = preview.querySelector('[data-preview-summary-state]');
+    let liveTranscript = transcript;
     let scene = 0;
     let elapsed = 0;
     let clock = 0;
@@ -157,7 +163,6 @@
       preview.classList.toggle('is-tapping', running && elapsed >= 4500);
       if (scene === 2) {
         const progress = fullScene || preference.matches ? 1 : Math.min(1, elapsed / 1400);
-        preview.style.setProperty('--summary-progress', progress);
         preview.classList.toggle('is-summary-ready', progress === 1);
         const state = translate(progress === 1 ? '已完成' : '处理中');
         if (summaryState.textContent !== state) summaryState.textContent = state;
@@ -171,7 +176,7 @@
         bar.style.setProperty('--bar-level', level.toFixed(3));
       });
       texts.forEach((text, index) => {
-        const value = translate(transcript[index]);
+        const value = translate(liveTranscript[index] || '');
         const progress =
           fullScene || preference.matches
             ? 1
@@ -179,7 +184,7 @@
         const characters = [...value];
         const next = characters.slice(0, Math.ceil(characters.length * progress)).join('');
         if (text.textContent !== next) text.textContent = next;
-        utterances[index].classList.toggle('is-pending', progress === 0);
+        utterances[index].classList.toggle('is-pending', progress === 0 || !value);
         text.classList.toggle('is-writing', running && progress > 0 && progress < 1);
       });
     }
@@ -262,6 +267,11 @@
     }
 
     function onClick(event) {
+      const library = event.target.closest('[data-preview-library]');
+      if (library)
+        for (const button of preview.querySelectorAll('[data-preview-library]'))
+          button.setAttribute('aria-pressed', String(button === library));
+
       const target = event.target.closest('[data-preview-select]');
       if (target) {
         select(Number(target.dataset.previewSelect));
@@ -353,7 +363,20 @@
       instances.delete(dialog);
     }
 
-    const controller = { refresh, select, setPaused, destroy };
+    const controller = {
+      refresh,
+      select,
+      setPaused,
+      destroy,
+      seekLive(time, entries) {
+        liveTranscript = entries;
+        select(1);
+        fullScene = true;
+        elapsed = Math.max(0, time);
+        clock = elapsed;
+        renderPhone();
+      },
+    };
     instances.set(dialog, controller);
     window.addEventListener('pagehide', destroy, { once: true });
     preview.dataset.previewScene = '0';
