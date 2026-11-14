@@ -300,6 +300,39 @@ void main() {
     }
   });
 
+  testWidgets(
+    'recording waveform shows the current level and retires past peaks during silence',
+    (tester) async {
+      final level = ValueNotifier<double>(.85);
+      addTearDown(level.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RecordingSignal(
+              level: level,
+              recording: true,
+              status: 'Recording',
+              time: '00:01',
+            ),
+          ),
+        ),
+      );
+      final meter = find.descendant(
+        of: find.byType(RecordingSignal),
+        matching: find.byType(CustomPaint),
+      );
+      CustomPainter wave() => tester.widget<CustomPaint>(meter).painter!;
+      final initial = wave();
+      level.value = 0;
+      await tester.pump(const Duration(milliseconds: 4100));
+      final silent = wave();
+      expect(silent.shouldRepaint(initial), isTrue);
+      await tester.pump(const Duration(milliseconds: 4200));
+      expect(wave().shouldRepaint(silent), isFalse);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('microphone meter paints segments with a visible height', (
     tester,
   ) async {
