@@ -23,8 +23,8 @@
 | iPhone    | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android   | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
-[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.3/Brevia-WebKit-2.0.3-arm64.dmg
-[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.3/Brevia-2.0.3-x64-setup.exe
+[download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.4/Brevia-WebKit-2.0.4-arm64.dmg
+[download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.0.4/Brevia-2.0.4-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
