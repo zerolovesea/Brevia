@@ -804,35 +804,55 @@ class _HomeState extends State<Home> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             sliver: SliverList.list(
               children: [
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    Text(tr('会议'), style: theme.textTheme.headlineLarge),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: tr(searching ? '关闭' : '搜索会议'),
-                          icon: BreviaIcon(
-                            searching ? Icons.close : Icons.search,
+                    if (computer != null) ...[
+                      for (final (selected, icon, label) in [
+                        (false, Icons.phone_iphone_outlined, '本机会议'),
+                        (true, Icons.laptop_outlined, '电脑会议'),
+                      ])
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: 4),
+                          child: IconButton.filledTonal(
+                            tooltip: tr(label),
+                            isSelected: onComputer == selected,
+                            style: IconButton.styleFrom(
+                              backgroundColor: onComputer == selected
+                                  ? theme.colorScheme.inverseSurface
+                                  : theme.colorScheme.surfaceContainerLow,
+                              foregroundColor: onComputer == selected
+                                  ? theme.colorScheme.onInverseSurface
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                            icon: Icon(icon, size: 20),
+                            onPressed: () =>
+                                setState(() => desktopLibrary = selected),
                           ),
-                          onPressed: () => setState(() {
-                            searching = !searching;
-                            if (!searching) query = '';
-                          }),
                         ),
-                        if (!searching &&
-                            (model.live == null ||
-                                model.live?['state'] == 'ended'))
-                          FilledButton.icon(
-                            onPressed: model.busy ? null : prepare,
-                            icon: const Icon(Icons.mic_none, size: 18),
-                            label: Text(model.busy ? tr('正在准备…') : tr('新建录音')),
-                          ),
-                      ],
+                    ],
+                    const Spacer(),
+                    IconButton(
+                      tooltip: tr(searching ? '关闭' : '搜索会议'),
+                      icon: BreviaIcon(searching ? Icons.close : Icons.search),
+                      onPressed: () => setState(() {
+                        searching = !searching;
+                        if (!searching) query = '';
+                      }),
                     ),
+                    if (!searching &&
+                        (model.live == null || model.live?['state'] == 'ended'))
+                      Flexible(
+                        flex: 3,
+                        child: FilledButton.icon(
+                          onPressed: model.busy ? null : prepare,
+                          icon: const Icon(Icons.mic_none, size: 18),
+                          label: Text(
+                            model.busy ? tr('正在准备…') : tr('新建录音'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 AnimatedSize(
@@ -885,33 +905,6 @@ class _HomeState extends State<Home> {
                     ],
                   ),
                 ),
-                if (computer != null)
-                  Row(
-                    children: [
-                      for (final (selected, icon, label) in [
-                        (false, Icons.phone_iphone_outlined, '本机会议'),
-                        (true, Icons.laptop_outlined, '电脑会议'),
-                      ])
-                        Padding(
-                          padding: const EdgeInsetsDirectional.only(end: 8),
-                          child: IconButton.filledTonal(
-                            tooltip: tr(label),
-                            isSelected: onComputer == selected,
-                            style: IconButton.styleFrom(
-                              backgroundColor: onComputer == selected
-                                  ? theme.colorScheme.inverseSurface
-                                  : theme.colorScheme.surfaceContainerLow,
-                              foregroundColor: onComputer == selected
-                                  ? theme.colorScheme.onInverseSurface
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
-                            icon: Icon(icon, size: 20),
-                            onPressed: () =>
-                                setState(() => desktopLibrary = selected),
-                          ),
-                        ),
-                    ],
-                  ),
                 const SizedBox(height: 8),
               ],
             ),
