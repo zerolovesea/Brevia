@@ -407,16 +407,7 @@ textarea,
 [contenteditable] {
   caret-color: var(--color-text);
 }
-.settings-card > :is(.interface-icon, [data-interface-icon]) {
-  position: absolute;
-  top: 24px;
-  left: 12px;
-  color: var(--color-text);
-}
-.settings-card.settings-preferences {
-  min-height: 64px;
-  padding-right: 200px;
-}
+
 .settings-preferences > .flow-select {
   position: absolute;
   right: 0;
@@ -425,12 +416,6 @@ textarea,
 }
 .settings-preferences .flow-select-options {
   z-index: 40;
-}
-#settings-view .settings-card,
-#settings-view .update-card {
-  border-radius: 0;
-  overflow: visible;
-  min-height: 64px;
 }
 
 #settings-view .settings-preferences > .flow-select {
@@ -449,10 +434,6 @@ textarea,
 }
 .settings-folder-paths .secondary {
   white-space: nowrap;
-}
-#settings-view .settings-grid > * {
-  grid-column: 1 / -1;
-  min-width: 0;
 }
 .library-toolbar .search input {
   height: 42px;
@@ -637,9 +618,7 @@ html[data-theme="dark"] {
   .meeting-row .meeting-main {
     grid-column: 1 / 9;
   }
-  .settings-card.settings-preferences {
-    padding-right: 120px;
-  }
+
   .settings-preferences > .flow-select {
     width: 110px;
   }
@@ -750,13 +729,6 @@ html[data-theme="dark"] {
 #prepare-view .capture-status > span {
   white-space: nowrap;
 }
-#settings-view .settings-card > h3 {
-  line-height: 22px;
-}
-
-#settings-view .settings-card > :is(.interface-icon, [data-interface-icon]) {
-  top: 20px;
-}
 
 /* 共用 AI 服务配置表面；引导的紧凑尺寸在对应上下文中校准。 */
 .modal-backdrop:is(.summary-model-modal, .ai-assist-modal):not(.settings-page) {
@@ -825,14 +797,7 @@ html[data-theme="dark"] {
   display: flex;
   gap: 12px;
 }
-#settings-view .settings-card,
-#settings-view .update-card {
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-#settings-view .settings-card > h3 {
-  margin: 0;
-}
+
 .sidebar .new-workspace {
   font-size: 14px;
 }
@@ -1013,26 +978,6 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
 #detail-view .tabbar-tabs .tab.active {
   border-bottom: 2px solid var(--color-text);
   font-weight: 700;
-}
-
-#detail-view .summary-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex: none;
-}
-
-#detail-view .summary-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
-}
-#detail-view .summary-actions svg {
-  width: 20px;
-  height: 20px;
 }
 
 #detail-view .final-transcript,
@@ -1337,14 +1282,6 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
   border-color: var(--color-text);
   color: var(--color-text);
   font-weight: 700;
-}
-
-#settings-view .settings-card > :is(.interface-icon, [data-interface-icon]) {
-  left: 24px;
-}
-
-#settings-view .update-card h2 {
-  font-size: 18px;
 }
 
 .config-fields {
@@ -2467,16 +2404,6 @@ details.advanced-settings-section[open]::details-content {
   display: block;
   font: inherit;
   letter-spacing: normal;
-}
-
-@media (max-width: 850px) {
-  #settings-view .update-card {
-    padding-right: 16px;
-  }
-  #settings-view .update-card .update-actions {
-    position: static;
-    margin-top: 16px;
-  }
 }
 
 .flow-select-options.is-floating {
@@ -4175,19 +4102,7 @@ textarea,
   line-height: 1.4;
   margin: 20px 0 10px;
 }
-#detail-view .summary-actions {
-  justify-content: flex-start;
-  border-top: 1px solid var(--color-line);
-  padding: 16px 0 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-}
-#detail-view .summary-actions .modal-action {
-  flex: initial;
-  min-width: 156px;
-}
+
 .save-state {
   display: inline-flex;
   align-items: center;
@@ -4255,11 +4170,7 @@ textarea,
   background: var(--color-text);
   color: var(--color-text-inverse);
 }
-#detail-view .tabbar-extra:has([data-save-state="failed"]) .tabbar-action.is-save {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-line);
-}
+
 .detail-notes-edit .notes-toolbar,
 .summary-inline-edit .notes-toolbar {
   border: 1px solid var(--color-line);
@@ -4312,11 +4223,7 @@ textarea,
   justify-content: space-between;
   gap: 12px;
 }
-#detail-view .tabbar-extra {
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-right: 0;
-}
+
 #detail-view :is(.tabbar-action, .detail-icon-action) {
   display: inline-flex;
   align-items: center;
@@ -4830,17 +4737,7 @@ textarea,
   letter-spacing: normal;
   line-height: 24px;
 }
-#settings-view .settings-grid {
-  grid-row: 3;
-  display: block;
-  margin: 0;
-  min-height: 0;
-  overflow: visible;
-  border-top: 0;
-}
-#settings-view .settings-grid > :not(.settings-preferences) {
-  display: none;
-}
+
 #settings-view .settings-preferences {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 180px;
@@ -7207,13 +7104,6 @@ html[data-theme] .toast,
   }
 }
 
-#detail-view .detail-summary-panel .summary-preview > .summary-actions {
-  display: none;
-}
-#detail-view .detail-summary-panel .summary-preview:has(.summary-empty) > .summary-actions,
-#detail-view .detail-summary-panel .summary-preview:has(.summary-inline-edit) > .summary-actions {
-  display: flex;
-}
 .detail-summary-panel .summary-head {
   flex: none;
   padding-top: 20px;
@@ -10059,9 +9949,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
     transition: none;
   }
 }
-#settings-view .settings-grid > [data-desktop-settings] {
-  display: contents;
-}
+
 #settings-view [data-desktop-settings] > .settings-group {
   display: block;
   margin: 28px 0 0;

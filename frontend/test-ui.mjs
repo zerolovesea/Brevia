@@ -248,11 +248,6 @@ assert.match(
 );
 assert.match(
   text(tailwind),
-  /\.final-transcript\s+\.tabbar-extra\s+\{\s+margin-right:\s+40px;/,
-  'refinement menu stays clear of the swap control',
-);
-assert.match(
-  text(tailwind),
   /\.tab\s+\{\s+@apply\s+border-b\s+border-transparent\s+pb-4\s+text-\[13px\]\s+text-\[#666666\];\s+white-space:\s+nowrap;/,
   'narrow transcript tabs do not wrap per character',
 );
@@ -1691,12 +1686,6 @@ assert.match(
 );
 assert.match(text(css), /\.app-shell\{[^}]*grid-template-columns:272px minmax\(0,1fr\)/);
 assert.match(text(workspaces), /class="new-workspace"/);
-assert.match(text(tailwind), /#settings-view\s+\.settings-card\s+\{\s+@apply\s+min-h-20/);
-assert.match(text(tailwind), /#settings-view \.settings-grid \{[^}]*grid-auto-rows: max-content/);
-assert.match(
-  text(tailwind),
-  /\.update-card\s+\{\s+@apply\s+col-span-12\s+flex\s+items-center\s+justify-between\s+gap-6/,
-);
 assert.match(text(app), /stackableTaskCardSelector\s+=\s+'[^']*\.mini-meeting[^']*\.mini-playback/);
 assert.match(
   text(app),

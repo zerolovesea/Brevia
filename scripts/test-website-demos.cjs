@@ -680,7 +680,7 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         if (width >= 1000)
           assert.ok(layout.frameWidth >= 840 - 1, 'The laptop preview stays readable');
         assert.equal(layout.backend, false, 'Demonstration has no native backend');
-        for (const platform of ['macos', 'windows', 'ios', 'android']) {
+        for (const platform of ['macos', 'windows', 'linux', 'ios', 'android']) {
           await win.locator(`label[for="platform-${platform}"]`).click();
           const currentWidth = await win
             .locator('.app-frame')
@@ -698,9 +698,12 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
               'QR is reachable by scrolling',
             );
           }
-          assert.equal(await win.locator('.platform-link:visible').count(), 1);
           assert.equal(
-            await win.locator('.platform-link:visible').getAttribute('data-platform'),
+            await win.locator('.platform-link:visible').count(),
+            ['linux', 'windows'].includes(platform) ? 2 : 1,
+          );
+          assert.equal(
+            await win.locator('.platform-link:visible').first().getAttribute('data-platform'),
             platform,
           );
         }
@@ -901,10 +904,10 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
     const noScript = await noScriptContext.newPage();
     await noScript.goto(`${siteURL}/website/index-en.html`);
-    for (const platform of ['macos', 'windows', 'ios', 'android']) {
+    for (const platform of ['macos', 'windows', 'linux', 'ios', 'android']) {
       await noScript.locator(`label[for="platform-${platform}"]`).click();
       assert.equal(
-        await noScript.locator('.platform-link:visible').getAttribute('data-platform'),
+        await noScript.locator('.platform-link:visible').first().getAttribute('data-platform'),
         platform,
       );
     }
@@ -950,7 +953,13 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
     mkdirSync(join(temp, 'docs'), { recursive: true });
     for (const file of readmes) cpSync(join(root, file), join(temp, file));
     mkdirSync(join(temp, 'dist'));
-    for (const name of ['Brevia-WebKit-9.8.7-arm64.dmg', 'Brevia-9.8.7-x64-setup.exe'])
+    for (const name of [
+      'Brevia-WebKit-9.8.7-arm64.dmg',
+      'Brevia-9.8.7-x64-setup.exe',
+      'Brevia-9.8.7-x64-cuda-setup.exe',
+      'Brevia-9.8.7-amd64-cpu.deb',
+      'Brevia-9.8.7-amd64-cuda.deb',
+    ])
       writeFileSync(join(temp, 'dist', name), Buffer.alloc(100000));
     const release = spawnSync(process.execPath, [join(root, 'scripts/update-release-links.mjs')], {
       cwd: temp,

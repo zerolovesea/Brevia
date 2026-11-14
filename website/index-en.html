@@ -84,6 +84,8 @@
               ><input type="radio" name="platform" id="platform-windows" /><label
                 for="platform-windows"
                 >Windows</label
+              ><input type="radio" name="platform" id="platform-linux" /><label for="platform-linux"
+                >Linux</label
               ><input type="radio" name="platform" id="platform-ios" /><label for="platform-ios"
                 >iOS</label
               ><input type="radio" name="platform" id="platform-android" /><label
@@ -95,21 +97,42 @@
               data-platform="macos"
               href="https://github.com/zerolovesea/Brevia/releases/download/v2.0.3/Brevia-WebKit-2.0.3-arm64.dmg"
               ><span>Download macOS</span
-              ><small>Apple Silicon · macOS 14+ · <span data-size="macos">45.5 MB</span></small
+              ><small>Apple Silicon · macOS 14+<span data-size="macos">45.5 MB</span></small
               ><span class="download-arrow" aria-hidden="true">↓</span></a
             ><a
               class="platform-link"
               data-platform="windows"
               href="https://github.com/zerolovesea/Brevia/releases/download/v2.0.3/Brevia-2.0.3-x64-setup.exe"
-              ><span>Download Windows</span
-              ><small>Windows 10/11 · x64 · <span data-size="windows">38.1 MB</span></small
+              ><span>Download Windows CPU</span
+              ><small>Windows 10/11 · x64<span data-size="windows">38.1 MB</span></small
+              ><span class="download-arrow" aria-hidden="true">↓</span></a
+            ><a
+              class="platform-link"
+              data-platform="windows"
+              href="https://github.com/zerolovesea/Brevia/releases/download/v2.0.4/Brevia-2.0.4-x64-cuda-setup.exe"
+              ><span>Download Windows CUDA</span
+              ><small>Windows 10/11 · x64<span data-size="windows-cuda"></span></small
+              ><span class="download-arrow" aria-hidden="true">↓</span></a
+            ><a
+              class="platform-link"
+              data-platform="linux"
+              href="https://github.com/zerolovesea/Brevia/releases/download/v2.0.4/Brevia-2.0.4-amd64-cpu.deb"
+              ><span>Download Linux CPU</span
+              ><small>Ubuntu 24.04 · x64<span data-size="linux-cpu"></span></small
+              ><span class="download-arrow" aria-hidden="true">↓</span></a
+            ><a
+              class="platform-link"
+              data-platform="linux"
+              href="https://github.com/zerolovesea/Brevia/releases/download/v2.0.4/Brevia-2.0.4-amd64-cuda.deb"
+              ><span>Download Linux CUDA</span
+              ><small>Ubuntu 24.04 · x64<span data-size="linux-cuda"></span></small
               ><span class="download-arrow" aria-hidden="true">↓</span></a
             ><a
               class="platform-link"
               data-platform="ios"
               href="https://apps.apple.com/app/id6819869442"
               ><span>Download iOS</span
-              ><small>App Store · <span data-size="ios">v1.2.0 · 22.1 MB</span></small
+              ><small>App Store<span data-size="ios">v1.2.0 · 22.1 MB</span></small
               ><img
                 class="download-qr"
                 src="../frontend/assets/app-store-download.svg"
@@ -119,7 +142,7 @@
               data-platform="android"
               href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
               ><span>Download Android</span
-              ><small>APK · <span data-size="android">v1.2.1 · 78.0 MB</span></small
+              ><small>APK<span data-size="android">v1.2.1 · 78.0 MB</span></small
               ><img
                 class="download-qr"
                 src="../frontend/assets/android-download.svg"

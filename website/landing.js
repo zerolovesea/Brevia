@@ -159,7 +159,9 @@
       ? 'ios'
       : /Win/i.test(navigator.platform)
         ? 'windows'
-        : 'macos';
+        : /Linux/i.test(navigator.platform)
+          ? 'linux'
+          : 'macos';
   document.getElementById(`platform-${platform}`).checked = true;
   const android = document.querySelector('[data-platform="android"]');
   const readAndroidSize = async () => {

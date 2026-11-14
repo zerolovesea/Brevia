@@ -852,12 +852,7 @@
   .wide {
     @apply w-full;
   }
-  .settings-card h2 {
-    @apply m-0 text-[22px] font-medium tracking-[-.03em];
-  }
-  .settings-card > p {
-    @apply mt-2 text-[13px] leading-7 text-[#666666];
-  }
+
   dl {
     @apply my-8 grid gap-4;
   }
@@ -2003,15 +1998,7 @@
   .final-transcript .segment.is-active {
     @apply bg-[#f2f2f2];
   }
-  .tabbar-extra {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  #detail-view .final-transcript .tabbar-extra {
-    margin-right: 40px;
-  }
+
   .refine-state {
     @apply text-[12px] text-[#767676];
     white-space: nowrap;
@@ -2292,10 +2279,7 @@
   .summary-head .eyebrow {
     margin-bottom: 0;
   }
-  .summary-actions {
-    display: flex;
-    gap: 6px;
-  }
+
   .detail-layout > .detail-mode-toggle {
     position: absolute;
     top: 0;
@@ -2373,16 +2357,6 @@
   #detail-view .notes label {
     @apply text-[12px] leading-6;
   }
-  /* Settings cards and model rows; card content comes from the shared UI data. */
-  .settings-grid {
-    @apply mt-8 grid grid-cols-1 gap-0;
-  }
-  .settings-card {
-    @apply relative flex min-h-20 flex-col justify-center border-0 border-b border-(--color-line) py-5 pl-14 pr-32;
-  }
-  .settings-card:last-child {
-    @apply col-span-12;
-  }
   .model-delete {
     @apply text-[11px] text-(--color-danger) transition-opacity duration-300 hover:opacity-70;
   }
@@ -2401,33 +2375,7 @@
   #settings-view > h1 {
     @apply text-[clamp(32px,3.5vw,52px)] leading-[1.05];
   }
-  #settings-view .settings-grid {
-    @apply mt-4 min-h-0 content-start overflow-y-auto pr-0;
-    grid-auto-rows: max-content;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-  #settings-view .settings-card {
-    @apply min-h-20 border-0 border-b border-(--color-line) py-4 pl-14 pr-32;
-  }
-  #settings-view .settings-card h2 {
-    @apply m-0 text-[16px] font-bold leading-6;
-  }
-  #settings-view .settings-card > p {
-    @apply mt-1 mb-0 text-[13px] leading-5;
-  }
-  #settings-view .settings-card .secondary {
-    @apply absolute right-0 top-1/2 mt-0 -translate-y-1/2 text-[13px];
-  }
-  .update-card {
-    @apply col-span-12 flex items-center justify-between gap-6 border border-black p-4;
-  }
-  .update-card h2 {
-    @apply m-0 text-[20px] leading-6 font-medium tracking-[-.03em];
-  }
-  .update-card p {
-    @apply mt-1 text-[12px] leading-5 text-[#666666];
-  }
+
   .update-button {
     @apply shrink-0 border border-black bg-black px-4 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-wait disabled:opacity-50;
   }
@@ -3444,13 +3392,7 @@
   .player-speed {
     display: none;
   }
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-  .settings-card,
-  .settings-card:last-child {
-    grid-column: auto;
-  }
+
   .config-fields {
     grid-template-columns: 1fr;
   }
@@ -3742,8 +3684,6 @@ select,
 .config-fields input {
   border-radius: 8px;
 }
-.settings-card,
-.update-card,
 .processing-card,
 .mini-meeting,
 .mini-playback,
@@ -3767,8 +3707,6 @@ select,
 /* Keep hover backgrounds and inner borders clipped inside the rounded corners. */
 .meeting-menu,
 .meeting-workspace-menu,
-.settings-card,
-.update-card,
 .modal-panel,
 .segment-context-menu,
 .toast,
@@ -3799,7 +3737,6 @@ html[data-theme="dark"] .sidebar,
 html[data-theme="dark"] .window-bar,
 html[data-theme="dark"] .library-toolbar,
 html[data-theme="dark"] .meeting-list,
-html[data-theme="dark"] .settings-card,
 html[data-theme="dark"] .tabbar,
 html[data-theme="dark"] .player,
 html[data-theme="dark"] .notes section,
@@ -3837,7 +3774,6 @@ html[data-theme="dark"] .detail-head h1,
 html[data-theme="dark"] #settings-view > h1,
 html[data-theme="dark"] .meeting-main h2,
 html[data-theme="dark"] .segment p,
-html[data-theme="dark"] .settings-card h2,
 html[data-theme="dark"] .live-title strong,
 html[data-theme="dark"] dd {
   color: #fff;
@@ -3849,7 +3785,6 @@ html[data-theme="dark"] .meeting-main p,
 html[data-theme="dark"] .segment .translation,
 html[data-theme="dark"] .notes p,
 html[data-theme="dark"] .notes label,
-html[data-theme="dark"] .settings-card > p,
 html[data-theme="dark"] dt {
   color: #b0b0b0;
 }
@@ -4047,15 +3982,7 @@ html[data-theme="dark"] .ai-suggestion-badge:hover {
 html[data-theme="dark"] .status {
   color: #ddd;
 }
-html[data-theme="dark"] .update-card {
-  border-color: #eee;
-}
-html[data-theme="dark"] .update-card h2 {
-  color: #fff;
-}
-html[data-theme="dark"] .update-card p {
-  color: #b0b0b0;
-}
+
 html[data-theme="dark"] .update-button {
   border-color: #fff;
   background: #fff;

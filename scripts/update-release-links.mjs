@@ -11,25 +11,24 @@ const updates = [
 ];
 
 for (const [file, baseUrl] of updates) {
-  const macUrl = `${baseUrl}/Brevia-WebKit-${version}-arm64.dmg`;
-  const windowsUrl = `${baseUrl}/Brevia-${version}-x64-setup.exe`;
-  let html = readFileSync(file, 'utf8')
-    .replace(/<!-- native-release-pending -->[\s\S]*?<!-- \/native-release-pending -->\s*/g, '')
-    .replace(/href="[^"]*Brevia-[^"]*-arm64\.dmg"/, `href="${macUrl}"`)
-    .replace(/href="[^"]*Brevia-[^"]*-x64-setup\.exe"/, `href="${windowsUrl}"`)
-    .replace(/(<[^>]*data-release-version[^>]*>)[^<]*(<\/)/g, `$1${tag}$2`);
-  for (const [platform, url] of [
-    ['macos', macUrl],
-    ['windows', windowsUrl],
-  ]) {
-    const bytes = statSync(`dist/${url.split('/').pop()}`).size;
-    html = html.replace(
-      new RegExp(`(data-size="${platform}">)[^<]*`),
-      `$1${(bytes / 1e6).toFixed(1)} MB`,
-    );
-  }
-  if (!html.includes(macUrl) || !html.includes(windowsUrl) || !html.includes(`>${tag}<`)) {
-    throw new Error(`Could not update all release links in ${file}`);
+  let html = readFileSync(file, 'utf8').replace(/(data-release-version[^>]*>)[^<]*/, `$1${tag}`);
+  for (const [key, filename] of Object.entries({
+    macos: `Brevia-WebKit-${version}-arm64.dmg`,
+    windows: `Brevia-${version}-x64-setup.exe`,
+    'windows-cuda': `Brevia-${version}-x64-cuda-setup.exe`,
+    'linux-cpu': `Brevia-${version}-amd64-cpu.deb`,
+    'linux-cuda': `Brevia-${version}-amd64-cuda.deb`,
+  })) {
+    const bytes = statSync(`dist/${filename}`).size;
+    const suffix = filename.slice(filename.indexOf(version) + version.length);
+    const anchor = html
+      .match(/<a\s[^>]*class="platform-link"[^>]*>/g)
+      ?.find((entry) => entry.includes(suffix + '"'));
+    if (!anchor || !html.includes(`data-size="${key}">`))
+      throw new Error(`Missing ${key} download in ${file}`);
+    html = html
+      .replace(anchor, anchor.replace(/href="[^"]*"/, `href="${baseUrl}/${filename}"`))
+      .replace(new RegExp(`(data-size="${key}">)[^<]*`), `$1${(bytes / 1e6).toFixed(1)} MB`);
   }
   writeFileSync(file, html);
 }
