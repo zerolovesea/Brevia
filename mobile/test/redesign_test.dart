@@ -18,6 +18,38 @@ void main() {
   });
   tearDown(() => uiLanguage = 'system');
 
+  testWidgets('home capsule stays fixed while the library scrolls', (
+    tester,
+  ) async {
+    final model = AppModel();
+    addTearDown(model.dispose);
+    model.meetings = [
+      for (var i = 0; i < 40; i++)
+        {
+          'id': 'nav-$i',
+          'title': 'Meeting $i',
+          'state': 'ended',
+          'localOnly': true,
+          'samples': 16000,
+        },
+    ];
+    await tester.pumpWidget(BreviaApp(model: model));
+    await tester.pumpAndSettle();
+    final notes = find.byTooltip(tr('笔记'));
+    final before = tester.getRect(notes);
+    await tester.drag(
+      find.byKey(const PageStorageKey('mobile-library')),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getRect(notes), before);
+    expect(notes.hitTestable(), findsOneWidget);
+    await tester.tap(notes);
+    await tester.pumpAndSettle();
+    expect(find.text(tr('暂无笔记')), findsOneWidget);
+    expect(find.byTooltip(tr('设置')).hitTestable(), findsOneWidget);
+  });
+
   testWidgets('reading scroll compacts and restores meeting destinations', (
     tester,
   ) async {
@@ -252,7 +284,7 @@ void main() {
     meeting['state'] = 'paused';
     model.notifyListeners();
     await tester.pumpAndSettle();
-    expect(find.text('暂停期间不采集音频'), findsOneWidget);
+    expect(find.byTooltip('暂停期间不采集音频'), findsOneWidget);
     expect(find.byTooltip('继续'), findsOneWidget);
     meeting['state'] = 'recording';
     meeting['connected'] = false;
@@ -299,39 +331,6 @@ void main() {
       await tester.pumpAndSettle();
     }
   });
-
-  testWidgets(
-    'recording waveform shows the current level and retires past peaks during silence',
-    (tester) async {
-      final level = ValueNotifier<double>(.85);
-      addTearDown(level.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: RecordingSignal(
-              level: level,
-              recording: true,
-              status: 'Recording',
-              time: '00:01',
-            ),
-          ),
-        ),
-      );
-      final meter = find.descendant(
-        of: find.byType(RecordingSignal),
-        matching: find.byType(CustomPaint),
-      );
-      CustomPainter wave() => tester.widget<CustomPaint>(meter).painter!;
-      final initial = wave();
-      level.value = 0;
-      await tester.pump(const Duration(milliseconds: 4100));
-      final silent = wave();
-      expect(silent.shouldRepaint(initial), isTrue);
-      await tester.pump(const Duration(milliseconds: 4200));
-      expect(wave().shouldRepaint(silent), isFalse);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
 
   testWidgets('microphone meter paints segments with a visible height', (
     tester,
@@ -386,6 +385,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(selector);
+    await tester.pumpAndSettle();
     await tester.tap(selector);
     await tester.pumpAndSettle();
     final missing = find.widgetWithText(ListTile, 'Missing model · 未安装');

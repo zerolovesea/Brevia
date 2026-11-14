@@ -128,7 +128,10 @@ Future<void> verifyMeetingStability(
       expect(find.text(tr('音频已传输')), findsNothing);
       if (tabs != null) {
         expect(tester.getRect(find.text(tr('转写'))), tabs, reason: label);
-        expect(find.text(tr(connected ? '已连接' : '正在重新连接')), findsOneWidget);
+        expect(
+          find.byTooltip(tr(connected ? '已连接' : '正在重新连接')),
+          findsOneWidget,
+        );
         expect(find.byType(LinearProgressIndicator), findsNothing);
         if (brightness == Brightness.dark && state == 'paused') {
           final red = find.byWidgetPredicate(

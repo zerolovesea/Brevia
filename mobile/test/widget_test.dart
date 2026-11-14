@@ -343,7 +343,7 @@ void main() {
     expect(find.text('笔记'), findsOneWidget);
     expect(find.byType(RecordingFocus), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('已连接'), findsOneWidget);
+    expect(find.byTooltip('已连接'), findsOneWidget);
     expect(find.byTooltip('暂停').hitTestable(), findsOneWidget);
     expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
     expect(find.byTooltip('返回录音'), findsNothing);
@@ -406,7 +406,7 @@ void main() {
       expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
       expect(tester.getRect(find.text('转写')), tabs);
       expect(tester.getRect(find.byType(RecordingControls)), controls);
-      expect(find.text(connected ? '已连接' : '正在重新连接'), findsOneWidget);
+      expect(find.byTooltip(connected ? '已连接' : '正在重新连接'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(tester.takeException(), isNull);
     }
@@ -427,12 +427,7 @@ void main() {
     await tester.tap(find.text('电脑已安装，开始配对'));
     await tester.pumpAndSettle();
     for (final label in ['首次录音时申请。', '连接电脑时申请。', '首次扫码时申请。']) {
-      await tester.scrollUntilVisible(
-        find.text(label),
-        120,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text(label), findsOneWidget);
+      expect(find.text(label), findsNothing);
     }
     expect(find.text('允许'), findsNothing);
     await tester.tap(find.text('已打开二维码，开始扫码'));
@@ -530,7 +525,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
-    final status = find.text('已连接');
+    final status = find.byTooltip('已连接');
     expect(status, findsOneWidget);
     final position = tester.getTopLeft(status);
     for (final counts in [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)]) {
@@ -549,7 +544,7 @@ void main() {
     await tester.pump();
     expect(status, findsNothing);
     expect(find.byType(MeetingConnectionStatus), findsOneWidget);
-    expect(find.text('正在重新连接'), findsOneWidget);
+    expect(find.byTooltip('正在重新连接'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -593,7 +588,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 240));
     expect(find.text('转写'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('已连接'), findsOneWidget);
+    expect(find.byTooltip('已连接'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     model.dispose();

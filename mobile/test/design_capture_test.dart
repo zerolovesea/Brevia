@@ -31,12 +31,19 @@ void main() {
       final font = Platform.environment['BREVIA_CAPTURE_FONT'];
       if (font != null) {
         for (final family in ['Roboto', 'Ahem']) {
-          await (FontLoader(family)..addFont(
-                Future.value(
-                  ByteData.sublistView(File(font).readAsBytesSync()),
-                ),
-              ))
-              .load();
+          final loader = FontLoader(family)
+            ..addFont(
+              Future.value(ByteData.sublistView(File(font).readAsBytesSync())),
+            );
+          final fallback = Platform.environment['BREVIA_CAPTURE_FALLBACK_FONT'];
+          if (fallback != null) {
+            loader.addFont(
+              Future.value(
+                ByteData.sublistView(File(fallback).readAsBytesSync()),
+              ),
+            );
+          }
+          await loader.load();
         }
       }
       await (FontLoader(
@@ -383,11 +390,7 @@ void main() {
       ),
     );
     await capture('mobile-review-summary');
-    await tester.tap(find.text(tr('全屏阅读')));
-    await tester.pumpAndSettle();
     await capture('mobile-minutes-reader');
-    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(tr('更多')).last);
     await tester.pumpAndSettle();
     await capture('mobile-minutes-actions');

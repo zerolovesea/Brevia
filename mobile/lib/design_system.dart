@@ -86,7 +86,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       ? '.SF Pro Text'
       : 'Roboto';
   final ink = dark ? Color(0xfff0f0f0) : Color(0xff171717);
-  final canvas = dark ? Color(0xff101010) : Color(0xfffafafa);
+  final canvas = dark ? Color(0xff101010) : Color(0xfff4f4f4);
   final muted = dark ? Color(0xffacacac) : Color(0xff696969);
   final line = dark ? Color(0xff404040) : Color(0xffd4d4d4);
   final sheet = dark ? Color(0xff171717) : Colors.white;
@@ -170,14 +170,14 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
     dialogTheme: DialogThemeData(
       backgroundColor: sheet,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         animationDuration: BreviaMotion.state,
         side: WidgetStatePropertyAll(BorderSide(color: line)),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         ),
       ),
     ),
@@ -193,7 +193,6 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       ),
       elevation: 0,
       scrolledUnderElevation: 0,
-      shape: Border(bottom: BorderSide(color: scheme.outlineVariant)),
     ),
     textTheme: base.textTheme
         .copyWith(
@@ -247,15 +246,15 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       fillColor: scheme.surfaceContainerLow,
       contentPadding: EdgeInsets.all(16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
         borderSide: BorderSide(color: line),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
         borderSide: BorderSide(color: line),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
     ),
@@ -270,7 +269,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
               fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(24),
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
@@ -290,7 +289,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
               fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(24),
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
@@ -308,7 +307,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
               fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(24),
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
@@ -319,13 +318,14 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       backgroundColor: sheet,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
     ),
     listTileTheme: ListTileThemeData(
       iconColor: ink,
       contentPadding: EdgeInsets.zero,
-      minVerticalPadding: 8,
+      minVerticalPadding: 10,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
         fontSize: 15,
@@ -346,7 +346,7 @@ ThemeData breviaTheme(Brightness brightness, {String? fontFamily}) {
       elevation: 0,
       indicatorColor: scheme.onSurface,
       indicatorShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
       ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
@@ -474,8 +474,10 @@ class BreviaPanel extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
+    this.radius = 24,
   });
   final Widget child;
+  final double radius;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -483,7 +485,9 @@ class BreviaPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     );
@@ -530,46 +534,53 @@ class MeetingDestinations extends StatelessWidget {
       Icons.account_tree_outlined,
     ];
     final colors = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final (value, label) in entries)
-            Semantics(
-              selected: value == selected,
-              child: TextButton(
-                onPressed: () => onSelect(value),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(48, 44),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  backgroundColor: value == selected
-                      ? colors.inverseSurface
-                      : null,
-                  foregroundColor: value == selected
-                      ? colors.onInverseSurface
-                      : colors.onSurfaceVariant,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSize(
-                      duration: BreviaMotion.duration(
-                        context,
-                        BreviaMotion.feedback,
-                      ),
-                      child: compact
-                          ? const SizedBox.shrink()
-                          : Icon(icons[value], size: 18),
+    return BreviaPanel(
+      radius: 14,
+      padding: const EdgeInsets.all(5),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final (value, label) in entries)
+              Semantics(
+                selected: value == selected,
+                child: TextButton(
+                  onPressed: () => onSelect(value),
+                  style: TextButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    Text(label, style: const TextStyle(fontSize: 12)),
-                  ],
+                    minimumSize: const Size(48, 44),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    backgroundColor: value == selected
+                        ? colors.inverseSurface
+                        : null,
+                    foregroundColor: value == selected
+                        ? colors.onInverseSurface
+                        : colors.onSurfaceVariant,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedSize(
+                        duration: BreviaMotion.duration(
+                          context,
+                          BreviaMotion.feedback,
+                        ),
+                        child: compact
+                            ? const SizedBox.shrink()
+                            : Icon(icons[value], size: 18),
+                      ),
+                      Text(label, style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -607,14 +618,14 @@ class BreviaTabs extends StatelessWidget {
                       vertical: 4,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                     animationDuration: BreviaMotion.duration(
                       context,
                       BreviaMotion.feedback,
                     ),
                     foregroundColor: selected == value
-                        ? scheme.onSurface
+                        ? scheme.onInverseSurface
                         : scheme.onSurfaceVariant,
                     textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontSize: 14,
@@ -634,14 +645,10 @@ class BreviaTabs extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: selected == value
-                              ? scheme.primary
-                              : Colors.transparent,
-                          width: 3,
-                        ),
-                      ),
+                      color: selected == value
+                          ? scheme.inverseSurface
+                          : scheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Tooltip(message: label, child: Text(label)),
                   ),

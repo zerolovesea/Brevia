@@ -44,7 +44,7 @@ class DeviceLinkHeader extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.inverseSurface,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 child: BreviaStateChange(
                   child: Icon(

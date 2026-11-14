@@ -85,7 +85,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
   Widget instruction(IconData icon, String title, String body) => ListTile(
     leading: BreviaGlyph(icon),
     title: Text(tr(title)),
-    subtitle: Text(tr(body)),
+    subtitle: body.isEmpty ? null : Text(tr(body)),
     contentPadding: EdgeInsets.zero,
   );
 
@@ -102,7 +102,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         if (step == 0) ...[
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: breviaBrand(context),
+            child: breviaLogo(size: 40),
           ),
           const SizedBox(height: 20),
           Text(
@@ -122,7 +122,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
               ),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Row(
               children: [
@@ -151,13 +151,9 @@ class _OnboardingGateState extends State<OnboardingGate> {
           ),
           const Divider(height: 32),
           Text(tr('按需授权'), style: Theme.of(context).textTheme.titleLarge),
-          instruction(Icons.mic_none, '麦克风', '首次录音时申请。'),
-          instruction(Icons.wifi_outlined, '本地网络', '连接电脑时申请。'),
-          instruction(Icons.camera_alt_outlined, '相机', '首次扫码时申请。'),
-          Text(
-            tr('可以使用手动配对，不必开启相机。'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          instruction(Icons.mic_none, '麦克风', ''),
+          instruction(Icons.wifi_outlined, '本地网络', ''),
+          instruction(Icons.camera_alt_outlined, '相机', ''),
         ] else ...[
           const SizedBox(height: 24),
           Center(child: breviaLogo(size: 48)),

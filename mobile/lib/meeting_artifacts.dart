@@ -850,35 +850,8 @@ class MinutesDocument extends StatelessWidget {
   const MinutesDocument({super.key, required this.child});
   final Widget child;
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Align(
-        alignment: AlignmentDirectional.centerEnd,
-        child: TextButton.icon(
-          icon: const BreviaIcon(Icons.open_in_full, size: 16),
-          label: Text(tr('全屏阅读')),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              fullscreenDialog: true,
-              builder: (_) => Scaffold(
-                appBar: AppBar(title: Text(tr('会议纪要'))),
-                body: SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 10),
-      const Divider(height: 1),
-      Padding(padding: const EdgeInsets.symmetric(vertical: 18), child: child),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      BreviaPanel(padding: const EdgeInsets.all(20), child: child);
 }
 
 class NoteComposer extends StatelessWidget {

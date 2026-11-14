@@ -26,7 +26,8 @@ class _SwipeDeleteState extends State<SwipeDelete> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return ClipRect(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
       child: Stack(
         children: [
           if (widget.enabled && offset > 0)
