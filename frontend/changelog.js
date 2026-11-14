@@ -18,12 +18,12 @@
           },
           {
             'text':
-              '手机与电脑协作支持手机端可编辑电脑会议的共享笔记、查看转写、纪要与原因图，并同步纪要生成进度。完善断线草稿恢复与并发编辑冲突保护。',
+              '完善手机与电脑协作，可在手机端编辑电脑会议的共享笔记、查看转写、纪要与原因图，并同步纪要生成进度。完善断线草稿恢复与并发编辑冲突保护。',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
           {
             'text':
-              '跨平台语音推理新增支持。新增 Ubuntu 24.04 x86-64 桌面版，macOS 与 Linux 使用 MLX 转写，Windows 使用 ONNX。Windows 和 Linux 分别提供 CPU 与 NVIDIA CUDA 安装包。',
+              '扩展跨平台语音推理，新增 Ubuntu 24.04 x86-64 桌面版，macOS 与 Linux 使用 MLX 转写，Windows 使用 ONNX。Windows 和 Linux 分别提供 CPU 与 NVIDIA CUDA 安装包。',
             'commit': 'cba52597d3dc1fe979d501546bdb904eccfc3caf',
           },
           {
