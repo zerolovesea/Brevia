@@ -237,7 +237,23 @@ function taskCardControls() {
 function taskPauseControl() {
   return `<button class="task-card-close task-card-pause" data-pause-task type="button" aria-label="${t('暂停')}" title="${t('暂停')}" disabled>${interfaceIcon('pause')}<span>${escapeHtml(t('暂停'))}</span></button>`;
 }
+function setTaskCardTarget(card, meetingId) {
+  if (!meetingId) return;
+  card.dataset.targetMeetingId = meetingId;
+  let target = card.querySelector('.task-target');
+  if (target?.tagName !== 'BUTTON') {
+    target?.remove();
+    target = document.createElement('button');
+    target.type = 'button';
+    target.className = 'task-target';
+    target.dataset.openTaskMeeting = '';
+    card.querySelector('.task-card-heading').after(target);
+  }
+  target.textContent = refinementTitle(meetingId) || t('会议');
+  target.title = target.textContent;
+}
 function setTaskCardTask(card, task, meetingId) {
+  setTaskCardTarget(card, meetingId);
   card.dataset.task = task;
   card.dataset.meetingId = meetingId;
   card.dataset.paused = 'false';
@@ -1909,7 +1925,7 @@ function hideRefinementProgress(dismissActiveTask = false) {
 }
 let summaryDismissTimer;
 let translationDismissTimer;
-function showTranslationProgress(completed, total, targetLanguage) {
+function showTranslationProgress(completed, total, targetLanguage, meetingId) {
   clearTimeout(translationDismissTimer);
   let card = document.querySelector('#translation-progress');
   if (!card) {
@@ -1929,6 +1945,7 @@ function showTranslationProgress(completed, total, targetLanguage) {
   );
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
   Object.assign(card.dataset, { completed, total });
+  setTaskCardTarget(card, meetingId);
   syncTaskCardStack(card);
   if (completed === total) translationDismissTimer = setTimeout(() => dismissTaskCard(card), 10000);
 }
@@ -2499,6 +2516,12 @@ taskCards.addEventListener('click', (event) => {
     !event.target.closest('.task-card-actions, .model-actions, .mini-playback-controls')
   ) {
     activateTaskCard(backCard);
+    if (backCard.dataset.targetMeetingId)
+      void openMeetingRow(
+        backCard,
+        backCard.dataset.targetMeetingId,
+        backCard.id === 'summary-progress' ? 'summary' : 'transcript',
+      );
     return;
   }
   const taskPause = event.target.closest('[data-pause-task]');
@@ -2533,7 +2556,25 @@ taskCards.addEventListener('click', (event) => {
           .cancel({ task, meeting_id: meetingId })
           .catch((error) => showToast(error.message, undefined, 'error'));
     } else {
-      if (card?.id === 'summary-progress') clearTimeout(summaryDismissTimer);
+      if (card?.id === 'summary-progress') {
+        const { task, meetingId } = card.dataset;
+        clearTimeout(summaryDismissTimer);
+        if (!task || !meetingId) {
+          dismissTaskCard(card);
+          return;
+        }
+        close.disabled = true;
+        void window.brevia.task
+          .cancel({ task, meeting_id: meetingId })
+          .then(() => {
+            if (card.dataset.meetingId === meetingId) hideSummaryProgress();
+          })
+          .catch((error) => showToast(error.message, undefined, 'error'))
+          .finally(() => {
+            close.disabled = false;
+          });
+        return;
+      }
       if (card?.id === 'summary-config-required') clearTimeout(summaryConfigDismissTimer);
       // 关闭下载队列对于已取消/失败的模型是终结性的：删除它们，以便卡片无法
       // 重新浮现（并且库无法一直停留在"下载中"）。正在进行的下载继续运行。
@@ -2568,13 +2609,26 @@ taskCards.addEventListener('click', (event) => {
     return;
   }
   const cancel = event.target.closest('[data-cancel-required]');
-  if (cancel) void cancelModelDownload(cancel.dataset.cancelRequired);
+  if (cancel) {
+    void cancelModelDownload(cancel.dataset.cancelRequired);
+    return;
+  }
+  const card = event.target.closest('[data-target-meeting-id]');
+  if (
+    card &&
+    !event.target.closest('button:not([data-open-task-meeting]),a,input,.task-card-actions')
+  )
+    void openMeetingRow(
+      card,
+      card.dataset.targetMeetingId,
+      card.id === 'summary-progress' ? 'summary' : 'transcript',
+    );
 });
 taskCards.addEventListener('keydown', (event) => {
   const card = event.target.closest('.is-task-card-back');
   if (card && event.target === card && ['Enter', ' '].includes(event.key)) {
     event.preventDefault();
-    activateTaskCard(card);
+    card.click();
   }
 });
 /** 选择音频只更新表单；导入按钮沿用原来的导入和精修流程。 */
@@ -4236,7 +4290,7 @@ function renderOnboardingAiDemo() {
     onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value || 'assist';
   const mode = enabled ? selectedMode : 'off';
   onboardingPage
-    .querySelectorAll('.onboarding-ai-segments button')
+    .querySelectorAll('.onboarding-ai-levels .onboarding-ai-segments button')
     .forEach((button) => (button.disabled = mode === 'off'));
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   const sample = aiOnboardingDemoCopy[locale] || aiOnboardingDemoCopy.en;
@@ -4792,13 +4846,15 @@ function openOnboardingAi(settingsMode = false) {
     .map(([value]) => [value, t({ quiet: '手动', assist: '适度', auto: '主动' }[value])]);
   const summaryIcon = interfaceIcon('document');
   const notesIcon = interfaceIcon('ai');
+  const glossaryConfig = glossaryUI.settings();
   const content = `<section class="${settingsMode ? 'ai-features-content' : 'onboarding-setup-page'} onboarding-ai-setup-page">
     ${
       settingsMode
         ? ''
         : `<header><h1>${escapeHtml(copy.title)}</h1>${copy.intro ? `<div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div>` : ''}</header>`
     }
-    <div class="onboarding-ai-sections"><section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
+    <div class="onboarding-ai-sections">    ${settingsMode ? '' : `<div class="onboarding-shared-service"><span>${interfaceIcon('model')}<b>${escapeHtml(copy.serviceTitle)}</b><small>${escapeHtml(copy.serviceHint)}</small></span><button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button></div>`}
+<section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
       <div class="onboarding-ai-copy">
         <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${notesIcon}</span><h2>${escapeHtml(t('AI 笔记'))}</h2><span class="onboarding-ai-timing">${escapeHtml(copy.during)}</span><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-ai-enabled" aria-label="${escapeHtml(copy.enableLiveNotes)}"${(settingsMode ? aiAssistConfig.enabled : defaultProactivity !== 'off') ? ' checked' : ''} /></label></div>
         <p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p>
@@ -4816,15 +4872,35 @@ function openOnboardingAi(settingsMode = false) {
     <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
       <div class="onboarding-ai-copy">
         <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${summaryIcon}</span><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><span class="onboarding-ai-timing">${escapeHtml(copy.after)}</span><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-summary-enabled" aria-label="${escapeHtml(copy.meetingNotesTitle)}"${summaryConfig.enabled ? ' checked' : ''} /></label></div>
-        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p><p class="onboarding-ai-scope">${escapeHtml(copy.summaryScope)}</p>
+        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p>
         ${settingsMode ? `<div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in"${summaryConfig.provider === 'built-in' ? ' checked' : ''} /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online"${summaryConfig.provider !== 'built-in' ? ' checked' : ''} /><span><b>${escapeHtml(copy.online)}${recommendTag(deviceIsWeak())}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div>` : ''}
         ${settingsMode ? `<button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button>` : ''}
       </div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div>
     </section>
-    <section class="onboarding-section"><h2>${escapeHtml(t('术语库'))}</h2><div class="glossary-sample"><span>A C D</span><span>ACD · ${escapeHtml(t('平均通话时长'))}</span></div></section>
-    ${settingsMode ? '' : `<div class="onboarding-shared-service"><span>${interfaceIcon('model')}<b>${escapeHtml(copy.serviceTitle)}</b><small>${escapeHtml(copy.serviceHint)}</small></span><button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button></div>`}
+    <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
+      <div class="onboarding-ai-copy"><div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${interfaceIcon('notebook')}</span><h2>${escapeHtml(t('术语库'))}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-glossary-enabled" aria-label="${t('自动识别术语')}"${glossaryConfig.enabled ? ' checked' : ''}></label></div>
+      <p class="onboarding-ai-feature-desc">${t('积累已确认的术语，让后续会议纪要越来越准确。')}</p>
+      <div class="flow-select onboarding-ai-segments" data-glossary-levels role="radiogroup" aria-label="${t('触发程度')}"><input type="hidden" name="onboarding-glossary-sensitivity" value="${glossaryConfig.sensitivity}"><div class="flow-select-options">${[
+        ['low', '低'],
+        ['balanced', '适中'],
+        ['high', '高'],
+      ]
+        .map(
+          ([value, label]) =>
+            `<button type="button" role="radio" aria-checked="${value === glossaryConfig.sensitivity}" data-onboarding-glossary-level="${value}" data-value="${{ low: 'quiet', balanced: 'assist', high: 'auto' }[value]}">${t(label)}</button>`,
+        )
+        .join('')}</div></div>
+      <dl class="onboarding-ai-mode-guide">${[
+        ['低', '仅提示证据明确、影响理解的术语问题。'],
+        ['适中', '同时提示较可能的误识别和含义歧义。'],
+        ['高', '也提示需要人工判断的不确定术语。'],
+      ]
+        .map(([level, desc]) => `<div><dt>${t(level)}</dt><dd>${t(desc)}</dd></div>`)
+        .join('')}</dl></div>
+      <div class="onboarding-ai-frame onboarding-glossary-frame">${glossaryUI.demo()}</div>
+    </section>
     ${settingsMode ? `<p class="onboarding-privacy-hint">${interfaceIcon('info')}${escapeHtml(t('在线 AI 会将相关文字发送至所选服务商。'))}</p>` : ''}</div>
-    <footer class="onboarding-ai-footer">${settingsMode ? '' : `<p>${escapeHtml(copy.adjustHint)}</p>`}<div class="onboarding-actions">${settingsMode ? '' : `<button class="secondary onboarding-previous" data-onboarding-back-language type="button">${escapeHtml(t('上一步'))}</button>`}<button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : t('下一步'))}${settingsMode ? '' : interfaceIcon('arrow-right')}</button></div></footer>
+    <footer class="onboarding-ai-footer"><div class="onboarding-actions">${settingsMode ? '' : `<button class="secondary onboarding-previous" data-onboarding-back-language type="button">${escapeHtml(t('上一步'))}</button>`}<button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : t('下一步'))}${settingsMode ? '' : interfaceIcon('arrow-right')}</button></div></footer>
   </section>`;
   if (settingsMode) {
     onboardingPage = document.createElement('div');
@@ -4850,6 +4926,37 @@ function openOnboardingAi(settingsMode = false) {
     options[index].focus();
     options[index].click();
   });
+  const glossaryLevels = onboardingPage.querySelector('[data-glossary-levels]');
+  const syncGlossary = () => {
+    const enabled = onboardingPage.querySelector('[name="onboarding-glossary-enabled"]').checked;
+    for (const button of glossaryLevels.querySelectorAll('button')) button.disabled = !enabled;
+    onboardingPage
+      .querySelector('.onboarding-glossary-frame')
+      .classList.toggle('is-disabled', !enabled);
+  };
+  onboardingPage.querySelector('[name="onboarding-glossary-enabled"]').onchange = syncGlossary;
+  for (const button of glossaryLevels.querySelectorAll('button'))
+    button.onclick = () => {
+      glossaryLevels.querySelector('input').value = button.dataset.onboardingGlossaryLevel;
+      for (const option of glossaryLevels.querySelectorAll('button'))
+        option.setAttribute('aria-checked', String(option === button));
+    };
+  glossaryLevels.onkeydown = (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const buttons = [...glossaryLevels.querySelectorAll('button:not(:disabled)')];
+    const at = buttons.indexOf(document.activeElement);
+    if (at < 0) return;
+    event.preventDefault();
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? buttons.length - 1
+          : (at + (event.key === 'ArrowLeft' ? -1 : 1) + buttons.length) % buttons.length;
+    buttons[next].focus();
+    buttons[next].click();
+  };
+  syncGlossary();
   renderOnboardingAiDemo();
   renderOnboardingSummaryDemo();
   const syncSummarySwitch = () => {
@@ -4862,7 +4969,7 @@ function openOnboardingAi(settingsMode = false) {
     });
     onboardingPage.querySelector('[data-configure-ai-summary]').disabled = settingsMode
       ? !enabled
-      : !enabled && !onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked;
+      : false;
     onboardingPage
       .querySelector('[data-onboarding-summary-demo]')
       .classList.toggle('is-disabled', !enabled);
@@ -5003,7 +5110,21 @@ async function finishAiOnboarding(forceEnabled, settingsMode = false) {
     : 'assist';
   aiAssistConfigRevision += 1;
   try {
-    await Promise.all([persistSummaryConfig(), persistAiAssistConfig()]);
+    await Promise.all([
+      persistSummaryConfig(),
+      persistAiAssistConfig(),
+      glossaryUI.configure({
+        enabled:
+          forceEnabled === false
+            ? false
+            : Boolean(
+                onboardingPage.querySelector('[name="onboarding-glossary-enabled"]')?.checked,
+              ),
+        sensitivity:
+          onboardingPage.querySelector('[name="onboarding-glossary-sensitivity"]')?.value ||
+          'balanced',
+      }),
+    ]);
   } catch (error) {
     showToast(error.message, undefined, 'error');
     return;
@@ -6438,8 +6559,8 @@ function collectTranslations() {
   let node;
   while ((node = walker.nextNode())) {
     if (node.parentElement?.closest('.brand-name, [translate="no"]')) continue;
-    const key = node.nodeValue.trim();
-    if (catalog.zh.labels[key])
+    const key = node.nodeValue.trim().replace(/\s+/g, ' ');
+    if (catalog.zh.labels[key] || catalog.en.labels[key])
       translatedNodes.push({
         node: new WeakRef(node),
         key,
@@ -6463,12 +6584,12 @@ function collectTranslations() {
   );
   document.querySelectorAll('[aria-label]').forEach((element) => {
     const key = element.getAttribute('aria-label');
-    if (catalog.zh.labels[key])
+    if (catalog.zh.labels[key] || catalog.en.labels[key])
       translatedNodes.push({ element: new WeakRef(element), attribute: 'aria-label', key });
   });
   document.querySelectorAll('[title]').forEach((element) => {
     const key = element.getAttribute('title');
-    if (catalog.zh.labels[key])
+    if (catalog.zh.labels[key] || catalog.en.labels[key])
       translatedNodes.push({ element: new WeakRef(element), attribute: 'title', key });
   });
 }
@@ -6901,6 +7022,7 @@ const showView = async (name) => {
   const next = document.querySelector(`#${name}-view`);
   const navigated = await transitionPage(current, next);
   if (!navigated) return;
+  if (typeof glossaryUI !== 'undefined') glossaryUI.stopPlayback();
   if (name !== 'live' && meetingActive && !miniMeeting.hidden)
     taskCards.scrollTop = taskCards.scrollHeight;
   if (name === 'prepare') {
@@ -8914,7 +9036,11 @@ async function runBatchMutation(action, meetings, previousResults = [], allMeeti
   }
 }
 
-async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
+async function openMeetingRow(row, meetingId = row.dataset.meetingId, documentTab) {
+  if (documentTab && (uiData.detail.notesEditing || uiData.detail.summaryEditing)) {
+    showToast(t('请先保存或取消当前编辑'), undefined, 'error');
+    return;
+  }
   if (currentMeetingDetail?.id !== meetingId) {
     // 持续可见的会议导航允许直接切换；未保存的文档必须先由用户保存或取消。
     if (uiData.detail.notesEditing || uiData.detail.summaryEditing) {
@@ -8939,7 +9065,7 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
     if (request !== meetingListRequest) return;
     breviaClient.state.selectedMeetingId = meeting.id;
     applyBackendDetail(meeting);
-    if (activeView === 'detail') switchDetailDocument('summary');
+    if (documentTab || activeView === 'detail') switchDetailDocument(documentTab || 'summary');
     await showView('detail');
     syncCurrentMeetingNavigation();
   } catch (error) {
@@ -11042,12 +11168,12 @@ async function translateLatestTranscript(targetLanguage, meeting = currentMeetin
   }
   try {
     let completed = 0;
-    showTranslationProgress(completed, segments.length, targetLanguage);
+    showTranslationProgress(completed, segments.length, targetLanguage, meeting.id);
     const results = await mapWithConcurrency(segments, 4, async (segment) => {
       try {
         return await generateSegmentTranslation(segment, targetLanguage);
       } finally {
-        showTranslationProgress(++completed, segments.length, targetLanguage);
+        showTranslationProgress(++completed, segments.length, targetLanguage, meeting.id);
       }
     });
     const failure = results.find((result) => result.status === 'rejected');

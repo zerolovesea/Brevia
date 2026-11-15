@@ -1201,3 +1201,123 @@ test('内置长会议的逐项核证遵循实际16K窗口而不是整场32K预�
   assert.ok(reviews > 0);
   assert.equal(saves, 1);
 });
+
+test('在线术语请求让位纪要，排队取消不占用请求槽', async (t) => {
+  const held = [];
+  const endpoint = await server(t, (_req, res, body) =>
+    held.push({ res, text: body.messages.at(-1).content }),
+  );
+  const worker = { settings: { llm: { timeout_seconds: 30 } } };
+  createLLMHandlers(worker);
+  const options = { provider: 'openai', model: 'test', endpoint, format: 'openai' };
+  const waitFor = async (count) => {
+    for (let i = 0; i < 100 && held.length < count; i++)
+      await new Promise((r) => setTimeout(r, 10));
+    assert.equal(held.length, count);
+  };
+  const first = [0, 1, 2].map((i) => worker.llmComplete(options, 'main' + i));
+  await waitFor(3);
+  const abort = new AbortController();
+  const cancelled = worker.llmComplete(options, 'cancelled', {
+    background: true,
+    signal: abort.signal,
+  });
+  abort.abort(new Error('cancelled'));
+  await assert.rejects(cancelled, /cancelled/);
+  const background = worker.llmComplete(options, 'terms', { background: true });
+  const foreground = worker.llmComplete(options, 'main3');
+  const reply = (index) =>
+    held[index].res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+  reply(0);
+  await waitFor(4);
+  assert.equal(held[3].text, 'main3');
+  reply(1);
+  reply(2);
+  await waitFor(5);
+  assert.equal(held[4].text, 'terms');
+  reply(3);
+  reply(4);
+  assert.deepEqual(await Promise.all([...first, foreground, background]), [
+    'ok',
+    'ok',
+    'ok',
+    'ok',
+    'ok',
+  ]);
+});
+
+test('重新生成等待旧术语扫描取消后启动本轮扫描，不误报失败', async (t) => {
+  let scans = 0;
+  const endpoint = await server(t, (_req, res, body) => {
+    const terms = body.messages
+      .at(-1)
+      .content.includes('Identify terminology that needs human clarification');
+    if (terms) scans++;
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: terms
+                ? '{"terms":[]}'
+                : completeMinutes('- Submit the budget tomorrow [[conclusion:S1]]'),
+            },
+          },
+        ],
+      }),
+    );
+  });
+  const tasks = new TaskRegistry(),
+    events = [];
+  const old = tasks.running(
+    'glossary.analyze',
+    'meeting',
+    async (control) =>
+      new Promise((resolve) => {
+        control.signal.addEventListener('abort', () => setTimeout(resolve, 40), { once: true });
+      }),
+  );
+  const meeting = {
+    id: 'meeting',
+    title: 'Meeting',
+    meeting_date: '2026-11-06',
+    summary: { data: { markdown: '' } },
+    segments: [
+      {
+        id: 's1',
+        text: 'We will submit the budget tomorrow.',
+        start_ms: 0,
+        end_ms: 1000,
+        speaker_name: 'Alice',
+      },
+    ],
+  };
+  const worker = {
+    tasks,
+    settings: { llm: { timeout_seconds: 2 } },
+    models: { catalog: new Map() },
+    emit: (type) => events.push(type),
+    store: {
+      getMeeting: () => meeting,
+      query: () => [],
+      one: () => undefined,
+      run: () => ({ changes: 0 }),
+      meetingExists: () => true,
+      saveSummary: () => false,
+    },
+  };
+  await createLLMHandlers(worker)['summary.generate']({
+    meeting_id: 'meeting',
+    endpoint,
+    provider: 'openai',
+    model: 'test',
+    consent: true,
+    analyze_terms: true,
+  });
+  await old;
+  for (let i = 0; i < 100 && (scans === 0 || tasks.hasAny()); i++)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.equal(scans, 1);
+  assert.ok(!events.includes('glossary.failed'));
+  assert.equal(tasks.hasAny(), false);
+});

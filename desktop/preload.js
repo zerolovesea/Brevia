@@ -111,6 +111,8 @@ contextBridge.exposeInMainWorld('brevia', {
   glossary: {
     list: invoke('glossary.list'),
     source: invoke('glossary.source'),
+    audio: invoke('glossary.audio'),
+    review: invoke('glossary.review'),
     update: invoke('glossary.update'),
   },
   workspace: {

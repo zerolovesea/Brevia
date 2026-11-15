@@ -69,6 +69,7 @@ function applyBackendDetail(meeting) {
         : t('本地会议');
   const audioPath = meetingPlaybackPath(meeting);
   const sameDetail = currentMeetingDetail?.id === meeting.id;
+  if (!sameDetail && typeof glossaryUI !== 'undefined') glossaryUI.stopPlayback();
   const transcriptScrollTop = sameDetail
     ? document.querySelector('.transcript-body')?.scrollTop
     : undefined;

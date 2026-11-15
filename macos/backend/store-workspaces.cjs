@@ -1,4 +1,12 @@
+const {
+  isTermCandidate,
+  containsTerm,
+  termIdentity,
+  distinctMentions,
+} = require('./glossary-candidate.cjs');
 const { randomUUID } = require('node:crypto');
+const fs = require('node:fs');
+const { wavInfo, wavHeader } = require('./store-audio.cjs');
 const { utcNow } = require('./store-base.cjs');
 const { replaceGlossaryMarkdown } = require('../../frontend/glossary-markdown.js');
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -43,38 +51,152 @@ module.exports = {
       },
     };
   },
-  glossarySource({ meeting_id, original }) {
-    const source = this.currentSegments(meeting_id).find((segment) =>
-      segment.text.includes(original),
+  glossaryContext(meeting, transcript) {
+    const scope = meeting.workspace_id || 'public';
+    const definitions = new Map();
+    for (const term of this.query(
+      'SELECT * FROM glossary_entries WHERE scope=? OR scope=? ORDER BY scope DESC',
+      scope,
+      '',
+    ))
+      if (!definitions.has(term.name)) definitions.set(term.name, term);
+    const terms = new Map();
+    for (const alias of this.query(
+      'SELECT * FROM glossary_aliases WHERE scope=? OR scope=? ORDER BY scope DESC',
+      scope,
+      '',
+    )) {
+      if (terms.has(alias.original)) continue;
+      terms.set(alias.original, alias);
+    }
+    const ignored = new Set(
+      this.query(
+        'SELECT original FROM glossary_mentions WHERE meeting_id=? AND dismissed=1',
+        meeting.id,
+      ).map((m) => m.original),
     );
-    return source ? { text: source.text, start_ms: source.start_ms } : null;
+    return [
+      ...[...definitions.values()]
+        .filter((t) => transcript.includes(t.name))
+        .map((t) => ({ original: t.name, name: t.name, meaning: t.meaning })),
+      ...[...terms.values()]
+        .filter(
+          (a) =>
+            !ignored.has(a.original) && transcript.includes(a.original) && definitions.has(a.name),
+        )
+        .map((a) => ({
+          original: a.original,
+          name: a.name,
+          meaning: definitions.get(a.name).meaning,
+        })),
+    ];
+  },
+  glossarySource({ meeting_id, original }) {
+    const mention = this.one(
+      'SELECT name,source_quote FROM glossary_mentions WHERE meeting_id=? AND original=?',
+      meeting_id,
+      original,
+    );
+    const quote = mention?.source_quote;
+    if (mention && !mention.name && (!isTermCandidate(original) || !quote)) return null;
+    const segments = this.currentSegments(meeting_id);
+    const source = quote
+      ? segments.find((s) => containsTerm(s.text, original) && s.text.includes(quote))
+      : segments.find((s) => containsTerm(s.text, original));
+    if (!source) return null;
+    const playback = this.audioFiles(meeting_id).playback;
+    return {
+      text: source.text,
+      start_ms: source.start_ms,
+      end_ms: source.end_ms,
+      audio_path: playback.mix || playback.mic || playback.system || null,
+    };
+  },
+  glossaryAudio(payload) {
+    const source = this.glossarySource(payload);
+    if (!source?.audio_path) throw new Error('Source audio unavailable');
+    const info = wavInfo(source.audio_path);
+    const start = Math.max(0, Math.round((source.start_ms * info.sampleRate) / 1000));
+    const end = Math.min(info.frames, Math.round((source.end_ms * info.sampleRate) / 1000));
+    const bytes = (end - start) * info.channels * 2;
+    // 只读原句，限制异常分段的内存占用，不把整场 WAV 传进 WebView。
+    if (!Number.isSafeInteger(bytes) || bytes <= 0 || bytes > 8 * 1024 * 1024)
+      throw new Error('Source audio segment exceeds playback limit');
+    const data = Buffer.alloc(bytes),
+      fd = fs.openSync(source.audio_path, 'r');
+    try {
+      let read = 0;
+      while (read < bytes) {
+        const n = fs.readSync(
+          fd,
+          data,
+          read,
+          bytes - read,
+          info.offset + start * info.channels * 2 + read,
+        );
+        if (!n) throw new Error('Truncated source audio');
+        read += n;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+    return (
+      'data:audio/wav;base64,' +
+      Buffer.concat([wavHeader(bytes, info.sampleRate, info.channels), data]).toString('base64')
+    );
+  },
+  glossarySettings() {
+    const saved = this.one("SELECT value FROM app_meta WHERE key='glossary_settings'");
+    return saved ? JSON.parse(saved.value) : { enabled: true, sensitivity: 'balanced' };
   },
   glossary() {
     return {
       entries: this.query('SELECT * FROM glossary_entries ORDER BY name'),
-      mentions: this.query(
-        'SELECT g.*,m.title,m.workspace_id,e.meaning FROM glossary_mentions g JOIN meetings m ON m.id=g.meeting_id LEFT JOIN glossary_entries e ON e.scope=g.scope AND e.name=g.name WHERE m.deleted_at IS NULL AND dismissed=0 ORDER BY g.rowid DESC',
+      settings: this.glossarySettings(),
+      mentions: distinctMentions(
+        this.query(
+          'SELECT g.*,m.title,m.workspace_id,e.meaning FROM glossary_mentions g JOIN meetings m ON m.id=g.meeting_id LEFT JOIN glossary_entries e ON e.scope=g.scope AND e.name=g.name WHERE m.deleted_at IS NULL AND dismissed=0 ORDER BY g.rowid DESC',
+        ),
+      ),
+      regeneration: this.query(
+        "SELECT m.id,m.title FROM meetings m JOIN summaries s ON s.meeting_id=m.id JOIN glossary_revisions g ON g.meeting_id=m.id WHERE m.deleted_at IS NULL AND g.revision>COALESCE(json_extract(s.data,'$.glossary_revision'),0) ORDER BY m.created_at DESC",
       ),
     };
   },
   updateGlossary(p) {
     return this.transaction(() => {
-      if (p.action === 'clear')
-        this.run('UPDATE glossary_mentions SET dismissed=1 WHERE name IS NULL');
-      else if (p.action === 'dismiss')
+      if (p.action === 'settings')
         this.run(
-          'UPDATE glossary_mentions SET dismissed=1 WHERE meeting_id=? AND original=?',
-          p.meeting_id,
-          p.original,
+          "INSERT INTO app_meta VALUES('glossary_settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+          JSON.stringify({ enabled: p.enabled, sensitivity: p.sensitivity }),
         );
-      else {
+      else if (p.action === 'clear')
+        this.run('UPDATE glossary_mentions SET dismissed=1 WHERE name IS NULL');
+      else if (p.action === 'dismiss') {
+        for (const mention of this.query(
+          'SELECT original FROM glossary_mentions WHERE meeting_id=?',
+          p.meeting_id,
+        ))
+          if (termIdentity(mention.original) === termIdentity(p.original))
+            this.run(
+              'UPDATE glossary_mentions SET dismissed=1 WHERE meeting_id=? AND original=?',
+              p.meeting_id,
+              mention.original,
+            );
+      } else {
         if (p.workspace_id && p.workspace_id !== 'public' && !this.getWorkspace(p.workspace_id))
           throw new Error('Workspace unavailable');
         this.run(
-          'INSERT INTO glossary_entries VALUES(?,?,?) ON CONFLICT(scope,name) DO UPDATE SET meaning=excluded.meaning',
+          "INSERT INTO glossary_entries VALUES(?,?,?) ON CONFLICT(scope,name) DO UPDATE SET meaning=CASE WHEN excluded.meaning<>'' THEN excluded.meaning ELSE glossary_entries.meaning END",
           p.workspace_id,
           p.name,
-          p.meaning,
+          p.meaning ||
+            this.one(
+              "SELECT meaning FROM glossary_entries WHERE name=? AND (scope=? OR scope='') ORDER BY scope DESC LIMIT 1",
+              p.name,
+              p.workspace_id,
+            )?.meaning ||
+            '',
         );
         if (p.action === 'resolve')
           this.run(
@@ -91,6 +213,22 @@ module.exports = {
             p.meeting_id,
             p.original,
           );
+        if (p.action === 'resolve') {
+          this.run(
+            'INSERT INTO glossary_revisions VALUES(?,1) ON CONFLICT(meeting_id) DO UPDATE SET revision=revision+1',
+            p.meeting_id,
+          );
+          for (const mention of this.query(
+            'SELECT original FROM glossary_mentions WHERE meeting_id=? AND name IS NULL',
+            p.meeting_id,
+          ))
+            if (termIdentity(mention.original) === termIdentity(p.original))
+              this.run(
+                'UPDATE glossary_mentions SET dismissed=1 WHERE meeting_id=? AND original=?',
+                p.meeting_id,
+                mention.original,
+              );
+        }
       }
       return this.glossary();
     });

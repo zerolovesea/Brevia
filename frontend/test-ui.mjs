@@ -992,6 +992,50 @@ runInNewContext(text(i18nData), localeContext);
   assert.doesNotMatch(settingsView.innerHTML, /data-desktop-section-link/);
 }
 
+// 静态文案不能依赖中文词条的重复登记；用户内容不应进入翻译队列。
+{
+  const nodes = [
+    '新建会议',
+    '打开手机端\n Brevia，进入「连接电脑」，用应用扫描此二维码，或选择这台电脑并输入配对码。',
+    '海外',
+  ].map((nodeValue) => ({
+    nodeValue,
+    parentElement: { closest: () => null },
+  }));
+  let index = 0;
+  const translatedNodes = [];
+  const context = {
+    catalog: localeContext.window.BreviaLocaleData.catalog,
+    translatedNodes,
+    WeakRef,
+    NodeFilter: { SHOW_TEXT: 4 },
+    document: {
+      body: {},
+      createTreeWalker: () => ({ nextNode: () => nodes[index++] }),
+      querySelectorAll: () => [],
+    },
+  };
+  runInNewContext(
+    text(app).slice(
+      text(app).indexOf('function collectTranslations()'),
+      text(app).indexOf('function applyLanguage('),
+    ),
+    context,
+  );
+  context.collectTranslations();
+  assert.deepEqual(
+    translatedNodes.map(({ key }) => key),
+    [
+      '新建会议',
+      '打开手机端 Brevia，进入「连接电脑」，用应用扫描此二维码，或选择这台电脑并输入配对码。',
+    ],
+  );
+  for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+    assert.notEqual(localeContext.window.BreviaLocaleData.translate('新建会议', code), '新建会议');
+  }
+  assert.equal(localeContext.window.BreviaLocaleData.translate('新建会议', 'es'), 'Nueva reunión');
+}
+
 const i18nRuntimeSource = await readFile('i18n-runtime.js', 'utf8');
 assert.doesNotThrow(() => runInNewContext(i18nRuntimeSource, { window: localeContext.window }));
 for (const stored of ['zh', 'en', 'de', 'fr-CA', '__proto__', '']) {
@@ -1059,6 +1103,27 @@ assert.match(text(html), /src="\.\/onboarding-motion\.js"/);
 assert.match(text(html), /href="\.\/onboarding-motion\.css"/);
 assert.ok((await readFile('onboarding-motion.css', 'utf8')).includes('.bom'));
 assert.ok((await readFile('assets/brevia-mark.svg', 'utf8')).includes('<svg'));
+// 模板静态文案、可访问标签和提示必须在七种非中文界面中都有词条。
+{
+  const data = localeContext.window.BreviaLocaleData;
+  const keys = [
+    ...[...text(html).matchAll(/>([^<>]*[\u3400-\u9fff][^<>]*)</g)].map((m) =>
+      m[1].trim().replace(/\s+/g, ' '),
+    ),
+    ...[
+      ...text(html).matchAll(/(?:title|aria-label|placeholder|alt)="([^"]*[\u3400-\u9fff][^"]*)"/g),
+    ].map((m) => m[1]),
+  ];
+  for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+    for (const key of new Set([...keys, ...Object.keys(data.catalog.en.labels)])) {
+      assert.ok(
+        data.catalog[code].labels[key] || data.appCopy.stageLabels[key]?.[code],
+        `${code}: missing static copy ${key}`,
+      );
+    }
+  }
+}
+
 const i18nStaticKeys = new Set(
   [
     text(app),
@@ -4376,7 +4441,7 @@ assert.match(
 );
 assert.match(
   text(app),
-  /function showTranslationProgress\(completed, total, targetLanguage\)/,
+  /function showTranslationProgress\(completed, total, targetLanguage, meetingId\)/,
   'subtitle translation exposes task-card progress',
 );
 assert.match(
@@ -10295,6 +10360,37 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').speaker, 'manual-
 assert.equal(liveSpeakerContext.liveSegmentData.get('segment').speaker_name, 'Bob');
 assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the text');
 
+// 默认术语释义随界面语言显示，保存的数据及自定义内容保持原样。
+{
+  const data = localeContext.window.BreviaLocaleData;
+  const storeSource = await readFile('../macos/backend/store-base.cjs', 'utf8');
+  const defaults = [
+    ...storeSource.matchAll(/'(自动语音识别[^']+|大语言模型[^']+|检索增强生成[^']+)'/g),
+  ].map((m) => m[1]);
+  assert.equal(defaults.length, 3);
+  for (const meaning of defaults) {
+    assert.equal(data.translate(meaning, 'zh'), meaning);
+    for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+      assert.ok(data.catalog[code].labels[meaning]);
+      assert.notEqual(data.translate(meaning, code), meaning);
+      if (code !== 'ja') assert.doesNotMatch(data.translate(meaning, code), /\p{Script=Han}/u);
+    }
+  }
+  const glossarySource = await readFile('glossary.js', 'utf8');
+  const display = { t: (key) => data.translate(key, 'es') };
+  runInNewContext(
+    glossarySource.slice(
+      glossarySource.indexOf('  const defaultMeanings'),
+      glossarySource.indexOf('  const scopes'),
+    ) + '\nthis.displayMeaning = displayMeaning;',
+    display,
+  );
+  for (const meaning of defaults)
+    assert.equal(display.displayMeaning(meaning), data.translate(meaning, 'es'));
+  for (const meaning of ['用户编辑的 ASR 释义', '保存'])
+    assert.equal(display.displayMeaning(meaning), meaning);
+}
+
 // 术语库沿用八语言词条；保存尚未完成时不重复提交，也不重绘已离开的表单。
 {
   const source = await readFile('glossary.js', 'utf8');
@@ -10329,6 +10425,16 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
   const end = source.indexOf('  function render()', start);
   runInNewContext(source.slice(start, end), context);
   context.bind({ querySelector: () => form }, null, 'workspace');
+  let confirmations = 0;
+  form.requestSubmit = () => confirmations++;
+  const enter = { key: 'Enter', target: {}, preventDefault() {} };
+  form.onkeydown({ ...enter, isComposing: true });
+  form.onkeydown({ ...enter, keyCode: 229 });
+  form.onkeydown({ ...enter, shiftKey: true });
+  form.onkeydown({ ...enter, repeat: true });
+  assert.equal(confirmations, 0, '选字回车和Shift+Enter不提交');
+  form.onkeydown(enter);
+  assert.equal(confirmations, 1, '普通回车提交当前建议');
   const event = { preventDefault() {} };
   const pendingSave = form.onsubmit(event);
   assert.equal(submit.disabled, true);
@@ -10392,14 +10498,19 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
   const responses = [];
   const mention = { meeting_id: 'meeting', original: 'A C D' };
   let closed = 0;
+  const additions = [];
   const context = {
     seq: 0,
+    hydrated: true,
+    activeModal: '',
     state: { mentions: [mention] },
     active: mention,
     window: {
       brevia: { glossary: { list: () => new Promise((resolve) => responses.push(resolve)) } },
     },
     paint() {},
+    updateIndicators: (count) => additions.push(count),
+    schedulePrompt() {},
     pending: () => context.state.mentions.filter((m) => !m.name),
     key: (m) => JSON.stringify([m.meeting_id, m.original]),
     closePrompt: () => {
@@ -10418,4 +10529,110 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
   responses[1]({ mentions: [{ ...mention, name: 'ACD' }] });
   await eventRefresh;
   assert.equal(closed, 1, '最新状态确认已处理后收起浮窗');
+  assert.deepEqual(additions, [0]);
+  const nextRefresh = context.refresh();
+  responses[2]({ mentions: [mention] });
+  await nextRefresh;
+  assert.deepEqual(additions, [0, 1], '真正新增的待处理项触发+1');
+  const duplicateRefresh = context.refresh();
+  responses[3]({ mentions: [mention] });
+  await duplicateRefresh;
+  assert.deepEqual(additions, [0, 1, 0], '重复刷新不重复显示+1');
+  context.hydrated = false;
+  const startup = context.refresh();
+  responses[4]({ mentions: [mention, { ...mention, original: 'RY' }] });
+  await startup;
+  assert.equal(additions.at(-1), 0, '启动恢复历史队列不显示增量动画');
+}
+
+// 待确认队列优先当前会议，处理后继续，关闭或超时后暂停连续打扰。
+{
+  const source = await readFile('glossary.js', 'utf8');
+  let callback, opened;
+  const candidates = [
+    { meeting_id: 'other', original: 'B' },
+    { meeting_id: 'current', original: 'RY' },
+  ];
+  const context = {
+    active: null,
+    queuePaused: false,
+    queueTimer: null,
+    seen: new Set(),
+    promptedMeetings: new Set(),
+    state: { settings: { enabled: true } },
+    currentMeetingDetail: { id: 'current' },
+    document: { hidden: false, querySelector: () => ({}) },
+    clearTimeout() {},
+    setTimeout(fn) {
+      callback = fn;
+      return 1;
+    },
+    pending: () => candidates,
+    key: (m) => m.meeting_id + m.original,
+    t: (key) => key,
+    ask: (m) => {
+      opened = m;
+      context.active = m;
+      context.seen.add(context.key(m));
+    },
+  };
+  const start = source.indexOf('  function schedulePrompt()');
+  const end = source.indexOf('  const key =', start);
+  runInNewContext(source.slice(start, end), context);
+  context.schedulePrompt();
+  callback();
+  assert.equal(opened, undefined, '启动恢复历史待处理项不会自动弹窗');
+  context.promptedMeetings.add('current');
+  context.schedulePrompt();
+  callback();
+  assert.equal(opened.original, 'RY');
+  context.promptedMeetings.add('other');
+  context.active = null;
+  context.schedulePrompt();
+  callback();
+  assert.equal(opened.original, 'B');
+  context.active = null;
+  context.queuePaused = true;
+  callback = null;
+  context.schedulePrompt();
+  assert.equal(callback, null);
+  context.queuePaused = false;
+  context.document.hidden = true;
+  context.schedulePrompt();
+  assert.equal(callback, null);
+}
+
+// 任务目标保留独立会议ID，完成状态清理后仍能从卡片返回会议。
+{
+  const source = await readFile('app.js', 'utf8');
+  let target;
+  const header = {
+    after: (node) => {
+      target = node;
+    },
+  };
+  const card = {
+    dataset: {},
+    querySelector: (selector) => (selector === '.task-target' ? target : header),
+  };
+  const context = {
+    refinementTitle: (id) => (id === 'one' ? '周会' : '复盘'),
+    t: (key) => key,
+    document: { createElement: () => ({ tagName: 'BUTTON', dataset: {} }) },
+  };
+  runInNewContext(
+    source.slice(
+      source.indexOf('function setTaskCardTarget('),
+      source.indexOf('function setTaskCardTask('),
+    ),
+    context,
+  );
+  context.setTaskCardTarget(card, 'one');
+  assert.equal(card.dataset.targetMeetingId, 'one');
+  assert.equal(target.textContent, '周会');
+  const button = target;
+  context.setTaskCardTarget(card, 'two');
+  assert.equal(target, button);
+  assert.equal(target.textContent, '复盘');
+  assert.equal(card.dataset.targetMeetingId, 'two');
 }

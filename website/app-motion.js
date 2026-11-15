@@ -62,7 +62,7 @@ const editingMeetingIndex = null;
       const node = walker.currentNode;
       const key = node.textContent.trim();
       if (key && !node.parentElement.closest('[translate="no"]'))
-        node.textContent = node.textContent.replace(key, t(key));
+        node.textContent = node.textContent.replace(key, t(key.replace(/\s+/g, ' ')));
     }
     for (const attribute of ['placeholder', 'aria-label', 'title', 'data-tooltip', 'alt']) {
       for (const element of root.querySelectorAll(`[${attribute}]`)) {
@@ -156,6 +156,7 @@ const editingMeetingIndex = null;
   pairing.querySelector('#mobile-qr').src = './assets/pair-demo.png';
   pairing.querySelector('#mobile-pin').textContent = '482 916';
   localize(pairing);
+  pairing.querySelector('.mobile-pair-code h3').textContent = pick('配对码', 'Pairing code');
   pairing
     .querySelectorAll('[data-interface-icon]')
     .forEach((el) => (el.innerHTML = interfaceIcon(el.dataset.interfaceIcon)));

@@ -128,6 +128,13 @@ class StoreBase {
         num_speakers: 'INTEGER NOT NULL DEFAULT -1',
         vad_model_id: 'TEXT',
       },
+      glossary_mentions: {
+        suggestion: 'TEXT',
+        suggestion_meaning: 'TEXT',
+        reason: 'TEXT',
+        source_quote: 'TEXT',
+        source_fingerprint: 'TEXT',
+      },
       workspaces: { deleted_at: 'TEXT' },
       segments: { asr_text: 'TEXT', word_timestamps: 'TEXT' },
       speakers: { profile_id: 'TEXT' },

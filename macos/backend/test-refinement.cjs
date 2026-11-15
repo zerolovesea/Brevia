@@ -66,3 +66,30 @@ test('Speaker clustering runs off the event loop and terminates on cancellation'
   controller.abort(new Error('Cancelled by test'));
   await assert.rejects(task, /Cancelled by test/);
 });
+
+test('Spoken identifiers retain leading zeroes and collapse only mixed-script equivalents', () => {
+  assert.equal(cleanText('NASA B52 F-35 A320 GPU'), 'NASA B52 F-35 A320 GPU');
+  for (const [source, expected] of [
+    ['零五四B用了全电力推进', '054B用了全电力推进'],
+    [
+      '零五四B这样的护卫舰，也能和零五五，055编程一组去执行任务。',
+      '054B这样的护卫舰，也能和055编程一组去执行任务。',
+    ],
+    [
+      '九零幺型最高航速大约二十五节，九零三型还不到二十节。',
+      '901型最高航速大约25节，903型还不到20节。',
+    ],
+    ['〇五四B、零零一号、百分之零点五', '054B、001号、0.5%'],
+    ['055，055；零五五和零五五；零五五，052；零五五，55', '055，055；055和055；055，052；055，55'],
+    ['零五四B，054C；零五四B，054B', '054B，054C；054B'],
+    ['055，零五五；055B，零五五B', '055；055B'],
+    ['零五五，055.5；零五五，055%', '055，055.5；055，055%'],
+    ['一零五四B、九零零一型、九零零一', '1054B、9001型、九零零一'],
+    ['1055，零五五；九零五五，055', '1055，055；九零五五，055'],
+    ['一五计划，一心一意，三五成群', '一五计划，一心一意，三五成群'],
+  ]) {
+    assert.equal(text.normalizeNumbers(source), expected);
+    assert.equal(cleanText(source), expected);
+    assert.equal(text.normalizeNumbers(expected), expected);
+  }
+});

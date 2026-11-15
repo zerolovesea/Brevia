@@ -353,9 +353,15 @@
   display: block;
 }
 @media (min-width: 741px) {
-  .pair-scene:not([data-step="scan"]) {
+  .pair-scene {
     justify-content: flex-end;
     padding-right: 24px;
     background: transparent;
+  }
+  .pair-scene #mobile-pair-dialog {
+    position: absolute;
+    left: calc((100% - 380px) / 2);
+    width: min(510px, calc(100% - 412px));
+    transform: translateX(-50%);
   }
 }

@@ -605,6 +605,18 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
         await win.setViewportSize({ width, height });
         await loadHome(locale);
         await waitForApp();
+        const pairingCopy = await win.locator('.app-frame').evaluate((frame) => {
+          const dialog = frame.contentDocument.querySelector('#mobile-pair-dialog');
+          return {
+            description: dialog.querySelector('#mobile-pair-description').textContent,
+            code: dialog.querySelector('.mobile-pair-code h3').textContent,
+          };
+        });
+        assert.equal(pairingCopy.code, locale === 'zh' ? '配对码' : 'Pairing code');
+        if (locale === 'en') {
+          assert.match(pairingCopy.description, /Open Brevia on your phone/);
+          assert.doesNotMatch(pairingCopy.description, /\p{Script=Han}/u);
+        }
         if (locale === 'en' && width === 1440) {
           await win.waitForFunction(
             () =>
@@ -749,6 +761,28 @@ const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
       () =>
         !!document.querySelector('.app-frame').contentDocument.querySelector('.pair-phone')
           .contentWindow.showMeetingPreview,
+    );
+    const pairingLayout = await win.locator('.app-frame').evaluate((frame) => {
+      const doc = frame.contentDocument;
+      return [32000, 33000, 35000, 38900, 32000].map((time) => {
+        frame.contentWindow.appMotion.render(time);
+        const phone = doc.querySelector('.dmp-phone').getBoundingClientRect();
+        const desktop = doc.querySelector('.app-shell').getBoundingClientRect();
+        const dialog = doc.querySelector('#mobile-pair-dialog').getBoundingClientRect();
+        return {
+          x: phone.x,
+          gap: phone.left - desktop.right,
+          dialogGap: phone.left - dialog.right,
+        };
+      });
+    });
+    assert.ok(
+      pairingLayout.every((p) => p.gap >= 0 && p.dialogGap >= 0),
+      'Pairing phone must stay beside the desktop and dialog',
+    );
+    assert.ok(
+      pairingLayout.every((p) => Math.abs(p.x - pairingLayout[0].x) < 1),
+      'Pairing phone must keep its position from the first frame through recording and loop reset',
     );
     const feature = await win.locator('.app-frame').evaluate((frame) => {
       const doc = frame.contentDocument;

@@ -9,6 +9,8 @@ const numberDigits = Object.fromEntries(
     [0, 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9][i],
   ]),
 );
+numberDigits['幺'] = 1;
+const spokenDigits = (text) => Array.from(text, (c) => numberDigits[c]).join('');
 function cnInteger(text) {
   if (!text || !/[零〇一二两三四五六七八九十百千]/.test(text)) return null;
   if (Array.from(text).every((c) => c in numberDigits))
@@ -43,22 +45,40 @@ function cnDisplay(text) {
   return number === null ? null : String(number) + unit;
 }
 function normalizeNumbers(text) {
-  return text
-    .replace(/([零〇一二两三四五六七八九十百千万亿点]+)([岁年月日号元块角毛])/g, (all, n, u) =>
-      cnDisplay(n) === null ? all : cnDisplay(n) + u,
-    )
-    .replace(
-      /([零〇一二两三四五六七八九十百千]+)([多余来])([万亿])([岁年月日号元块角毛])?/g,
-      (_, n, a, b, c) => (cnDisplay(n) || n) + a + b + (c || ''),
-    )
-    .replace(
-      /百分之([零〇一二两三四五六七八九十百千万亿点]+)/g,
-      (_, n) => (cnDisplay(n) || n) + '%',
-    )
-    .replace(
-      /([零〇一二两三四五六七八九十百千万亿]+点[零〇一二三四五六七八九]+)/g,
-      (_, n) => cnDisplay(n) || n,
-    );
+  return (
+    text
+      // 型号按逐字读数转换，保留前导零；只去掉紧邻的中阿混写同值复述。
+      .replace(
+        /(?<![A-Za-z0-9零〇一二两三四五六七八九幺])((?:[零〇][零〇一二两三四五六七八九幺]{2,}|0\d{2,})[A-Za-z]?)[，,、 \t]+((?:[零〇][零〇一二两三四五六七八九幺]{2,}|0\d{2,})[A-Za-z]?)(?![A-Za-z0-9%％]|\.\d)/g,
+        (all, left, right) => {
+          if (/[零〇]/.test(left) === /[零〇]/.test(right)) return all;
+          const [a, b] = [left, right].map((value) =>
+            value.replace(/[零〇一二两三四五六七八九幺]+/g, spokenDigits),
+          );
+          return a.toLowerCase() === b.toLowerCase() ? b : all;
+        },
+      )
+      .replace(
+        /(?<![零〇一二两三四五六七八九幺])[零〇][零〇一二两三四五六七八九幺]{2,}/g,
+        spokenDigits,
+      )
+      .replace(/[零〇一二两三四五六七八九幺]{2,}(?=[A-Za-z]|型)/g, spokenDigits)
+      .replace(/([零〇一二两三四五六七八九十百千万亿点]+)([岁年月日号元块角毛节])/g, (all, n, u) =>
+        cnDisplay(n) === null ? all : cnDisplay(n) + u,
+      )
+      .replace(
+        /([零〇一二两三四五六七八九十百千]+)([多余来])([万亿])([岁年月日号元块角毛])?/g,
+        (_, n, a, b, c) => (cnDisplay(n) || n) + a + b + (c || ''),
+      )
+      .replace(
+        /百分之([零〇一二两三四五六七八九十百千万亿点]+)/g,
+        (_, n) => (cnDisplay(n) || n) + '%',
+      )
+      .replace(
+        /([零〇一二两三四五六七八九十百千万亿]+点[零〇一二三四五六七八九]+)/g,
+        (_, n) => cnDisplay(n) || n,
+      )
+  );
 }
 // 与 difflib 的递归最长公共子串匹配一致；只处理已被音频窗口限制的文本。
 function matchingRatio(a, b) {

@@ -60,16 +60,57 @@ function summaryReferences(text) {
 
 function createLLMHandlers(worker) {
   const queues = new Map();
+  const reviews = new Map();
+  const glossaryRuns = new Map();
+  let remoteActive = 0;
+  const remotePending = [];
+  function drainRemote() {
+    while (remoteActive < 3 && remotePending.length) {
+      const index = remotePending.findIndex((job) => !job.background);
+      if (index < 0 && remoteActive >= 2) return;
+      const job = remotePending.splice(index < 0 ? 0 : index, 1)[0];
+      job.signal?.removeEventListener('abort', job.abort);
+      remoteActive++;
+      Promise.resolve()
+        .then(() => {
+          job.signal?.throwIfAborted();
+          return job.run();
+        })
+        .then(job.resolve, job.reject)
+        .finally(() => {
+          remoteActive--;
+          drainRemote();
+        });
+    }
+  }
   async function generate(
     payload,
     prompt,
-    { signal, channel = 'assistant', chat = true, jsonMode = false } = {},
+    { signal, channel = 'assistant', chat = true, jsonMode = false, background = false } = {},
   ) {
     if (!local(payload))
-      return complete(payload, prompt, {
-        signal,
-        jsonMode,
-        timeout: worker.settings.llm.timeout_seconds,
+      return new Promise((resolve, reject) => {
+        signal?.throwIfAborted();
+        const job = {
+          background,
+          signal,
+          resolve,
+          reject,
+          run: () =>
+            complete(payload, prompt, {
+              signal,
+              jsonMode,
+              timeout: worker.settings.llm.timeout_seconds,
+            }),
+        };
+        job.abort = () => {
+          const index = remotePending.indexOf(job);
+          if (index >= 0) remotePending.splice(index, 1);
+          reject(signal.reason);
+        };
+        signal?.addEventListener('abort', job.abort, { once: true });
+        remotePending.push(job);
+        drainRemote();
       });
     const modelId = payload.model_id || payload.model;
     if (typeof modelId !== 'string' || !modelId.trim()) throw new Error('Model is required');
@@ -208,6 +249,36 @@ function createLLMHandlers(worker) {
   const progress = (id, completed, stage = 'summary.generating') =>
     worker.emit('summary.progress', { meeting_id: id, completed, total: 100, stage });
   return {
+    'glossary.review': (payload) => {
+      if (!payload.consent)
+        throw failure('error.sharing_not_confirmed', 'Transcript sharing was not confirmed');
+      const previous = reviews.get(payload.meeting_id) || Promise.resolve();
+      const next = previous
+        .catch(() => {})
+        .then(() =>
+          worker.tasks.running('glossary.review', payload.meeting_id, async (control) => {
+            const { setTimeout: delay } = require('node:timers/promises');
+            while (
+              worker.active ||
+              [...worker.tasks.controls.values()].some((t) => t.task === 'summary.generate')
+            ) {
+              await delay(100, undefined, { signal: control.signal });
+              await control.wait();
+            }
+            return require('./glossary-review.cjs').reviewGlossary(
+              worker,
+              payload,
+              (options, prompt, settings) =>
+                generate(options, prompt, { ...settings, background: true }),
+              control,
+            );
+          }),
+        );
+      reviews.set(payload.meeting_id, next);
+      return next.finally(() => {
+        if (reviews.get(payload.meeting_id) === next) reviews.delete(payload.meeting_id);
+      });
+    },
     'summary.save': (payload) => worker.store.editSummary(payload.meeting_id, payload),
     'summary.generate': (payload) => {
       let started = false;
@@ -235,6 +306,8 @@ function createLLMHandlers(worker) {
             'error.summary.no_transcript',
             '当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。',
           );
+        for (const task of worker.tasks.controls.values())
+          if (['glossary.analyze', 'glossary.review'].includes(task.task)) task.control.cancel();
         started = true;
         worker.emit('summary.started', {
           meeting_id: meeting.id,
@@ -261,12 +334,31 @@ function createLLMHandlers(worker) {
             : deepseek
               ? 65536
               : 8192);
+        const knownTerms = worker.store.glossaryContext?.(meeting, transcript) || [];
+        const glossaryRevision =
+          worker.store.one?.(
+            'SELECT revision FROM glossary_revisions WHERE meeting_id=?',
+            meeting.id,
+          )?.revision || 0;
+        const includedTerms = [];
+        let termCost = 0;
+        for (const term of knownTerms) {
+          const entry = JSON.stringify([term.original, term.name, term.meaning]);
+          const cost = estimatedTokens(entry);
+          if (termCost + cost > Math.min(2048, Math.floor(context / 8))) continue;
+          termCost += cost;
+          includedTerms.push([term.original, term.name, term.meaning]);
+        }
+        const terminology = includedTerms.length
+          ? '\nConfirmed terminology (original spelling, canonical name, meaning; apply aliases only when speech supports that meaning, leave ambiguous names as written; definitions are not meeting facts): ' +
+            JSON.stringify(includedTerms)
+          : '';
         const options = {
           ...payload,
           context_size: context,
           require_complete: true,
           disable_thinking: deepseek,
-          summaryPreference: preference,
+          summaryPreference: preference + terminology,
           max_tokens: Math.min(
             payload.max_tokens ??
               (deepseek ? 8192 : local(payload) && context >= 32768 ? 4608 : 3072),
@@ -281,7 +373,8 @@ function createLLMHandlers(worker) {
         );
         const overhead = options.summaryPreference;
         const rulesCost = estimatedTokens(rules);
-        const factOverhead = estimatedTokens(prompts.chunk[language] || prompts.chunk.en) + 384;
+        const factOverhead =
+          estimatedTokens((prompts.chunk[language] || prompts.chunk.en) + terminology) + 384;
         const factBudget = context - Math.min(options.max_tokens, 1536) - factOverhead;
         const budget =
           context -
@@ -300,11 +393,30 @@ function createLLMHandlers(worker) {
             'Summary prompt exceeds the available model context',
           );
         const thematic = citedTopics && transcriptCost > 1500;
+        const glossaryRun = Symbol();
+        const glossarySettings = worker.store.glossarySettings?.() || {
+          enabled: true,
+          sensitivity: 'balanced',
+        };
+        payload.analyze_terms &&= glossarySettings.enabled;
+        options.terminology_sensitivity = glossarySettings.sensitivity;
+        if (payload.analyze_terms) glossaryRuns.set(meeting.id, glossaryRun);
         const scanTerms = () => {
           const task = 'glossary.analyze';
-          if (worker.tasks.controls.has(worker.tasks.key(task, meeting.id))) return;
-          void worker.tasks
-            .running(task, meeting.id, async (scanner) => {
+          void (async () => {
+            const { setTimeout: delay } = require('node:timers/promises');
+            let existing;
+            while ((existing = worker.tasks.controls.get(worker.tasks.key(task, meeting.id)))) {
+              if (!existing.control.cancelled) return;
+              await delay(25, undefined, { signal: control.signal });
+            }
+            await control.wait();
+            if (
+              glossaryRuns.get(meeting.id) !== glossaryRun ||
+              worker.store.glossarySettings?.().enabled === false
+            )
+              return;
+            return worker.tasks.running(task, meeting.id, async (scanner) => {
               const cancel = () => scanner.cancel();
               control.signal.addEventListener('abort', cancel, { once: true });
               try {
@@ -312,15 +424,26 @@ function createLLMHandlers(worker) {
                   worker,
                   meeting,
                   transcript,
-                  options,
-                  generate,
+                  {
+                    ...options,
+                    terminology_sensitivity:
+                      worker.store.glossarySettings?.().sensitivity ||
+                      options.terminology_sensitivity,
+                  },
+                  (options, prompt, settings) =>
+                    generate(options, prompt, { ...settings, background: true }),
                   scanner,
                 );
               } finally {
                 control.signal.removeEventListener('abort', cancel);
               }
+            });
+          })()
+            .finally(() => {
+              if (glossaryRuns.get(meeting.id) === glossaryRun) glossaryRuns.delete(meeting.id);
             })
-            .catch(() => {
+            .catch((error) => {
+              if (error.name === 'TaskCancelled' || error.name === 'AbortError') return;
               if (!control.signal.aborted && worker.store.meetingExists(meeting.id))
                 worker.emit('glossary.failed', { meeting_id: meeting.id });
             });
@@ -375,6 +498,7 @@ function createLLMHandlers(worker) {
                 options.endpoint,
                 options.format,
                 options.max_tokens,
+                terminology,
               ],
               preview: (draft, done, total) => {
                 const [markdown, claims] = evidence.parseClaims(draft, [], false, headings, false);
@@ -407,7 +531,7 @@ function createLLMHandlers(worker) {
                       : {}),
                     temperature: 0,
                   },
-                  prompt,
+                  prompt + terminology,
                   {
                     signal: control.signal,
                     jsonMode: true,
@@ -443,7 +567,7 @@ function createLLMHandlers(worker) {
               const previous = index ? chunks[index - 1].split('\n').at(-1) : '';
               const contextLine = previous && estimatedTokens(previous) <= 120 ? previous : '';
               const factPrompt = (part, previousLine) =>
-                `${prompts.chunk[language] || prompts.chunk.en}\nEnd each fact with [[kind:source]], replacing kind with action, decision, conclusion or cause, and source with the actual segment ID from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
+                `${prompts.chunk[language] || prompts.chunk.en}${terminology}\nEnd each fact with [[kind:source]], replacing kind with action, decision, conclusion or cause, and source with the actual segment ID from this block. The preceding line is context for pronouns, not a new fact.\n<preceding_context>${previousLine}</preceding_context>\n<transcript>\n${part}\n</transcript>`;
               const prompt = factPrompt(chunk, contextLine);
               const fingerprint = createHash('sha256')
                 .update(
@@ -623,6 +747,7 @@ function createLLMHandlers(worker) {
           claims,
           template,
           basis_date: meeting.meeting_date,
+          glossary_revision: glossaryRevision,
         };
         if (
           !worker.store.saveSummary(meeting.id, data, markdown, {

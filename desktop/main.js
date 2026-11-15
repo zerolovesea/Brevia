@@ -157,6 +157,7 @@ const dataTaskCommands = new Set([
   'meeting.import',
   'meeting.refine',
   'summary.generate',
+  'glossary.review',
   'translation.generate',
   'mobile.translate',
   'meeting.export',
@@ -184,6 +185,7 @@ const workerRequestTimeouts = new Map([
   ['meeting.resume', 180000],
   ['meeting.reconfigure', 180000],
   ['summary.generate', 900000],
+  ['glossary.review', 900000],
   // 精修和纪要收到自己的进度事件时续期；长任务仍有有限的无响应期限。
   ...[
     'meeting.refine',
@@ -1765,14 +1767,34 @@ function registerIpc() {
     meaning: z.string().trim().min(1).max(1000),
   });
   const mention = z.object({ meeting_id: z.string().uuid(), original: termText });
+  handleIpc('glossary.review', async (_, payload) => {
+    const value = mention
+      .extend({ ...llmRequest.shape, consent: z.literal(true) })
+      .refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+        message: 'Endpoint is required for remote providers',
+        path: ['endpoint'],
+      })
+      .parse(payload);
+    const api_key = await getSecret(value.key_reference);
+    if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
+    return worker.request('glossary.review', { ...value, api_key });
+  });
   handle('glossary.source', mention, 'glossary.source');
+  handle('glossary.audio', mention, 'glossary.audio');
   handle(
     'glossary.update',
     z.discriminatedUnion('action', [
       glossaryEntry.extend({ action: z.literal('save') }),
-      glossaryEntry.merge(mention).extend({ action: z.literal('resolve') }),
+      glossaryEntry
+        .merge(mention)
+        .extend({ action: z.literal('resolve'), meaning: z.string().trim().max(1000) }),
       mention.extend({ action: z.literal('dismiss') }),
       z.object({ action: z.literal('clear') }),
+      z.object({
+        action: z.literal('settings'),
+        enabled: z.boolean(),
+        sensitivity: z.enum(['low', 'balanced', 'high']),
+      }),
     ]),
     'glossary.update',
   );

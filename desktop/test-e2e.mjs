@@ -594,7 +594,7 @@ try {
     returnByValue: true,
   });
   check(
-    aiOnboarding.result?.value?.cards === 2 &&
+    aiOnboarding.result?.value?.cards === 3 &&
       aiOnboarding.result?.value?.choices === 0 &&
       aiOnboarding.result?.value?.off === 'off' &&
       aiOnboarding.result?.value?.on === 'auto' &&
@@ -642,7 +642,7 @@ try {
         const guide=page.querySelector('.onboarding-ai-mode-guide');
         if(guide.querySelectorAll('dt').length!==3||guide.querySelectorAll('dd').length!==3||guide.textContent.includes('undefined'))errors.push(code+': mode descriptions missing');
         const rows=page.querySelectorAll('.onboarding-ai-row');
-        if(!rows[0].querySelector('[name=onboarding-ai-enabled]')||!rows[1].querySelector('[name=onboarding-summary-enabled]')||!(rows[1].compareDocumentPosition(page.querySelector('.onboarding-shared-service'))&Node.DOCUMENT_POSITION_FOLLOWING))errors.push(code+': feature order incorrect');
+        if(!rows[0].querySelector('[name=onboarding-ai-enabled]')||!rows[1].querySelector('[name=onboarding-summary-enabled]')||!(page.querySelector('.onboarding-shared-service').compareDocumentPosition(rows[0])&Node.DOCUMENT_POSITION_FOLLOWING))errors.push(code+': feature order incorrect');
         summary.checked=true;
         summary.dispatchEvent(new Event('change',{bubbles:true}));
         const enabled=page.querySelector('[name=onboarding-ai-enabled]');
@@ -842,7 +842,7 @@ try {
   });
   check(
     JSON.stringify(aiOptions.result?.value?.options) === '["quiet","assist","auto"]' &&
-      aiOptions.result?.value?.icons === 2 &&
+      aiOptions.result?.value?.icons === 3 &&
       aiOptions.result?.value?.keyboard &&
       aiOptions.result?.value?.disabled &&
       aiOptions.result?.value?.saved === false &&

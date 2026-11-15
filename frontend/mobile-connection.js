@@ -21,7 +21,7 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode,
-        key = node.textContent.trim();
+        key = node.textContent.trim().replace(/\s+/g, ' ');
       if (/[\u3400-\u9fff]/.test(key)) staticCopy.push({ node, key });
     }
   }

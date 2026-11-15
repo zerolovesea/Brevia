@@ -60,7 +60,13 @@ function cleanText(input) {
   } while (text !== previous);
   const sentenceCase = (value) => {
     const prefix = value.match(/^\s*/)[0],
-      body = value.trimStart().toLowerCase();
+      identifiers =
+        value.match(
+          /\b[A-Za-z]+-?\d+[A-Za-z0-9-]*\b|\b\d+[A-Za-z][A-Za-z0-9-]*\b|[零〇一二两三四五六七八九幺]{2,}[A-Za-z]+\b/g,
+        ) || [];
+    let body = value.trimStart().toLowerCase();
+    // 全大写英文纠正不能把型号字母后缀一起改成小写。
+    for (const identifier of identifiers) body = body.replace(identifier.toLowerCase(), identifier);
     return (prefix + body.charAt(0).toUpperCase() + body.slice(1)).replace(
       /\b(?:ai|api|asr|cpu|fbi|gpu|html|http|https|llm|nasa|ny|url|ii)\b/gi,
       (word) => word.toUpperCase(),

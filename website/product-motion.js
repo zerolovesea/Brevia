@@ -307,7 +307,7 @@ window.detailActiveTab = 'summary';
       const node = textNodes.currentNode;
       if (node.parentElement?.closest('.brand-name, [translate="no"]')) continue;
       const label = node.textContent.trim();
-      if (label) node.textContent = node.textContent.replace(label, t(label));
+      if (label) node.textContent = node.textContent.replace(label, t(label.replace(/\s+/g, ' ')));
     }
     shell
       .querySelectorAll('[data-interface-icon]')

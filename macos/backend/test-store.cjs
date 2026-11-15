@@ -742,6 +742,8 @@ test('术语匹配仅使用本工作区和全局定义，挂起词可确认、�
   assert.deepEqual(store.glossarySource({ meeting_id: m.id, original: '小蓝盒' }), {
     text: source,
     start_ms: 3100,
+    end_ms: 5100,
+    audio_path: null,
   });
   assert.equal(store.glossarySource({ meeting_id: m.id, original: '不存在' }), null);
   const run = () =>
@@ -753,8 +755,8 @@ test('术语匹配仅使用本工作区和全局定义，挂起词可确认、�
       async () =>
         JSON.stringify({
           terms: [
-            { original: 'A C D', match: 'ACD' },
-            { original: '小蓝盒', match: null },
+            { original: 'A C D', match: 'ACD', quote: source },
+            { original: '小蓝盒', match: null, quote: source },
             { original: '不存在', match: null },
           ],
         }),
@@ -763,7 +765,16 @@ test('术语匹配仅使用本工作区和全局定义，挂起词可确认、�
   await run();
   let mentions = store.glossary().mentions;
   assert.equal(mentions.length, 2);
-  assert.equal(mentions.find((x) => x.original === 'A C D').name, 'ACD');
+  assert.equal(mentions.find((x) => x.original === 'A C D').name, null);
+  assert.equal(mentions.find((x) => x.original === 'A C D').suggestion, 'ACD');
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: 'A C D',
+    name: 'ACD',
+    meaning: '平均通话时长',
+    workspace_id: '',
+  });
   assert.equal(
     store.glossaryDocument({ ...m, summary: { data: { markdown: 'A C D；XA C DY' } } }).summary.data
       .markdown,
@@ -811,4 +822,654 @@ test('术语匹配仅使用本工作区和全局定义，挂起词可确认、�
     store.glossary().mentions.map((x) => x.original),
     ['小蓝盒'],
   );
+});
+
+test('RY 首次建议 ROI 须确认，确认别名仅在语义匹配时复用', async (t) => {
+  const { store } = setup(t);
+  const meeting = store.createMeeting({
+    title: '投放复盘',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  const text = '投放成本100，收入120，RY为1.2。';
+  store.saveSegment({
+    meeting_id: meeting.id,
+    segment_id: 'ry-source',
+    start_ms: 0,
+    end_ms: 1000,
+    text,
+  });
+  let result = {
+    original: 'RY',
+    suggestion: 'ROI',
+    meaning: '投资回报率',
+    reason: '讨论投放成本与收入',
+    quote: text,
+  };
+  const scan = () =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...meeting, segments: [{ text }] },
+      text,
+      { context_size: 8192 },
+      async () => JSON.stringify({ terms: [result, { original: '不存在', suggestion: 'ABC' }] }),
+      new TaskControl(),
+    );
+  await scan();
+  assert.equal(store.glossary().mentions.length, 1);
+  let term = store.glossary().mentions[0];
+  assert.equal(term.name, null);
+  assert.equal(term.suggestion, 'ROI');
+  assert.equal(term.suggestion_meaning, '投资回报率');
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: meeting.id,
+    original: 'RY',
+    workspace_id: 'public',
+    name: 'ROI',
+    meaning: '投资回报率',
+  });
+  const second = store.createMeeting({
+    title: '另一会议',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  store.saveSegment({
+    meeting_id: second.id,
+    segment_id: 'another',
+    start_ms: 0,
+    end_ms: 1000,
+    text,
+  });
+  result = { original: 'RY', match: 'ROI' };
+  await require('./glossary-analysis.cjs').analyzeTerms(
+    { store, emit() {} },
+    { ...second, segments: [{ text }] },
+    text,
+    { context_size: 8192 },
+    async () => JSON.stringify({ terms: [result] }),
+    new TaskControl(),
+  );
+  assert.equal(store.glossary().mentions.find((m) => m.meeting_id === second.id).name, 'ROI');
+  assert.ok(
+    store.glossaryContext(second, text).some((t) => t.original === 'RY' && t.name === 'ROI'),
+  );
+
+  store.updateGlossary({ action: 'dismiss', meeting_id: second.id, original: 'RY' });
+  await scan();
+  assert.equal(store.glossary().mentions.filter((m) => m.meeting_id === second.id).length, 0);
+});
+
+test('术语含义局部核对保留原话、无关条目及并发人工改稿', async (t) => {
+  const { store } = setup(t);
+  const meeting = store.createMeeting({
+    title: '核对ROI',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  const text = '成本100，收入120，RY为1.2，还没确定是否扩大投放。';
+  store.saveSegment({
+    meeting_id: meeting.id,
+    segment_id: 'source',
+    start_ms: 0,
+    end_ms: 1000,
+    text,
+  });
+  store.run('INSERT INTO glossary_mentions(meeting_id,original) VALUES(?,?)', meeting.id, 'RY');
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: meeting.id,
+    original: 'RY',
+    workspace_id: 'public',
+    name: 'ROI',
+    meaning: '投资回报率',
+  });
+  const claim = {
+    id: 'c1',
+    kind: 'conclusion',
+    text: 'RY为1.2。',
+    line: '- RY为1.2。',
+    sources: [{ text, start_ms: 0, segment_id: 'source' }],
+  };
+  const before = {
+    markdown: `## 摘要
+
+- RY为1.2。
+- 下周复盘。`,
+    claims: [claim],
+  };
+  store.saveSummary(meeting.id, before, '');
+  const { reviewGlossary } = require('./glossary-review.cjs');
+  const generate = async (_options, prompt = '') =>
+    JSON.stringify(
+      prompt.startsWith('Verify')
+        ? { supported: true, quote: text }
+        : { updates: [{ id: 'c1', text: 'ROI为1.2，尚未确定扩大投放。' }] },
+    );
+  const result = await reviewGlossary(
+    { store },
+    { meeting_id: meeting.id, original: 'RY' },
+    generate,
+    new TaskControl(),
+  );
+  assert.ok(result.summary.markdown.includes('尚未确定扩大投放'));
+  assert.ok(result.summary.markdown.includes('- 下周复盘。'));
+  assert.equal(result.summary.claims[0].sources[0].text, text);
+  assert.ok(result.summary.claims[0].text.includes('RY'));
+  store.saveSummary(meeting.id, before, '');
+  const ignored = await reviewGlossary(
+    { store },
+    { meeting_id: meeting.id, original: 'RY' },
+    async () => {
+      store.saveSummary(meeting.id, { ...before, markdown: '人工改稿' }, '');
+      return generate();
+    },
+    new TaskControl(),
+  );
+  assert.deepEqual(ignored, {});
+  assert.equal(store.getMeeting(meeting.id, true).summary.data.markdown, '人工改稿');
+});
+
+test('工作区别名覆盖全局，局部核对拒绝否定翻转', async (t) => {
+  const { store } = setup(t);
+  const meeting = store.createMeeting({ title: 'RY', language: 'zh', refined_model_id: 'test' });
+  const text = '这批投放的RY没有跑正，下周再看。';
+  store.saveSegment({ meeting_id: meeting.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text });
+  store.run('INSERT INTO glossary_mentions(meeting_id,original) VALUES(?,?)', meeting.id, 'RY');
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: meeting.id,
+    original: 'RY',
+    workspace_id: '',
+    name: 'ROI',
+    meaning: '投资回报率',
+  });
+  const before = {
+    markdown: '- RY没有跑正。',
+    claims: [
+      {
+        id: 'c1',
+        kind: 'conclusion',
+        text: 'RY没有跑正。',
+        line: '- RY没有跑正。',
+        sources: [{ text, start_ms: 0 }],
+      },
+    ],
+  };
+  store.saveSummary(meeting.id, before, '');
+  const result = await require('./glossary-review.cjs').reviewGlossary(
+    { store },
+    { meeting_id: meeting.id, original: 'RY' },
+    async () =>
+      JSON.stringify({
+        updates: [{ id: 'c1', text: 'ROI已经跑正。' }],
+        supported: true,
+        quote: text,
+      }),
+    new TaskControl(),
+  );
+  assert.deepEqual(result, {});
+  assert.equal(store.getMeeting(meeting.id, true).summary.data.markdown, before.markdown);
+  store.updateGlossary({
+    action: 'save',
+    workspace_id: 'public',
+    name: 'Retail Yield',
+    meaning: '内部项目名称',
+  });
+  store.run(
+    'INSERT INTO glossary_aliases(scope,original,name) VALUES(?,?,?)',
+    'public',
+    'RY',
+    'Retail Yield',
+  );
+  assert.equal(
+    store.glossaryContext(meeting, text).find((t) => t.original === 'RY').name,
+    'Retail Yield',
+  );
+  const next = store.createMeeting({ title: 'next', language: 'zh', refined_model_id: 'test' });
+  store.saveSegment({ meeting_id: next.id, segment_id: 's2', start_ms: 0, end_ms: 1000, text });
+  await require('./glossary-analysis.cjs').analyzeTerms(
+    { store, emit() {} },
+    { ...next, segments: [{ text }] },
+    text,
+    { context_size: 8192 },
+    async () => JSON.stringify({ terms: [{ original: 'RY', match: 'ROI', quote: text }] }),
+    new TaskControl(),
+  );
+  assert.equal(store.glossary().mentions.find((m) => m.meeting_id === next.id).name, null);
+});
+
+test('术语服务返回空对象时重试普通JSON，空候选数组与结构错误区分', async (t) => {
+  const { store } = setup(t);
+  const m = store.createMeeting({ title: '兼容JSON', language: 'zh', refined_model_id: 'test' });
+  const text = '投放成本100，收入120，RY为1.2。';
+  store.saveSegment({ meeting_id: m.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text });
+  const modes = [];
+  const scan = (generate) => {
+    store.run('DELETE FROM glossary_scans WHERE meeting_id=?', m.id);
+    return require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...m, segments: [{ text }] },
+      text,
+      { context_size: 8192 },
+      generate,
+      new TaskControl(),
+    );
+  };
+  await scan(async (_options, _prompt, request) => {
+    modes.push(request.jsonMode);
+    return request.jsonMode
+      ? '{"terms":[{}]}'
+      : JSON.stringify({
+          terms: [
+            {
+              original: 'RY',
+              suggestion: 'ROI',
+              meaning: '投资回报率',
+              reason: '投放回报语境',
+              quote: text,
+            },
+          ],
+        });
+  });
+  assert.deepEqual(modes, [true, false]);
+  assert.equal(store.glossary().mentions.find((m) => m.original === 'RY').suggestion, 'ROI');
+  let calls = 0;
+  await scan(async () => {
+    calls++;
+    return '{"terms":[]}';
+  });
+  assert.equal(calls, 1);
+  await assert.rejects(
+    scan(async () => '{"terms":[{}]}'),
+    /candidate spelling is missing/,
+  );
+  await assert.rejects(
+    scan(async () => 'null'),
+    /candidate spelling is missing/,
+  );
+});
+
+test('术语输出截断时按原文边界拆分重试，保留取消支持', async (t) => {
+  const { store } = setup(t);
+  const m = store.createMeeting({ title: '长段术语', language: 'zh', refined_model_id: 'test' });
+  const text = '讨论内部指标及投放成本。'.repeat(180);
+  store.saveSegment({ meeting_id: m.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text });
+  let truncated = 0,
+    completed = 0;
+  await require('./glossary-analysis.cjs').analyzeTerms(
+    { store, emit() {} },
+    { ...m, segments: [{ text }] },
+    text,
+    { context_size: 8192 },
+    async (_options, prompt) => {
+      const part = prompt.split('\nTranscript:\n')[1];
+      if (part.length > 600) {
+        truncated++;
+        throw new Error('Model response reached the output limit');
+      }
+      completed++;
+      return '{"terms":[]}';
+    },
+    new TaskControl(),
+  );
+  assert.ok(truncated > 0);
+  assert.ok(completed > 0, '相同拆分片段只扫描一次');
+});
+
+test('术语候选拒绝普通单字与错位原话，允许完整名词及已确认单字', async (t) => {
+  const { store } = setup(t);
+  const m = store.createMeeting({ title: '误报回归', language: 'zh', refined_model_id: 'test' });
+  const first = '其实整体还是收缩了，因为预算有限。';
+  const second = '其他确期也是各家单独定制的。';
+  for (const [index, text] of [first, second].entries())
+    store.saveSegment({
+      meeting_id: m.id,
+      segment_id: 's' + index,
+      start_ms: index * 1000,
+      end_ms: index * 1000 + 900,
+      text,
+    });
+  const scan = (terms) =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      {
+        ...m,
+        segments: [
+          { text: first, start_ms: 0 },
+          { text: second, start_ms: 1000 },
+        ],
+      },
+      first + '\n' + second,
+      { context_size: 8192 },
+      async () => JSON.stringify({ terms }),
+      new TaskControl(),
+    );
+  await scan([
+    { original: '其', reason: '其本身无独立问题', quote: second },
+    { original: '确期', suggestion: '续期', meaning: '保险续期业务', quote: second },
+    { original: '预算', quote: '另一个不存在的预算片段' },
+  ]);
+  assert.deepEqual(
+    store.glossary().mentions.map((m) => m.original),
+    ['确期'],
+  );
+  assert.deepEqual(store.glossarySource({ meeting_id: m.id, original: '确期' }), {
+    text: second,
+    start_ms: 1000,
+    end_ms: 1900,
+    audio_path: null,
+  });
+  store.run(
+    'INSERT INTO glossary_mentions(meeting_id,original,source_quote) VALUES(?,?,?)',
+    m.id,
+    '其',
+    second,
+  );
+  assert.ok(!store.glossary().mentions.some((m) => m.original === '其'));
+  assert.equal(store.glossarySource({ meeting_id: m.id, original: '其' }), null);
+  store.run(
+    'UPDATE glossary_mentions SET source_quote=? WHERE meeting_id=? AND original=?',
+    '已被改掉的确期原话',
+    m.id,
+    '确期',
+  );
+  assert.equal(store.glossarySource({ meeting_id: m.id, original: '确期' }), null);
+  store.updateGlossary({
+    action: 'save',
+    workspace_id: 'public',
+    name: '熵',
+    meaning: '不确定性度量',
+  });
+  const third = '熵是本次模型的度量指标。';
+  store.saveSegment({
+    meeting_id: m.id,
+    segment_id: 's2',
+    start_ms: 2000,
+    end_ms: 2900,
+    text: third,
+  });
+  await require('./glossary-analysis.cjs').analyzeTerms(
+    { store, emit() {} },
+    { ...m, segments: [first, second, third].map((text, i) => ({ text, start_ms: i * 1000 })) },
+    third,
+    { context_size: 8192 },
+    async () => JSON.stringify({ terms: [{ original: '熵', match: '熵', quote: third }] }),
+    new TaskControl(),
+  );
+  assert.equal(store.glossary().mentions.find((m) => m.original === '熵').name, '熵');
+});
+
+test('术语扫描拒绝句子、去重缩写，重复生成复用已扫描片段，确认后提示重新生成', async (t) => {
+  const { store } = setup(t);
+  const m = store.createMeeting({ title: '队列验收', language: 'zh', refined_model_id: 'test' });
+  const text =
+    '这个url指的是一个组。URL、u r l用于链接，前端的R Y是指标，RY需要核对。成本比较高。他一条1毛，咱们一条一分。我幺八幺九二幺幺八六幺八六八二。';
+  store.saveSegment({ meeting_id: m.id, segment_id: 's1', start_ms: 2000, end_ms: 7000, text });
+  const audio = require('node:path').join(store.meetingDir(m.id), 'audio/playback-mic.wav');
+  require('node:fs').writeFileSync(audio, Buffer.alloc(44));
+  const worker = { store, emit() {} };
+  const meeting = () => ({
+    ...store.getMeeting(m.id, true),
+    segments: store.currentSegments(m.id),
+  });
+  let calls = 0;
+  const generate = async () => {
+    calls++;
+    return JSON.stringify({
+      terms: [
+        '这个url指的是一个组',
+        '成本比较高。他一条1毛，咱们一条一分',
+        '我幺八幺九二幺幺八六幺八六八二',
+        '前端的R Y',
+        'URL',
+        'u r l',
+        'RY',
+        'R Y',
+      ].map((original) => ({ original, quote: text, reason: '含义需要核对' })),
+    });
+  };
+  const scan = () =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      worker,
+      meeting(),
+      text,
+      { model: 'test', context_size: 8192 },
+      generate,
+      new TaskControl(),
+    );
+  await scan();
+  assert.equal(calls, 1);
+  assert.deepEqual(
+    store.glossary().mentions.map((m) => m.original),
+    ['RY', 'URL'],
+  );
+  assert.equal(worker.glossaryScans.size, 0, '扫描结束清理运行状态');
+  await scan();
+  assert.equal(calls, 1, '重复生成不再花token扫描相同原文和词库');
+  const source = store.glossarySource({ meeting_id: m.id, original: 'URL' });
+  assert.deepEqual(source, { text, start_ms: 2000, end_ms: 7000, audio_path: audio });
+  store.run(
+    'INSERT INTO glossary_mentions(meeting_id,original,source_quote) VALUES(?,?,?)',
+    m.id,
+    'u r l',
+    text,
+  );
+  store.run(
+    'INSERT INTO glossary_mentions(meeting_id,original,source_quote) VALUES(?,?,?)',
+    m.id,
+    '这个url指的是一个组',
+    text,
+  );
+  assert.equal(store.glossary().mentions.length, 2, '历史噪声和变体也不计入待处理');
+  store.updateGlossary({ action: 'dismiss', meeting_id: m.id, original: 'URL' });
+  assert.deepEqual(
+    store.glossary().mentions.map((m) => m.original),
+    ['RY'],
+    '排除术语同时排除其变体',
+  );
+  store.saveSummary(m.id, { markdown: '## 会议摘要\n\nRY需要核对。' }, '');
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: 'RY',
+    name: 'ROI',
+    meaning: '投资回报率',
+    workspace_id: 'public',
+  });
+  assert.equal(store.glossary().regeneration[0].id, m.id);
+  const revision = store.one(
+    'SELECT revision FROM glossary_revisions WHERE meeting_id=?',
+    m.id,
+  ).revision;
+  store.saveSummary(
+    m.id,
+    { markdown: '## 会议摘要\n\nROI需要核对。', glossary_revision: revision },
+    '',
+  );
+  assert.equal(store.glossary().regeneration.length, 0);
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: 'RY',
+    name: 'ROI',
+    meaning: '本场指投放收入除以支出',
+    workspace_id: 'public',
+  });
+  store.saveSummary(m.id, { markdown: '旧快照成稿', glossary_revision: revision }, '');
+  assert.equal(
+    store.glossary().regeneration.length,
+    1,
+    '生成期间确认新术语，旧快照成稿仍提示重新生成',
+  );
+});
+
+test('术语扫描缓存隔离工作区，移区后重新确认匹配作用域', async (t) => {
+  const { store } = setup(t);
+  const a = store.createWorkspace({ name: 'A' }),
+    b = store.createWorkspace({ name: 'B' });
+  const m = store.createMeeting({
+    title: '移区验证',
+    language: 'zh',
+    refined_model_id: 'test',
+    workspace_id: a.id,
+  });
+  const text = '投放成本100，收入120，RY为1.2。';
+  store.saveSegment({ meeting_id: m.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text });
+  for (const scope of [a.id, b.id]) {
+    store.updateGlossary({
+      action: 'save',
+      workspace_id: scope,
+      name: 'ROI',
+      meaning: '投资回报率',
+    });
+    store.run('INSERT INTO glossary_aliases VALUES(?,?,?)', scope, 'RY', 'ROI');
+  }
+  let calls = 0;
+  const scan = () =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...store.getMeeting(m.id, true), segments: store.currentSegments(m.id) },
+      text,
+      { context_size: 8192 },
+      async () => {
+        calls++;
+        return JSON.stringify({ terms: [{ original: 'RY', match: 'ROI', quote: text }] });
+      },
+      new TaskControl(),
+    );
+  await scan();
+  assert.equal(store.glossary().mentions[0].scope, a.id);
+  store.run('UPDATE meetings SET workspace_id=? WHERE id=?', b.id, m.id);
+  await scan();
+  assert.equal(calls, 2);
+  assert.equal(store.glossary().mentions[0].scope, b.id);
+});
+
+test('术语取消或原文并发变化不缓存未完成扫描，运行状态始终收尾', async (t) => {
+  const { store } = setup(t);
+  const m = store.createMeeting({ title: '取消核验', language: 'zh', refined_model_id: 'test' });
+  const text = 'RY需要确认。';
+  const segment = { meeting_id: m.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text };
+  store.saveSegment(segment);
+  const worker = { store, emit() {} };
+  const snapshot = { ...m, segments: store.currentSegments(m.id) };
+  const scan = (generate, control = new TaskControl()) =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      worker,
+      snapshot,
+      text,
+      { context_size: 8192 },
+      generate,
+      control,
+    );
+  const control = new TaskControl();
+  await assert.rejects(
+    scan(async () => {
+      control.cancel();
+      return '{"terms":[]}';
+    }, control),
+    { name: 'TaskCancelled' },
+  );
+  assert.equal(store.one('SELECT COUNT(*) n FROM glossary_scans').n, 0);
+  assert.equal(worker.glossaryScans.size, 0);
+  await scan(async () => {
+    store.saveSegment({ ...segment, text: '改为确认ROI。' });
+    return JSON.stringify({ terms: [{ original: 'RY', quote: text }] });
+  });
+  assert.equal(store.one('SELECT COUNT(*) n FROM glossary_scans').n, 0);
+  assert.equal(store.glossary().mentions.length, 0);
+  assert.equal(worker.glossaryScans.size, 0);
+});
+
+test('术语回听只读取长录音中的原句，确认建议允许空释义并保留已有定义', (t) => {
+  const { store } = setup(t),
+    fs = require('node:fs'),
+    path = require('node:path');
+  const { wavHeader } = require('./store-audio.cjs');
+  const m = store.createMeeting({ title: '长录音回听', language: 'zh', refined_model_id: 'test' });
+  const text = 'H5指网页技术。';
+  store.saveSegment({ meeting_id: m.id, segment_id: 'h5', text, start_ms: 728000, end_ms: 730000 });
+  store.run(
+    'INSERT INTO glossary_mentions(meeting_id,original,source_quote) VALUES(?,?,?)',
+    m.id,
+    'H5',
+    text,
+  );
+  const audio = path.join(store.meetingDir(m.id), 'audio/playback-mic.wav');
+  const fd = fs.openSync(audio, 'w'),
+    bytes = 110 * 60 * 32000;
+  fs.writeSync(fd, wavHeader(bytes));
+  fs.ftruncateSync(fd, 44 + bytes);
+  const expected = Buffer.alloc(64000, 23);
+  fs.writeSync(fd, expected, 0, expected.length, 44 + 728 * 32000);
+  fs.closeSync(fd);
+  for (let i = 0; i < 3; i++) {
+    const clip = Buffer.from(
+      store.glossaryAudio({ meeting_id: m.id, original: 'H5' }).split(',')[1],
+      'base64',
+    );
+    assert.equal(clip.length, 64044);
+    assert.deepEqual(clip.subarray(44), expected);
+  }
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: 'H5',
+    workspace_id: 'public',
+    name: 'H5',
+    meaning: '',
+  });
+  assert.equal(store.glossary().mentions[0].name, 'H5');
+  store.updateGlossary({ action: 'save', workspace_id: 'public', name: 'H5', meaning: '网页技术' });
+  store.updateGlossary({
+    action: 'resolve',
+    meeting_id: m.id,
+    original: 'H5',
+    workspace_id: 'public',
+    name: 'H5',
+    meaning: '',
+  });
+  assert.equal(store.glossary().entries.find((e) => e.name === 'H5').meaning, '网页技术');
+});
+
+test('术语默认适中并保留自选等级，关闭后不请求模型且词条保留', async (t) => {
+  const { store } = setup(t);
+  assert.deepEqual(store.glossarySettings(), { enabled: true, sensitivity: 'balanced' });
+  store.updateGlossary({ action: 'settings', enabled: true, sensitivity: 'low' });
+  assert.equal(store.glossarySettings().sensitivity, 'low');
+  const m = store.createMeeting({ title: '灵敏度', language: 'zh', refined_model_id: 'test' }),
+    text = 'RY和小蓝盒需要确认。';
+  store.saveSegment({ meeting_id: m.id, segment_id: 't', start_ms: 0, end_ms: 1000, text });
+  let calls = 0;
+  const scan = () =>
+    require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...m, segments: store.currentSegments(m.id) },
+      text,
+      { context_size: 8192, terminology_sensitivity: store.glossarySettings().sensitivity },
+      async () => {
+        calls++;
+        return JSON.stringify({
+          terms: [
+            { original: 'RY', suggestion: 'ROI', priority: 'high', quote: text },
+            { original: '小蓝盒', priority: 'normal', quote: text },
+          ],
+        });
+      },
+      new TaskControl(),
+    );
+  await scan();
+  assert.deepEqual(
+    store.glossary().mentions.map((x) => x.original),
+    ['RY'],
+  );
+  store.updateGlossary({ action: 'settings', enabled: true, sensitivity: 'balanced' });
+  await scan();
+  assert.equal(store.glossary().mentions.length, 2);
+  store.updateGlossary({ action: 'settings', enabled: false, sensitivity: 'low' });
+  await scan();
+  assert.equal(calls, 2);
+  assert.equal(store.glossary().mentions.length, 2);
+  assert.equal(store.glossary().settings.enabled, false);
 });

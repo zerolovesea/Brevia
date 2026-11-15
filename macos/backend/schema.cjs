@@ -8,6 +8,8 @@ module.exports = {
 CREATE TABLE IF NOT EXISTS glossary_entries(scope TEXT NOT NULL, name TEXT NOT NULL, meaning TEXT NOT NULL, PRIMARY KEY(scope,name));
 CREATE TABLE IF NOT EXISTS glossary_aliases(scope TEXT NOT NULL, original TEXT NOT NULL,name TEXT NOT NULL,PRIMARY KEY(scope,original));
 CREATE TABLE IF NOT EXISTS glossary_mentions(meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, original TEXT NOT NULL, name TEXT, scope TEXT, dismissed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(meeting_id,original));
+CREATE TABLE IF NOT EXISTS glossary_scans(meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, fingerprint TEXT NOT NULL, PRIMARY KEY(meeting_id,fingerprint));
+CREATE TABLE IF NOT EXISTS glossary_revisions(meeting_id TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE, revision INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS summary_chunks (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   position INTEGER NOT NULL, fingerprint TEXT NOT NULL, facts TEXT NOT NULL,
