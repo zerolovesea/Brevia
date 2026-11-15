@@ -536,11 +536,21 @@ void main() {
     expect(find.text(tr('暂无会议纪要')), findsOneWidget);
     await capture('mobile-live-minutes');
     await tester.tap(find.text(tr('笔记')));
-    for (var i = 0; i < 12 && find.byType(TextField).evaluate().isEmpty; i++) {
+    for (
+      var i = 0;
+      i < 12 &&
+          find.byType(TextField).evaluate().isEmpty &&
+          find.text(tr('编辑')).evaluate().isEmpty;
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 30)),
       );
+    }
+    if (find.byType(TextField).evaluate().isEmpty) {
+      await tester.tap(find.text(tr('编辑')));
+      await tester.pump();
     }
     await tester.enterText(
       find.byType(TextField),
