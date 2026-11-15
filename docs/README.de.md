@@ -42,25 +42,27 @@ Mac ca. 43 MiB (45,5 MB), Windows 38 MB. Sprachmodelle werden separat herunterge
 
 ### Protokoll und Fischgrätendiagramm
 
-[![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+![Sitzungsprotokoll und Fischgrätendiagramm mit Verweis auf die Originalaufnahme](assets/showcase/desktop/en/summary.gif)
 
 Längere chinesische und englische Meetings können thematische Protokolle mit Quellenprüfung je Eintrag erzeugen; sonst bleiben die sieben Abschnitte erhalten. Über das Ursachendiagramm können Sie Aussagen im Transkript prüfen und anhören. Protokoll und Ursachenanalyse lassen sich getrennt exportieren. Sie können nach Sprechern filtern und Namen für eine ganze Besprechung ändern.
-
-Im Glossar speichern Sie allgemeine oder arbeitsbereichsspezifische Begriffe und bestätigen KI-Vorschläge, Definitionen und Ersetzungen. Im Protokoll lassen sich Definitionen anzeigen und Originalbegriffe wiederherstellen; das Transkript bleibt unverändert.
-
-Glossarscans bieten eine Empfindlichkeitseinstellung, verwenden fertige Ergebnisse erneut und erlauben das Anhören der Quelle. Nach der Bestätigung können betroffene Protokolle im Hintergrund geprüft werden; gleichzeitige manuelle Änderungen bleiben erhalten.
 
 ### KI-Notizen
 
 Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.
 
-![KI schlägt eine Aufgabe für die Notizen vor](assets/showcase/desktop/en/ai-notes.png)
+![KI schlägt eine Aufgabe für die Notizen vor](assets/showcase/desktop/en/ai-notes.gif)
+
+### Ein Glossar, das mitlernt
+
+Hören Sie die Originalstelle an und bestätigen Sie Begriffe und Definitionen. Jede Bestätigung erweitert das gemeinsame oder arbeitsbereichsspezifische Glossar für künftige Meetings. Je mehr Sie ihm beibringen, desto besser versteht es Ihre Fachsprache. Definitionen und Originalformulierungen bleiben im Protokoll zugänglich; das Quelltranskript bleibt erhalten.
+
+![Begriff und Definition bestätigen und im Protokoll anzeigen](assets/showcase/desktop/en/glossary.gif)
 
 ## Mit dem Smartphone aufnehmen
 
 Offline aufnehmen, Notizen schreiben und wichtige Stellen markieren. Sobald der Computer den Empfang bestätigt, kann die Smartphone-App verlassen werden: Import und Transkription laufen auf dem Desktop weiter. Die lokale Kopie bleibt erhalten. Das Smartphone kann auch als Mikrofon oder zur Anzeige von Live-Untertiteln dienen. Beide Geräte unter **Einstellungen → Geräteverbindung** im selben lokalen Netzwerk koppeln; für den Live-Modus muss der Computer laufen.
 
-![Live-Untertitel auf Smartphone und Computer](assets/showcase/desktop/en/phone.png)
+![Live-Untertitel auf Smartphone und Computer](assets/showcase/desktop/en/phone.gif)
 
 ## Meeting-Kapsel
 

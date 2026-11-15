@@ -42,23 +42,25 @@ The Mac installer is about **43 MiB** (45.5 MB), and the Windows installer is **
 
 Longer Chinese and English meetings can produce topic-based minutes with each item checked against the source; other cases retain seven sections. Use the cause diagram to check transcript quotes and replay the recording. Export the minutes and cause analysis separately. Filter the transcript by speaker or rename a speaker throughout one meeting.
 
-Save shared or workspace-specific terms in the glossary, and confirm AI-suggested terms, definitions and replacements. In minutes, view definitions or restore the original wording; the source transcript stays unchanged.
-
-Glossary scans support sensitivity settings, reuse completed results and let you replay source speech. After confirmation, affected minutes can be reviewed in the background while preserving concurrent manual edits.
-
-[![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.gif)
 
 ### AI notes
 
 Choose which suggested decisions and tasks to keep alongside your own notes as the conversation unfolds.
 
-![An AI suggestion to add a follow-up task to the meeting notes](assets/showcase/desktop/en/ai-notes.png)
+![An AI suggestion to add a follow-up task to the meeting notes](assets/showcase/desktop/en/ai-notes.gif)
+
+### A glossary that learns with you
+
+When AI finds an unfamiliar term, replay the source and confirm its name and meaning. Each confirmation builds a shared or workspace-specific glossary for future meetings. The more you teach it, the better it understands your business vocabulary. View definitions or restore original wording in minutes; the source transcript is preserved.
+
+![Confirming a term and its definition, then viewing it in the minutes](assets/showcase/desktop/en/glossary.gif)
 
 ## Connect your phone
 
 On the same local network, scan the QR code under **Settings → Device Connection**. Use your phone as a wireless microphone or follow live captions. You can also record on your phone and transfer the meeting to your computer later.
 
-![Live meeting captions on a paired phone and computer](assets/showcase/desktop/en/phone.png)
+![Live meeting captions on a paired phone and computer](assets/showcase/desktop/en/phone.gif)
 
 ## Meeting capsule
 

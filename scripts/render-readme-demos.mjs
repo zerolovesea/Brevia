@@ -12,6 +12,9 @@ const project = join(root, 'output/readme-gif-export');
 const assets = join(root, 'docs/assets/showcase/desktop');
 const scenes = {
   capsule: { query: 'scene=capsule', start: 0, duration: 26 },
+  'ai-notes': { current: true, start: 10, duration: 4.8 },
+  glossary: { current: true, start: 56, duration: 9 },
+  phone: { current: true, start: 32, duration: 8 },
   live: { current: true, start: 0, duration: 10 },
   summary: { current: true, start: 20, duration: 12 },
   library: { query: 'scene=library', start: 0, duration: 12 },
@@ -27,7 +30,7 @@ assert(
   'Unknown scene',
 );
 assert(!onlyLanguage || ['zh', 'en'].includes(onlyLanguage), 'Unknown language');
-if (onlyScene === '--screenshots') {
+if (onlyScene === '--screenshots' || onlyScene === 'phone') {
   const server = createServer((request, response) => {
     const file = resolve(root, '.' + new URL(request.url, 'http://localhost').pathname);
     if (!file.startsWith(root + sep)) return response.writeHead(403).end();
@@ -64,6 +67,50 @@ if (onlyScene === '--screenshots') {
       );
       await page.waitForFunction(() => !!window.appMotion);
       assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+      if (onlyScene === 'phone') {
+        const frames = join(project, 'phone-frames', lang);
+        mkdirSync(frames, { recursive: true });
+        await page.evaluate(() => window.appMotion.render(32000));
+        await page.waitForFunction(
+          () => !!document.querySelector('.pair-phone').contentWindow.showMeetingPreview,
+        );
+        await page.waitForTimeout(500);
+        for (let i = 0; i < 160; i++) {
+          await page.evaluate(
+            (time) => {
+              window.appMotion.render(time);
+              document.querySelector('.pair-phone').contentWindow.playMobilePreview(false);
+              for (const animation of document.getAnimations())
+                if (Number.isFinite(animation.effect?.getComputedTiming().endTime))
+                  animation.finish();
+            },
+            32000 + i * 50,
+          );
+          await page.waitForTimeout(30);
+          await page.screenshot({ path: join(frames, `${String(i).padStart(4, '0')}.png`) });
+        }
+        assert.deepEqual(errors, [], `${lang}/phone: page errors`);
+        const output = join(assets, lang, 'phone.gif');
+        execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-y',
+          '-framerate',
+          '20',
+          '-i',
+          join(frames, '%04d.png'),
+          '-filter_complex',
+          '[0:v]split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a',
+          '-loop',
+          '0',
+          output,
+        ]);
+        const gif = readFileSync(output);
+        assert.equal(gif.readUInt16LE(6), 2560);
+        assert.equal(gif.readUInt16LE(8), 1600);
+        assert(gif.length < 10 * 1024 * 1024, 'phone: GIF exceeds 10 MiB');
+        continue;
+      }
       for (const [name, time] of Object.entries({
         'ai-notes': 12500,
         summary: 28000,
@@ -176,7 +223,7 @@ addEventListener('message',event=>{
         '--format',
         'gif',
         '--fps',
-        '10',
+        '20',
         '--workers',
         '1',
         '--output',
@@ -209,7 +256,7 @@ addEventListener('message',event=>{
         { encoding: 'utf8' },
       ),
     );
-    assert.equal(Number(streams[0].nb_frames), duration * 10, `${name}: incomplete GIF`);
+    assert.equal(Number(streams[0].nb_frames), duration * 20, `${name}: incomplete GIF`);
     assert.equal(Number(streams[0].duration), duration, `${name}: incorrect GIF duration`);
   }
 }

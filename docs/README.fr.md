@@ -42,25 +42,27 @@ Le programme d’installation pèse environ 43 Mio (45,5 Mo) sur Mac et 38 Mo su
 
 ### Compte rendu et diagramme en arêtes de poisson
 
-[![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+![Compte rendu et diagramme en arêtes de poisson avec renvoi à l’enregistrement](assets/showcase/desktop/en/summary.gif)
 
 Les longues réunions en chinois ou en anglais peuvent produire un compte rendu thématique, vérifié point par point dans les propos d’origine ; les autres cas conservent sept rubriques. Le diagramme des causes permet de vérifier les citations et de réécouter les interventions. Le compte rendu et l’analyse sont exportables séparément. Filtrez la transcription par intervenant ou modifiez son nom pour toute la réunion.
-
-Le glossaire conserve les termes communs ou propres à un espace de travail et permet de confirmer les termes, définitions et remplacements proposés par l’IA. Consultez une définition ou rétablissez le terme d’origine dans le compte rendu ; la transcription reste inchangée.
-
-L’analyse du glossaire propose un réglage de sensibilité, réutilise les résultats et permet de réécouter la source. Après confirmation, les passages concernés peuvent être revus en arrière-plan sans écraser les modifications manuelles simultanées.
 
 ### Notes IA
 
 Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.
 
-![L’IA propose une tâche à ajouter aux notes](assets/showcase/desktop/en/ai-notes.png)
+![L’IA propose une tâche à ajouter aux notes](assets/showcase/desktop/en/ai-notes.gif)
+
+### Un glossaire qui apprend avec vous
+
+Réécoutez la source et confirmez les termes et leurs définitions. Chaque confirmation enrichit le glossaire commun ou celui de l’espace de travail pour les prochaines réunions : plus vous lui apprenez, mieux il comprend votre vocabulaire métier. Consultez les définitions ou rétablissez le terme d’origine dans le compte rendu ; la transcription est conservée.
+
+![Confirmer un terme et consulter sa définition dans le compte rendu](assets/showcase/desktop/en/glossary.gif)
 
 ## Enregistrer avec le téléphone
 
 Enregistrez hors ligne, prenez des notes et marquez les moments importants. Dès que l’ordinateur confirme la réception, vous pouvez quitter l’application mobile : l’importation et la transcription continuent sur le bureau. Le téléphone conserve sa copie. Il peut aussi servir de microphone ou afficher les sous-titres en direct. Associez les appareils sur le même réseau local dans **Paramètres → Connexion des appareils** ; le mode direct exige que l’ordinateur reste allumé.
 
-![Sous-titres sur le téléphone et l’ordinateur](assets/showcase/desktop/en/phone.png)
+![Sous-titres sur le téléphone et l’ordinateur](assets/showcase/desktop/en/phone.gif)
 
 ## Capsule de réunion
 

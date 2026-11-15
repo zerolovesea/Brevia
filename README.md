@@ -44,23 +44,25 @@ Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次�
 
 较长的中英文会议可按业务议题生成纪要，并逐项核对原话；其他情况保留七章结构。在右侧原因图核对字幕原话并回听录音。纪要和原因分析可以分别导出。逐字稿支持按说话人筛选，也可以一次修改该说话人在本场会议中的名字。
 
-术语库保存工作区或通用词条，可确认 AI 发现的名词、释义与替换词。纪要中的术语可查看释义或恢复原词；原始逐字稿保持不变。
-
-术语扫描支持灵敏度设置、结果复用和原句回听；确认后可后台复核受影响的纪要，保留并发人工编辑。
-
-[![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](docs/assets/showcase/desktop/zh/summary.png)](docs/assets/showcase/desktop/zh/summary.gif)
+![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](docs/assets/showcase/desktop/zh/summary.gif)
 
 ### AI 笔记
 
 讨论过程中，AI 会建议值得记下的决定和待办，你可以选择采纳，也可以随手写下自己的笔记。
 
-![AI 建议将发言中的待办加入会议笔记](docs/assets/showcase/desktop/zh/ai-notes.png)
+![AI 建议将发言中的待办加入会议笔记](docs/assets/showcase/desktop/zh/ai-notes.gif)
+
+### 术语库
+
+AI 发现不熟悉的名词时，你可以回听原话，确认正确名称和释义。每次确认都会积累为工作区或通用词条，在后续会议中复用：越学越聪明，越用越懂你的业务。纪要可查看释义或恢复原词，原始逐字稿始终保留。
+
+![确认术语名称和释义，保存后在纪要中查看](docs/assets/showcase/desktop/zh/glossary.gif)
 
 ## 手机和电脑一起开会
 
 在同一局域网内，用手机扫描电脑 **设置 → 设备连接** 里的二维码。手机可以充当无线麦克风，也可以查看实时字幕。外出时用手机独立录音，回来后传给电脑继续转写、整理。
 
-![手机与电脑显示同一场会议的实时字幕](docs/assets/showcase/desktop/zh/phone.png)
+![手机与电脑显示同一场会议的实时字幕](docs/assets/showcase/desktop/zh/phone.gif)
 
 ## 会议胶囊
 

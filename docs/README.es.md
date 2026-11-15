@@ -42,25 +42,27 @@ El instalador ocupa unos 43 MiB (45,5 MB) en Mac y 38 MB en Windows. Los modelos
 
 ### Acta y diagrama de espina de pescado
 
-[![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
+![Acta y diagrama de espina de pescado con referencias a la grabación](assets/showcase/desktop/en/summary.gif)
 
 Las reuniones largas en chino o inglés pueden generar actas por temas, verificadas con las intervenciones originales; los demás casos mantienen siete secciones. El diagrama de causas permite comprobar las citas y escuchar la grabación. El acta y el análisis se exportan por separado. Puedes filtrar la transcripción por hablante o cambiar su nombre en toda la reunión.
-
-Guarda términos generales o del espacio de trabajo en el glosario y confirma términos, definiciones y sustituciones sugeridos por la IA. En el acta puedes consultar definiciones o restaurar el término original; la transcripción no cambia.
-
-El análisis del glosario permite ajustar la sensibilidad, reutilizar resultados y escuchar la fuente. Tras confirmar un término, las actas afectadas pueden revisarse en segundo plano sin sobrescribir las ediciones manuales simultáneas.
 
 ### Notas con IA
 
 Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.
 
-![La IA propone añadir una tarea a las notas](assets/showcase/desktop/en/ai-notes.png)
+![La IA propone añadir una tarea a las notas](assets/showcase/desktop/en/ai-notes.gif)
+
+### Un glosario que aprende contigo
+
+Reproduce la frase original y confirma los términos y sus definiciones. Cada confirmación amplía el glosario común o del espacio de trabajo para futuras reuniones: cuanto más le enseñas, mejor entiende el vocabulario de tu negocio. Consulta las definiciones o restaura la expresión original en el acta; la transcripción se conserva.
+
+![Confirmar un término y consultar su definición en el acta](assets/showcase/desktop/en/glossary.gif)
 
 ## Graba con el móvil
 
 Graba sin conexión, toma notas y marca momentos importantes. Tras subir la grabación y recibir la confirmación del ordenador, puedes salir de la aplicación móvil: la importación y la transcripción continúan en el escritorio. El móvil conserva su copia. También puede funcionar como micrófono o mostrar subtítulos en directo. Empareja ambos dispositivos en la misma red local desde **Ajustes → Conexión de dispositivos**; el modo en directo necesita el ordenador encendido.
 
-![Subtítulos en el teléfono y el ordenador](assets/showcase/desktop/en/phone.png)
+![Subtítulos en el teléfono y el ordenador](assets/showcase/desktop/en/phone.gif)
 
 ## Cápsula de reunión
 
