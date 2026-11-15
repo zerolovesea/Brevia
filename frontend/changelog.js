@@ -2,9 +2,88 @@
 (() => {
   const releases = [
     {
-      'version': '2.1.0',
+      'version': '2.1.1',
       'date': '2026-11-15',
       'current': true,
+      'previousVersion': '2.1.0',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '改进术语识别、原句回听与确认后的纪要复核，修复工作区切换、后台任务收尾和键盘操作问题，并完善手机笔记阅读。',
+        'improved': [
+          {
+            'text':
+              '术语扫描支持灵敏度设置、进度与数量反馈，复用已完成的识别结果，过滤句子片段、数字串与重复缩写，支持回听原句。',
+            'commit': 'a7154ab1a841ff0824973ba724204569f6ec26bf',
+          },
+          {
+            'text':
+              '确认术语后可在后台复核受影响的纪要条目，保留原始逐字稿，并保护期间发生的人工编辑。',
+            'commit': 'a7154ab1a841ff0824973ba724204569f6ec26bf',
+          },
+          {
+            'text': '完善手机说话人标签、Markdown 笔记阅读及会议库操作对齐。',
+            'commit': '2289bd4b',
+          },
+        ],
+        'fixed': [
+          {
+            'text': '修复术语扫描或纪要复核期间移动工作区后，旧工作区结果仍可能写回的问题。',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+          {
+            'text': '修复纪要失败、取消或目标消失时，未启动的术语扫描状态残留。',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+          {
+            'text':
+              '修复非模态术语浮窗抢占其他按钮和编辑器的回车操作，清理退役样式及八语言旧文案。',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Improve term detection, source playback and minutes review after confirmation; fix workspace races, background task cleanup and keyboard handling, and improve mobile note reading.',
+        'improved': [
+          {
+            'text':
+              'Add scan sensitivity settings, progress and count feedback, reuse completed scans, filter sentence fragments, number strings and duplicate abbreviations, and replay source speech.',
+            'commit': 'a7154ab1a841ff0824973ba724204569f6ec26bf',
+          },
+          {
+            'text':
+              'Review affected minutes in the background after confirming terms, preserving the source transcript and concurrent manual edits.',
+            'commit': 'a7154ab1a841ff0824973ba724204569f6ec26bf',
+          },
+          {
+            'text':
+              'Improve phone speaker labels, Markdown note reading and meeting library action alignment.',
+            'commit': '2289bd4b',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Prevent stale glossary scans and minutes reviews from writing results after a meeting moves to another workspace.',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+          {
+            'text':
+              'Release pending glossary scan state when minutes generation fails, is cancelled or loses its target meeting.',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+          {
+            'text':
+              'Keep the glossary popup from intercepting Enter on other buttons and editors, and remove retired styles and obsolete copy across all eight interface languages.',
+            'commit': '2903339a4980c46c0d49b1d28cd1bd29eb3f7469',
+          },
+        ],
+      },
+    },
+    {
+      'version': '2.1.0',
+      'date': '2026-11-15',
       'previousVersion': '2.0.4',
       'contributors': [],
       'zh': {
