@@ -5389,21 +5389,10 @@ textarea,
   font-weight: 600;
   color: var(--color-text);
 }
-.onboarding-ai-mode-guide dd,
-.onboarding-ai-scope {
+.onboarding-ai-mode-guide dd {
   margin: 0;
   color: var(--color-text-muted);
   text-align: left;
-}
-.onboarding-ai-scope {
-  font-size: 13px;
-  line-height: 1.5;
-}
-.onboarding-ai-footer > p {
-  margin: 0 0 8px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--color-text-muted);
 }
 .onboarding-ai-setup-page .onboarding-preview-paper {
   display: flex;

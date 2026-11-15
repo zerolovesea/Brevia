@@ -7186,16 +7186,7 @@ assert.match(text(app), /renderOnboardingAiDemo/);
 for (const [language, copy] of Object.entries(
   localeContext.window.BreviaLocaleData.appCopy.aiOnboardingCopy,
 )) {
-  for (const key of [
-    'during',
-    'after',
-    'serviceTitle',
-    'serviceHint',
-    'adjustHint',
-    'summaryScope',
-    'demoOff',
-    'replay',
-  ]) {
+  for (const key of ['during', 'after', 'serviceTitle', 'serviceHint', 'demoOff', 'replay']) {
     assert.ok(typeof copy[key] === 'string' && copy[key].trim(), `${language}: ${key}`);
   }
   const modes = copy.levels.filter(([value]) => value !== 'off');
@@ -10635,4 +10626,41 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
   assert.equal(target, button);
   assert.equal(target.textContent, '复盘');
   assert.equal(card.dataset.targetMeetingId, 'two');
+}
+
+// 后台术语浮窗不抢走其他按钮或富文本编辑器的键盘操作。
+{
+  const source = await readFile('glossary.js', 'utf8');
+  let keydown;
+  let submitted = 0;
+  let prevented = 0;
+  const context = {
+    document: { addEventListener: (_name, callback) => (keydown = callback) },
+    active: {},
+    prompt: {
+      matches: () => true,
+      contains: () => false,
+      querySelector: () => ({ dataset: {}, requestSubmit: () => submitted++ }),
+    },
+  };
+  const start = source.indexOf("  document.addEventListener('keydown'");
+  const end = source.indexOf("  prompt.addEventListener('click'", start);
+  runInNewContext(source.slice(start, end), context);
+  const enter = { key: 'Enter', preventDefault: () => prevented++ };
+  for (const selector of [
+    'button',
+    'summary',
+    '[role="button"]',
+    '[contenteditable="plaintext-only"]',
+  ]) {
+    keydown({
+      ...enter,
+      target: { closest: (selectors) => selectors.includes(selector.split('=')[0]) },
+    });
+  }
+  keydown({ ...enter, defaultPrevented: true, target: { closest: () => false } });
+  assert.equal(submitted, 0);
+  assert.equal(prevented, 0);
+  keydown({ ...enter, target: { closest: () => false } });
+  assert.equal(submitted, 1, '空白工作面仍支持回车确认术语');
 }

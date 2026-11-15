@@ -48,6 +48,8 @@ Las reuniones largas en chino o inglés pueden generar actas por temas, verifica
 
 Guarda términos generales o del espacio de trabajo en el glosario y confirma términos, definiciones y sustituciones sugeridos por la IA. En el acta puedes consultar definiciones o restaurar el término original; la transcripción no cambia.
 
+El análisis del glosario permite ajustar la sensibilidad, reutilizar resultados y escuchar la fuente. Tras confirmar un término, las actas afectadas pueden revisarse en segundo plano sin sobrescribir las ediciones manuales simultáneas.
+
 ### Notas con IA
 
 Toma notas y extrae decisiones y tareas con IA. Vuelve a las palabras originales y al audio desde las notas.

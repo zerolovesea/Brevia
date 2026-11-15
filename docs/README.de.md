@@ -48,6 +48,8 @@ Längere chinesische und englische Meetings können thematische Protokolle mit Q
 
 Im Glossar speichern Sie allgemeine oder arbeitsbereichsspezifische Begriffe und bestätigen KI-Vorschläge, Definitionen und Ersetzungen. Im Protokoll lassen sich Definitionen anzeigen und Originalbegriffe wiederherstellen; das Transkript bleibt unverändert.
 
+Glossarscans bieten eine Empfindlichkeitseinstellung, verwenden fertige Ergebnisse erneut und erlauben das Anhören der Quelle. Nach der Bestätigung können betroffene Protokolle im Hintergrund geprüft werden; gleichzeitige manuelle Änderungen bleiben erhalten.
+
 ### KI-Notizen
 
 Notizen schreiben und mit KI Entscheidungen und Aufgaben herausarbeiten. Von den Notizen zu Originalaussagen und Aufnahme zurückspringen.

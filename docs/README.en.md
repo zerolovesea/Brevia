@@ -44,6 +44,8 @@ Longer Chinese and English meetings can produce topic-based minutes with each it
 
 Save shared or workspace-specific terms in the glossary, and confirm AI-suggested terms, definitions and replacements. In minutes, view definitions or restore the original wording; the source transcript stays unchanged.
 
+Glossary scans support sensitivity settings, reuse completed results and let you replay source speech. After confirmation, affected minutes can be reviewed in the background while preserving concurrent manual edits.
+
 [![Meeting minutes beside a fishbone diagram with a source passage expanded](assets/showcase/desktop/en/summary.png)](assets/showcase/desktop/en/summary.gif)
 
 ### AI notes

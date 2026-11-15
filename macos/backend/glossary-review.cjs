@@ -157,6 +157,7 @@ async function reviewGlossary(worker, payload, generate, control) {
   const current = worker.store.getMeeting(meeting.id, { compact: true });
   if (
     worker.active ||
+    current.workspace_id !== meeting.workspace_id ||
     JSON.stringify(current.segments) !== snapshot ||
     JSON.stringify(current.summary?.data) !== JSON.stringify(before) ||
     JSON.stringify(

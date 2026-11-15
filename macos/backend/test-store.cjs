@@ -968,6 +968,19 @@ test('术语含义局部核对保留原话、无关条目及并发人工改稿',
   );
   assert.deepEqual(ignored, {});
   assert.equal(store.getMeeting(meeting.id, true).summary.data.markdown, '人工改稿');
+  store.saveSummary(meeting.id, before, '');
+  const destination = store.createWorkspace({ name: '另一个语义环境' });
+  const moved = await reviewGlossary(
+    { store },
+    { meeting_id: meeting.id, original: 'RY' },
+    async (...args) => {
+      store.run('UPDATE meetings SET workspace_id=? WHERE id=?', destination.id, meeting.id);
+      return generate(...args);
+    },
+    new TaskControl(),
+  );
+  assert.deepEqual(moved, {});
+  assert.equal(store.getMeeting(meeting.id, true).summary.data.markdown, before.markdown);
 });
 
 test('工作区别名覆盖全局，局部核对拒绝否定翻转', async (t) => {
@@ -1472,4 +1485,33 @@ test('术语默认适中并保留自选等级，关闭后不请求模型且词�
   assert.equal(calls, 2);
   assert.equal(store.glossary().mentions.length, 2);
   assert.equal(store.glossary().settings.enabled, false);
+});
+
+test('术语扫描期间移动工作区不写回旧词库建议或缓存', async (t) => {
+  const { store } = setup(t);
+  const a = store.createWorkspace({ name: '投放' });
+  const b = store.createWorkspace({ name: '零售' });
+  const meeting = store.createMeeting({
+    title: 'RY',
+    language: 'zh',
+    refined_model_id: 'test',
+    workspace_id: a.id,
+  });
+  const text = 'RY需要核对。';
+  store.saveSegment({ meeting_id: meeting.id, segment_id: 's1', start_ms: 0, end_ms: 1000, text });
+  store.updateGlossary({ action: 'save', workspace_id: a.id, name: 'ROI', meaning: '投资回报率' });
+  store.run('INSERT INTO glossary_aliases VALUES(?,?,?)', a.id, 'RY', 'ROI');
+  await require('./glossary-analysis.cjs').analyzeTerms(
+    { store, emit() {} },
+    store.getMeeting(meeting.id, true),
+    text,
+    { context_size: 8192 },
+    async () => {
+      store.run('UPDATE meetings SET workspace_id=? WHERE id=?', b.id, meeting.id);
+      return JSON.stringify({ terms: [{ original: 'RY', match: 'ROI', quote: text }] });
+    },
+    new TaskControl(),
+  );
+  assert.equal(store.query('SELECT * FROM glossary_mentions').length, 0);
+  assert.equal(store.query('SELECT * FROM glossary_scans').length, 0);
 });

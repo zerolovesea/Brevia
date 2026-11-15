@@ -581,6 +581,7 @@ const glossaryUI = (() => {
     if (
       event.key !== 'Enter' ||
       event.repeat ||
+      event.defaultPrevented ||
       event.isComposing ||
       event.keyCode === 229 ||
       event.shiftKey ||
@@ -590,7 +591,12 @@ const glossaryUI = (() => {
     )
       return;
     // 不截获用户在正文或其他表单中输入的回车。
-    if (event.target.closest('input,textarea,select,a,[contenteditable="true"]')) return;
+    if (
+      event.target.closest(
+        'input,textarea,select,a,button,summary,[role="button"],[contenteditable]:not([contenteditable="false"])',
+      )
+    )
+      return;
     event.preventDefault();
     const form = prompt.querySelector('form');
     if (!form.dataset.saving) form.requestSubmit();

@@ -3366,39 +3366,6 @@ html[data-theme="dark"] .glossary-mark {
 .glossary-term:focus-within .glossary-term-info {
   display: block;
 }
-.glossary-sample {
-  display: grid;
-  align-items: center;
-  min-height: 48px;
-}
-.glossary-sample span {
-  grid-area: 1/1;
-  animation: glossary-spelling 6s ease-in-out infinite;
-}
-.glossary-sample span + span {
-  animation-direction: reverse;
-  color: var(--accent);
-}
-@keyframes glossary-spelling {
-  0%,
-  40% {
-    opacity: 1;
-  }
-  55%,
-  100% {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .glossary-sample span {
-    animation: none;
-    opacity: 0;
-  }
-  .glossary-sample span + span {
-    opacity: 1;
-  }
-}
-
 :is(#glossary-prompt, .glossary-demo-popup) .glossary-reason {
   margin: 0 0 8px;
   color: var(--color-text-muted);

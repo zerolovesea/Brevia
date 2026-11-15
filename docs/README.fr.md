@@ -48,6 +48,8 @@ Les longues réunions en chinois ou en anglais peuvent produire un compte rendu 
 
 Le glossaire conserve les termes communs ou propres à un espace de travail et permet de confirmer les termes, définitions et remplacements proposés par l’IA. Consultez une définition ou rétablissez le terme d’origine dans le compte rendu ; la transcription reste inchangée.
 
+L’analyse du glossaire propose un réglage de sensibilité, réutilise les résultats et permet de réécouter la source. Après confirmation, les passages concernés peuvent être revus en arrière-plan sans écraser les modifications manuelles simultanées.
+
 ### Notes IA
 
 Prenez des notes et laissez l’IA extraire décisions et tâches. Revenez aux propos d’origine et à l’enregistrement depuis vos notes.

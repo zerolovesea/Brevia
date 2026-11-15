@@ -282,6 +282,8 @@ function createLLMHandlers(worker) {
     'summary.save': (payload) => worker.store.editSummary(payload.meeting_id, payload),
     'summary.generate': (payload) => {
       let started = false;
+      let glossaryRun;
+      let glossaryScheduled = false;
       const task = worker.tasks.running('summary.generate', payload.meeting_id, async (control) => {
         if (worker.active)
           throw failure('error.summary.live_meeting', '实时会议中，结束后再生成会议纪要。');
@@ -393,7 +395,7 @@ function createLLMHandlers(worker) {
             'Summary prompt exceeds the available model context',
           );
         const thematic = citedTopics && transcriptCost > 1500;
-        const glossaryRun = Symbol();
+        glossaryRun = Symbol();
         const glossarySettings = worker.store.glossarySettings?.() || {
           enabled: true,
           sensitivity: 'balanced',
@@ -402,6 +404,7 @@ function createLLMHandlers(worker) {
         options.terminology_sensitivity = glossarySettings.sensitivity;
         if (payload.analyze_terms) glossaryRuns.set(meeting.id, glossaryRun);
         const scanTerms = () => {
+          glossaryScheduled = true;
           const task = 'glossary.analyze';
           void (async () => {
             const { setTimeout: delay } = require('node:timers/promises');
@@ -768,6 +771,8 @@ function createLLMHandlers(worker) {
         return saved;
       });
       return task.finally(() => {
+        if (!glossaryScheduled && glossaryRuns.get(payload.meeting_id) === glossaryRun)
+          glossaryRuns.delete(payload.meeting_id);
         if (started) worker.emit('summary.finished', { meeting_id: payload.meeting_id });
       });
     },

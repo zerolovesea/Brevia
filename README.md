@@ -46,6 +46,8 @@ Mac 版安装包约 **43 MiB**（45.5 MB），Windows 版约 **38 MB**。首次�
 
 术语库保存工作区或通用词条，可确认 AI 发现的名词、释义与替换词。纪要中的术语可查看释义或恢复原词；原始逐字稿保持不变。
 
+术语扫描支持灵敏度设置、结果复用和原句回听；确认后可后台复核受影响的纪要，保留并发人工编辑。
+
 [![会议回看：左侧是纪要，右侧鱼骨图展开了结论对应的发言](docs/assets/showcase/desktop/zh/summary.png)](docs/assets/showcase/desktop/zh/summary.gif)
 
 ### AI 笔记

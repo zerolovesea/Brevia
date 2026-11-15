@@ -5,6 +5,9 @@ async function analyzeTerms(worker, meeting, transcript, options, generate, cont
   if (worker.store.glossarySettings?.().enabled === false) return;
   const sensitivity = options.terminology_sensitivity || 'balanced';
   const scope = meeting.workspace_id || 'public';
+  const currentScope = () =>
+    (worker.store.one('SELECT workspace_id FROM meetings WHERE id=?', meeting.id)?.workspace_id ||
+      'public') === scope;
   const entries = worker.store.query(
     'SELECT scope,name,meaning FROM glossary_entries WHERE scope=? OR scope=? ORDER BY scope DESC',
     scope,
@@ -147,7 +150,7 @@ async function analyzeTerms(worker, meeting, transcript, options, generate, cont
       return true;
     }
     await control.wait();
-    if (!worker.store.meetingExists(meeting.id)) return false;
+    if (!worker.store.meetingExists(meeting.id) || !currentScope()) return false;
     if (
       worker.store.currentSegments &&
       JSON.stringify(worker.store.currentSegments(meeting.id).map((s) => s.text)) !==
@@ -238,7 +241,7 @@ async function analyzeTerms(worker, meeting, transcript, options, generate, cont
   try {
     for (const part of parts) {
       await control.wait();
-      if (!worker.store.meetingExists(meeting.id)) return;
+      if (!worker.store.meetingExists(meeting.id) || !currentScope()) return;
       if (
         worker.store.currentSegments &&
         JSON.stringify(worker.store.currentSegments(meeting.id).map((s) => s.text)) !==
