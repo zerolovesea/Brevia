@@ -170,15 +170,19 @@ const path = require('node:path');
     await page.waitForFunction(() => !document.querySelector('#capsule-panel').hidden);
     const closes = await page.evaluate(() => window.capsuleCalls.filter((value) => !value).length);
     await page.mouse.move(462, 468);
-    await page.waitForFunction(() =>
-      document
+    await page.waitForFunction(() => {
+      const animation = document
         .querySelector('#capsule-panel')
         .getAnimations()
-        .some(
+        .find(
           (animation) =>
             animation.effect.getTiming().fill === 'forwards' && animation.playState === 'running',
-        ),
-    );
+        );
+      if (!animation) return false;
+      // 固定在淡出中途，避免慢速 CI 在下一次鼠标指令到达前已完成收起。
+      animation.pause();
+      return true;
+    });
     await page.locator('.capsule-identity').hover();
     await page.waitForTimeout(350);
     assert.equal(
