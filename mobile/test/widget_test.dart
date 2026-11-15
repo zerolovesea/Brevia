@@ -698,8 +698,8 @@ void main() {
       expect(waitingForComputer(meeting, model), false);
       for (final language in languageNames.keys) {
         uiLanguage = language;
-        expect(mobileSpeakerName('Local user'), tr('发言人'));
-        expect(mobileSpeakerName('local-user'), tr('发言人'));
+        expect(mobileSpeakerName('Local user'), tr('说话人'));
+        expect(mobileSpeakerName('local-user'), tr('说话人'));
         expect(mobileSpeakerName('Alice'), 'Alice');
       }
     },
@@ -738,7 +738,7 @@ void main() {
       model.notifyListeners();
       await tester.pump();
       expect(find.text('Partial transcript'), findsOneWidget);
-      expect(find.text('发言人'), findsOneWidget);
+      expect(find.text('说话人'), findsOneWidget);
       expect(dots, findsNWidgets(3));
       await tester.tap(find.text('笔记'));
       await tester.pump(const Duration(milliseconds: 300));

@@ -18,6 +18,32 @@ void main() {
   });
   tearDown(() => uiLanguage = 'system');
 
+  testWidgets('home search and recording actions align to the right edge', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final model = AppModel();
+    addTearDown(model.dispose);
+    for (final width in [320.0, 393.0]) {
+      tester.view.physicalSize = Size(width, 852);
+      await tester.pumpWidget(BreviaApp(model: model));
+      await tester.pumpAndSettle();
+      final record = find.widgetWithText(FilledButton, tr('新建录音'));
+      expect(tester.getRect(record).right, closeTo(width - 20, 1));
+      await tester.tap(find.byTooltip(tr('搜索会议')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byTooltip(tr('关闭'))).right,
+        closeTo(width - 20, 1),
+      );
+      await tester.tap(find.byTooltip(tr('关闭')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('home capsule stays fixed while the library scrolls', (
     tester,
   ) async {

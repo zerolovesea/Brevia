@@ -17,7 +17,7 @@ on:
       channel:
         description: 'TestFlight build, or submit an existing tested iOS build for App Store review'
         type: choice
-        options: [testflight, appstore]
+        options: [testflight, appstore, status]
         default: testflight
       version:
         description: 'App Store only: existing TestFlight version, e.g. 1.0.0'
@@ -79,7 +79,7 @@ jobs:
 
   android:
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && needs.check.outputs.android == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && inputs.channel != 'status' && needs.check.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -139,7 +139,7 @@ jobs:
 
   ios:
     needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && needs.check.outputs.ios == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore' && inputs.channel != 'status' && needs.check.outputs.ios == 'true'
     runs-on: macos-26
     timeout-minutes: 90
     defaults:
@@ -210,6 +210,25 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/brevia-distribution.p12" "$RUNNER_TEMP/com.brevia.breviaMobile.mobileprovision" "$RUNNER_TEMP/com.brevia.breviaMobile.RecordingActivity.mobileprovision" "$RUNNER_TEMP/brevia-asc.p8"
 
+  store-status:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.channel == 'status'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+      - run: bundle exec fastlane store_status
+
   appstore:
     needs: check
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.channel == 'appstore'
@@ -233,5 +252,9 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
           working-directory: mobile
+      - name: Read current store and review status
+        run: bundle exec fastlane store_status
       - name: Submit tested build for review; release manually after approval
         run: bundle exec fastlane promote
+      - name: Read back formal review submission
+        run: bundle exec fastlane store_status

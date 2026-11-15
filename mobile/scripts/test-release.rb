@@ -50,3 +50,32 @@ raise 'Non-exempt encryption was lost' unless sent.last[:uses_non_exempt_encrypt
   end
 end
 puts 'Release safeguards passed'
+
+# 只读状态通道不触发上传或送审，空账号状态仍有可解析回执。
+require 'json'
+require 'stringio'
+module Spaceship
+  module ConnectAPI
+    class App
+      def self.find(identifier)
+        raise 'Unexpected app' unless identifier == 'com.brevia.breviaMobile'
+        app = Object.new
+        app.define_singleton_method(:get_app_store_versions) { |**_| [] }
+        app.define_singleton_method(:get_review_submissions) { |**_| [] }
+        app
+      end
+    end
+  end
+end
+before = sent.length
+original_stdout = $stdout
+begin
+  $stdout = StringIO.new
+  lanes.fetch(:store_status).call
+  receipt = JSON.parse($stdout.string.split('APP_STORE_STATUS=', 2).last)
+  raise 'Unreadable status receipt' unless receipt == { 'versions' => [], 'submissions' => [] }
+  raise 'Status channel performed a write' unless sent.length == before
+ensure
+  $stdout = original_stdout
+end
+puts 'Read-only App Store status passed'

@@ -5,6 +5,7 @@ import 'package:brevia_mobile/app_model.dart';
 import 'package:brevia_mobile/i18n.dart';
 import 'package:brevia_mobile/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,7 +26,9 @@ void main() {
     final file = File('${root.path}/recordings/$id/phone-notes.json');
     await tester.runAsync(() async {
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({'text': 'before', 'base': ''}));
+      await file.writeAsString(
+        jsonEncode({'text': '# 标题\n\n**重点**', 'base': ''}),
+      );
     });
     final model = AppModel()
       ..meetings = [
@@ -45,12 +48,19 @@ void main() {
         home: MeetingPage(model: model, id: id, initialTab: 1),
       ),
     );
-    for (var i = 0; i < 12 && find.byType(TextField).evaluate().isEmpty; i++) {
+    for (var i = 0; i < 12 && find.text('编辑').evaluate().isEmpty; i++) {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 30));
       });
     }
+    await tester.pump();
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      tester.widget<MarkdownBody>(find.byType(MarkdownBody)).data,
+      '# 标题\n\n**重点**',
+    );
+    await tester.tap(find.text('编辑'));
     await tester.pump();
     await tester.enterText(find.byType(TextField).first, 'before + last edit');
     model.didChangeAppLifecycleState(AppLifecycleState.paused);

@@ -721,10 +721,14 @@ class _HomeState extends State<Home> {
             contentPadding: const EdgeInsets.symmetric(vertical: 8),
 
             title: Text(meeting['title']?.toString() ?? tr('会议')),
-            subtitle: Text(
-              meeting['snapshot']['notes'].toString(),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+            subtitle: ClipRect(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 72),
+                child: MarkdownBody(
+                  data: meeting['snapshot']['notes'].toString(),
+                  sizedImageBuilder: (img) => Text(img.alt ?? tr('图片')),
+                ),
+              ),
             ),
             trailing: const BreviaIcon(Icons.chevron_right),
             onTap: () => Navigator.push(
@@ -830,29 +834,38 @@ class _HomeState extends State<Home> {
                           ),
                         ),
                     ],
-                    const Spacer(),
-                    IconButton(
-                      tooltip: tr(searching ? '关闭' : '搜索会议'),
-                      icon: BreviaIcon(searching ? Icons.close : Icons.search),
-                      onPressed: () => setState(() {
-                        searching = !searching;
-                        if (!searching) query = '';
-                      }),
-                    ),
-                    if (!searching &&
-                        (model.live == null || model.live?['state'] == 'ended'))
-                      Flexible(
-                        flex: 3,
-                        child: FilledButton.icon(
-                          onPressed: model.busy ? null : prepare,
-                          icon: const Icon(Icons.mic_none, size: 18),
-                          label: Text(
-                            model.busy ? tr('正在准备…') : tr('新建录音'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            tooltip: tr(searching ? '关闭' : '搜索会议'),
+                            icon: BreviaIcon(
+                              searching ? Icons.close : Icons.search,
+                            ),
+                            onPressed: () => setState(() {
+                              searching = !searching;
+                              if (!searching) query = '';
+                            }),
                           ),
-                        ),
+                          if (!searching &&
+                              (model.live == null ||
+                                  model.live?['state'] == 'ended'))
+                            Flexible(
+                              flex: 3,
+                              child: FilledButton.icon(
+                                onPressed: model.busy ? null : prepare,
+                                icon: const Icon(Icons.mic_none, size: 18),
+                                label: Text(
+                                  model.busy ? tr('正在准备…') : tr('新建录音'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
                 AnimatedSize(
@@ -3549,6 +3562,7 @@ class _PhoneMeetingNotesState extends State<_PhoneMeetingNotes> {
           computer = data['computer'] as String?;
         }
         editor.text = saved;
+        preview = saved.trim().isNotEmpty;
         file = target;
         failed = false;
       });
@@ -4599,9 +4613,9 @@ String mobileSpeakerName(dynamic name) {
     'local user',
     'local_user',
   ].contains(value.toLowerCase())) {
-    return tr('发言人');
+    return tr('说话人');
   }
-  return value.isEmpty ? tr('发言人') : value;
+  return value.isEmpty ? tr('说话人') : value;
 }
 
 class TranscriptionActivity extends StatelessWidget {

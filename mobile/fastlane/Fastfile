@@ -22,7 +22,7 @@ lane :beta do
     wait_processing_timeout_duration: 2400,
     # 只使用维护者按当前实现复核问卷后的明确声明，不推定豁免。
     uses_non_exempt_encryption: encryption == 'true',
-    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。更新手机界面：底部悬浮导航、紧凑会议列表、录音准备与内嵌扫码配对，统一笔记和纪要阅读分区。请验证扫码和手动配对、暂停与继续录音、笔记保存、会议回看及大字号布局。" }
+    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。统一手机与桌面的说话人文案，已有笔记默认渲染 Markdown，修正首页搜索与新建录音按钮靠右对齐。网络请求和数据协议未变更。" }
   )
 end
 
@@ -45,4 +45,39 @@ lane :promote do
     precheck_include_in_app_purchases: false,
     force: true
   )
+end
+
+# 只读回读版本、商店资料和正式审核记录，不输出密钥或审核联系人。
+lane :store_status do
+  connect_key
+  app = Spaceship::ConnectAPI::App.find('com.brevia.breviaMobile')
+  UI.user_error!('App unavailable') unless app
+  versions = app.get_app_store_versions(filter: { platform: 'IOS' }, includes: 'appStoreVersionSubmission,build,appStoreReviewDetail', limit: 10)
+  result = {
+    versions: versions.map do |version|
+      review = version.app_store_review_detail
+      {
+        version: version.version_string, state: version.app_store_state,
+        build: version.get_build&.version, release: version.release_type,
+        copyright: version.copyright,
+        contact_complete: review && [review.contact_first_name, review.contact_last_name, review.contact_phone, review.contact_email].all? { |value| !value.to_s.empty? },
+        login_required: review&.demo_account_required,
+        review_notes_present: !review&.notes.to_s.empty?,
+        locales: version.get_app_store_version_localizations.map do |locale|
+          {
+            locale: locale.locale, description_present: !locale.description.to_s.empty?,
+            support_url: locale.support_url, whats_new: locale.whats_new,
+            screenshots: locale.get_app_screenshot_sets.map do |set|
+              { display: set.screenshot_display_type, states: (set.app_screenshots || []).map(&:asset_delivery_state) }
+            end
+          }
+        end
+      }
+    end,
+    submissions: app.get_review_submissions(includes: 'appStoreVersionForReview').map do |submission|
+      { id: submission.id, state: submission.state, submitted_at: submission.submitted_date,
+        version: submission.app_store_version_for_review&.version_string }
+    end
+  }
+  puts "APP_STORE_STATUS=#{JSON.generate(result)}"
 end
