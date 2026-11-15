@@ -582,6 +582,9 @@ const glossaryUI = (() => {
       event.key !== 'Enter' ||
       event.repeat ||
       event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
       event.isComposing ||
       event.keyCode === 229 ||
       event.shiftKey ||

@@ -10658,7 +10658,8 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
       target: { closest: (selectors) => selectors.includes(selector.split('=')[0]) },
     });
   }
-  keydown({ ...enter, defaultPrevented: true, target: { closest: () => false } });
+  for (const modifier of ['defaultPrevented', 'altKey', 'ctrlKey', 'metaKey'])
+    keydown({ ...enter, [modifier]: true, target: { closest: () => false } });
   assert.equal(submitted, 0);
   assert.equal(prevented, 0);
   keydown({ ...enter, target: { closest: () => false } });
