@@ -191,7 +191,7 @@ gh workflow run mobile.yml --repo zerolovesea/Brevia --ref main \
   -f channel=appstore -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD"
 ```
 
-此入口运行 `mobile/fastlane/Fastfile` 的 `promote` lane，使用 App Store Connect API Key 复用指定构建送审。它跳过二进制、商店文案和截图上传，不重新编译、不自动上线；资料必须事先保存。通过审核后再手动发布。
+此入口运行 `mobile/fastlane/Fastfile` 的 `promote` lane，使用 App Store Connect API Key 复用指定构建送审。它跳过二进制和截图上传，同步仓库中的双语介绍与更新说明，不重新编译、不自动上线；其余资料必须事先保存。通过审核后再手动发布。
 
 触发后跟踪对应 Actions 运行及环境审批。任务结束后回读 App Store Connect 的正式审核提交记录，确认目标版本和构建、提交时间及“等待审核”或后续审核状态，再报告成功。记录工作流链接、实际提交方式及状态依据；不能仅凭任务触发成功或提交者显示名称判断送审成功或操作来源。API 实际失败时记录错误与阻塞，只有需要网页补查或备用提交时才切换并说明原因；切换前先确认没有已经成功的提交。
 

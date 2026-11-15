@@ -1,0 +1,9 @@
+A clearer mobile workspace for meeting notes and collaboration with your computer.
+
+• Refreshed the meeting library, recording setup, QR pairing, navigation and reading layouts.
+• Unified speaker labels across phone and desktop.
+• Saved notes open as rendered Markdown, with editing, autosave and sync conflict protection retained.
+• Aligned search and new recording actions to the right, including on narrow screens.
+• Improved note saving when the app enters the background.
+
+Transcription requires a compatible Brevia computer on the same local network with the appropriate models installed. This update does not change network requests or how data is transferred.

@@ -28,6 +28,7 @@ ENV['RELEASE_VERSION'] = '1.0.0'
 ENV['RELEASE_BUILD'] = '123'
 lanes.fetch(:promote).call
 release = sent.last
+raise 'Production must upload the reviewed store text' unless release[:skip_metadata] == false
 raise 'Production must reuse the tested binary and hold release' unless release[:skip_binary_upload] && release[:submit_for_review] && release[:automatic_release] == false && release[:build_number] == '123'
 ENV['RELEASE_BUILD'] = 'latest'
 begin
