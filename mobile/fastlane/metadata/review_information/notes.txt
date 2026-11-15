@@ -1,0 +1,11 @@
+Brevia requires no account, login or subscription. Offline recording, notes, playback and audio export work on the iPhone independently. An API key is not required for these features or for local computer transcription.
+
+To test phone–computer collaboration:
+1. Download the public Brevia desktop v2.1.0 from https://github.com/zerolovesea/Brevia/releases/tag/v2.1.0 (macOS, Windows and Linux installers), or https://brevia.work/ .
+2. Open the computer app, install a supported speech model from its model library, and connect both devices to the same local network.
+3. In the computer app, open Settings > Device Connection and display the pairing QR code. On the iPhone, select Connect computer and scan it, or use manual pairing. Confirm the pairing request on the computer.
+4. Create a recording on the iPhone and choose live transcription. The computer processes speech and sends the transcript back to the phone. Test pause/resume, end recording, playback, notes and meeting review. Offline recordings upload only after the user chooses a computer and confirms the transfer.
+
+Version 1.2.1 updates the mobile workspace and phone–computer data presentation, renders saved Markdown notes, aligns the home actions and unifies speaker labels. Network requests and data-transfer methods are unchanged. If referring to an earlier review recording, its interface may differ from this version; the steps above describe the current app. Optional online AI is configured by the user on the computer and is not required for the above review steps.
+
+本应用无需账号、登录或订阅。离线录音、笔记、回听和音频导出可在 iPhone 独立使用。测试转写时，请安装上述公开电脑端及语音模型，将两台设备连接到同一局域网，在电脑“设置→设备连接”显示二维码，手机扫码或手动配对，并在电脑确认。手机新建实时录音后由电脑转写，手机显示回传字幕和笔记。在线 AI 为可选功能，以上验收无需 API Key。
