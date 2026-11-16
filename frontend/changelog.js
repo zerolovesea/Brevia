@@ -2,9 +2,84 @@
 (() => {
   const releases = [
     {
+      'version': '2.1.2',
+      'date': '2026-11-16',
+      'current': true,
+      'previousVersion': '2.1.1',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '完善术语编辑、工作区移动和未识别说话人展示，修复异步扫描与界面切换中的状态覆盖，并更新多语言界面与演示。',
+        'improved': [
+          {
+            'text': '术语库支持编辑和删除已保存词条，保留会议原文，并保护编辑中的输入。',
+            'commit': '4a725736',
+          },
+          {
+            'text': '改进会议拖动到工作区及 Windows 侧栏拖放，统一工作区移动后的界面状态。',
+            'commit': '4a725736',
+          },
+          {
+            'text': '未识别的说话人在逐字稿、来源和分享中统一展示；更新多语言文案与 README 演示。',
+            'commit': '4a725736',
+          },
+        ],
+        'fixed': [
+          {
+            'text': '修复术语扫描期间编辑或删除词条后，旧响应仍可能重新写入旧词条关联的问题。',
+            'commit': '4a725736',
+          },
+          {
+            'text': '修复会议读取尚未完成时切换页面，迟到结果仍可能打断导航的问题。',
+            'commit': '4a725736',
+          },
+          {
+            'text': '统一 AI 笔记建议的展示与采纳操作，清理退役样式。',
+            'commit': '4a725736',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Improve glossary editing, workspace moves and unidentified speaker display; fix stale state during background scans and navigation, and refresh localized interfaces and demos.',
+        'improved': [
+          {
+            'text':
+              'Edit and delete saved glossary entries while preserving meeting transcripts and protecting unsaved input.',
+            'commit': '4a725736',
+          },
+          {
+            'text':
+              'Improve meeting drag and drop into workspaces, including the Windows sidebar, and keep workspace state consistent after moves.',
+            'commit': '4a725736',
+          },
+          {
+            'text':
+              'Display unidentified speakers consistently across transcripts, sources and shares; refresh localized copy and README demos.',
+            'commit': '4a725736',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Prevent stale glossary scan responses from restoring old term associations after entries are edited or deleted.',
+            'commit': '4a725736',
+          },
+          {
+            'text':
+              'Prevent late meeting loads from interrupting navigation after switching pages.',
+            'commit': '4a725736',
+          },
+          {
+            'text': 'Unify AI note suggestion display and acceptance, and remove retired styles.',
+            'commit': '4a725736',
+          },
+        ],
+      },
+    },
+    {
       'version': '2.1.1',
       'date': '2026-11-15',
-      'current': true,
       'previousVersion': '2.1.0',
       'contributors': [],
       'zh': {
