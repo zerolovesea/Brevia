@@ -8,18 +8,22 @@ async function analyzeTerms(worker, meeting, transcript, options, generate, cont
   const currentScope = () =>
     (worker.store.one('SELECT workspace_id FROM meetings WHERE id=?', meeting.id)?.workspace_id ||
       'public') === scope;
-  const entries = worker.store.query(
-    'SELECT scope,name,meaning FROM glossary_entries WHERE scope=? OR scope=? ORDER BY scope DESC',
-    scope,
-    '',
-  );
+  const readTerms = () => [
+    worker.store.query(
+      'SELECT scope,name,meaning FROM glossary_entries WHERE scope=? OR scope=? ORDER BY scope DESC,name',
+      scope,
+      '',
+    ),
+    worker.store.query(
+      'SELECT * FROM glossary_aliases WHERE scope=? OR scope=? ORDER BY scope DESC,original',
+      scope,
+      '',
+    ),
+  ];
+  const [entries, aliasRows] = readTerms();
+  const termsSnapshot = JSON.stringify([entries, aliasRows]);
   const catalog = new Map();
   for (const term of entries) if (!catalog.has(term.name)) catalog.set(term.name, term);
-  const aliasRows = worker.store.query(
-    'SELECT * FROM glossary_aliases WHERE scope=? OR scope=? ORDER BY scope DESC',
-    scope,
-    '',
-  );
   const byOriginal = new Map();
   for (const alias of aliasRows)
     if (!byOriginal.has(alias.original)) byOriginal.set(alias.original, alias);
@@ -151,6 +155,8 @@ async function analyzeTerms(worker, meeting, transcript, options, generate, cont
     }
     await control.wait();
     if (!worker.store.meetingExists(meeting.id) || !currentScope()) return false;
+    // 用户可能在推理期间编辑或删除词条，旧词库结果不能重新确认旧名称。
+    if (JSON.stringify(readTerms()) !== termsSnapshot) return false;
     if (
       worker.store.currentSegments &&
       JSON.stringify(worker.store.currentSegments(meeting.id).map((s) => s.text)) !==

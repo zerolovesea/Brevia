@@ -1149,20 +1149,6 @@
   .ai-suggestion-badge:hover {
     color: #222222;
   }
-  .ai-topic-divider {
-    display: block;
-    width: 100%;
-    padding: 8px 0;
-    text-align: center;
-    font-size: 11px;
-    color: #767676;
-    border: 0;
-    background: transparent;
-    transition: color 0.2s ease;
-  }
-  .ai-topic-divider:hover {
-    color: #222222;
-  }
   .notes-toolbar {
     display: flex;
     align-items: center;
@@ -3967,15 +3953,13 @@ html[data-theme="dark"] .ai-suggestion-card {
   border-left-color: #f2f2f2;
 }
 html[data-theme="dark"] .ai-suggestion-type,
-html[data-theme="dark"] .ai-suggestion-ignore,
-html[data-theme="dark"] .ai-topic-divider {
+html[data-theme="dark"] .ai-suggestion-ignore {
   color: #888;
 }
 html[data-theme="dark"] .ai-suggestion-accept {
   color: #f2f2f2;
 }
 html[data-theme="dark"] .ai-suggestion-ignore:hover,
-html[data-theme="dark"] .ai-topic-divider:hover,
 html[data-theme="dark"] .ai-suggestion-badge:hover {
   color: #fff;
 }

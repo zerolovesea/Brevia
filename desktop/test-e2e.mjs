@@ -490,13 +490,33 @@ try {
       await form.onsubmit(new Event('submit', { cancelable: true }));
       const saved = activeView === 'settings' && activeModal === 'glossary' && settingsModal.querySelector('dt')?.textContent === 'ACD' &&
         settingsModal.querySelector('dd')?.textContent === '平均通话时长';
+      settingsModal.querySelector('[data-edit]').click();
+      const edit = settingsModal.querySelector('[data-editor] form');
+      const prefilled = edit.elements.name.value === 'ACD' && edit.elements.meaning.value === '平均通话时长';
+      edit.elements.name.value = 'ACD2';
+      edit.elements.meaning.value = '更新释义';
+      settingsModal.querySelector('[data-delete]').click();
+      settingsModal.querySelector('[data-action]').click();
+      settingsModal.querySelector('[data-scope="public"]').click();
+      const draftPreserved = edit.isConnected && edit.elements.name.value === 'ACD2' && edit.elements.meaning.value === '更新释义';
+      closeModal();
+      await document.querySelector('#open-glossary').onclick();
+      const reopenedDraft = settingsModal.querySelector('[data-editor] form') === edit && edit.elements.name.value === 'ACD2';
+      await edit.onsubmit(new Event('submit', { cancelable: true }));
+      const edited = settingsModal.querySelector('dt')?.textContent === 'ACD2' && settingsModal.querySelector('dd')?.textContent === '更新释义';
+      settingsModal.querySelector('[data-delete]').click();
+      settingsModal.querySelector('[data-editor] [data-cancel]').click();
+      const cancelled = settingsModal.querySelector('dt')?.textContent === 'ACD2' && document.activeElement?.hasAttribute('data-edit');
+      settingsModal.querySelector('[data-delete]').click();
+      await settingsModal.querySelector('[data-editor] form').onsubmit(new Event('submit', { cancelable: true }));
+      const deleted = ![...settingsModal.querySelectorAll('dt')].some(e => e.textContent === 'ACD2') && document.activeElement?.hasAttribute('data-action');
       closeModal(); await showView('home');
-      return saved;
+      return saved && prefilled && draftPreserved && reopenedDraft && edited && cancelled && deleted;
     })()`,
     awaitPromise: true,
     returnByValue: true,
   });
-  check(glossary.result?.value === true, '顶部术语库可打开并持久化术语定义');
+  check(glossary.result?.value === true, '术语库可添加、编辑名称与释义、取消删除及确认删除');
 
   const storageRows = await client.send('Runtime.evaluate', {
     expression: `[...document.querySelectorAll('.settings-folder-paths [data-settings-path]')].map((row) => row.dataset.settingsPath).join(',')`,
@@ -2151,6 +2171,18 @@ try {
     if(evidence.querySelector('[data-live-locate]')||!evidence.textContent.includes('生成时的原话快照'))throw Error('stale source linked to a changed live segment');
     resetAiNoteSuggestions();
     if(!document.querySelector('[data-live-accepted]').hidden||document.querySelector('[data-live-note-dialog][open]'))throw Error('stale meeting citation survived reset');
+    latestAiSuggestion={...claim,id:'live-topic',type:'topic',text:'本周试点范围'};aiNoteUserTyping=false;renderAiSuggestion();
+    if(!aiSuggestionRoot().querySelector('.ai-suggestion-card [data-ai-accept]')||!aiSuggestionRoot().querySelector('[data-ai-ignore]')||!aiSuggestionRoot().querySelector('[data-live-suggestion-sources]')||aiSuggestionRoot().querySelector('.ai-topic-divider'))throw Error('topic does not share the suggestion card');
+    aiNoteUserTyping=true;renderAiSuggestion();
+    if(!aiSuggestionRoot().querySelector('[data-ai-suggestion-badge]'))throw Error('topic interrupts note typing');
+    aiSuggestionRoot().querySelector('[data-ai-suggestion-badge]').click();
+    if(!aiSuggestionRoot().querySelector('.ai-suggestion-card'))throw Error('topic badge did not restore the card');
+    await acceptAiSuggestion(latestAiSuggestion.text);
+    if(!(await window.brevia.meeting.get({meeting_id:meeting.id})).notes.includes('## 本周试点范围'))throw Error('topic is not saved as a heading');
+    latestAiSuggestion={...claim,id:'live-topic-ignore',type:'topic',text:'忽略的话题'};renderAiSuggestion();
+    aiSuggestionRoot().querySelector('[data-ai-ignore]').click();
+    if(!aiSuggestionRoot().hidden||currentNotesMarkdown().includes('忽略的话题'))throw Error('topic ignore changed notes or kept the card');
+    resetAiNoteSuggestions();
     const serverNotes=await window.brevia.meeting.update({meeting_id:meeting.id,updates:{notes:'手机新增的原文'}});
     liveNotesEditor.setMarkdown('北威亚上线，北威亚验收。');
     await openCorrection('北威亚',false,'notes');
@@ -3213,6 +3245,96 @@ try {
     returnByValue: true,
   });
   check(workspaceSubmit.result?.value === true, '连续提交工作区表单只能创建一次');
+  const { Store } = await import('../macos/backend/store.cjs');
+  const dragStore = new Store(dataDir, { meetingsDir: recordingsDir });
+  const dragMeeting = dragStore.createMeeting({
+    title: 'Workspace drag regression',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  dragStore.finishImportedMeeting(dragMeeting.id, 0);
+  dragStore.close();
+  const workspaceDrag = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      await refreshBackendMeetings(false);
+      const meeting=uiData.meetings.find(item=>item.id===${JSON.stringify(dragMeeting.id)});
+      if(!meeting)throw new Error('No meeting for drag regression');
+      const current=()=>uiData.meetings.find(item=>item.id===meeting.id);
+      const original=current().workspaceId||'',view=activeView,detail=currentMeetingDetail;
+      const created=await window.brevia.workspace.create({name:'Drag target',description:''});
+      workspaces.push(created);collapsedSidebarWorkspaces.add(created.id);renderMeetingList();
+      const transfer=new DataTransfer();
+      const fire=(node,type)=>node.dispatchEvent(new DragEvent(type,{bubbles:true,cancelable:true,dataTransfer:transfer}));
+      const row=()=>meetingList.querySelector('[data-meeting-id="'+CSS.escape(meeting.id)+'"]');
+      const group=()=>meetingList.querySelector('[data-sidebar-workspace="'+created.id+'"]');
+      const wait=async()=>{for(let i=0;i<100&&current().workspaceId!==created.id;i++)await new Promise(r=>setTimeout(r,25));};
+      const assign=window.brevia.workspace.assign;
+      try{
+        transfer.setData('text/plain',meeting.id);
+        if(!fire(group(),'dragover'))throw new Error('External text accepted');
+        fire(row(),'dragstart');
+        const source=row().closest('[data-sidebar-workspace]');
+        if(!fire(source,'dragover'))throw new Error('Same workspace accepted');
+        if(fire(group(),'dragover')||!group().classList.contains('is-drop-target'))throw new Error('Collapsed target not accepting drag');
+        if(getComputedStyle(group()).outlineStyle!=='dashed')throw new Error('Drop target outline missing');
+        window.brevia.workspace.assign=async()=>{throw new Error('Expected drag failure');};
+        fire(group(),'drop');await new Promise(r=>setTimeout(r,50));
+        if((current().workspaceId||'')!==original)throw new Error('Failed move changed workspace');
+        window.brevia.workspace.assign=assign;
+        fire(row(),'dragstart');fire(group(),'drop');await wait();
+        if(current().workspaceId!==created.id||collapsedSidebarWorkspaces.has(created.id))throw new Error('Move or expansion failed');
+        if(currentMeetingDetail?.id===meeting.id&&currentMeetingDetail.workspace_id!==created.id)throw new Error('Open document workspace stale');
+        const stored=await window.brevia.meeting.get({meeting_id:meeting.id});
+        if(stored.workspace_id!==created.id)throw new Error('Move not persisted');
+        if(activeView!==view||currentMeetingDetail!==detail)throw new Error('Drag changed open document');
+        fire(row(),'dragstart');fire(row(),'dragend');
+        if(draggedMeetingId||document.querySelector('.is-drop-target'))throw new Error('Drag cleanup failed');
+        await assignMeetingToWorkspace(meeting.id,'');
+        if(current().workspaceId!=='')throw new Error('Cannot move to public workspace');
+        const platform=window.__BREVIA_PLATFORM__,pointerRow=row();
+        try{
+          window.__BREVIA_PLATFORM__='win32';
+          pointerRow.setPointerCapture=()=>{};pointerRow.hasPointerCapture=()=>false;
+          group().scrollIntoView({block:'center'});
+          const bounds=group().querySelector('button').getBoundingClientRect();
+          const x=bounds.x+bounds.width/2,y=bounds.y+bounds.height/2;
+          pointerRow.querySelector('.meeting-main').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1,button:0,clientX:x-20,clientY:y}));
+          document.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:1,clientX:x,clientY:y}));
+          if(!group().querySelector('.is-drop-target')&&!group().classList.contains('is-drop-target'))throw new Error('Windows pointer drag has no target');
+          document.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Escape'}));
+          if(sidebarPointerDrag||draggedMeetingId||document.querySelector('.is-drop-target')||current().workspaceId!=='')throw new Error('Windows Escape did not cancel');
+          pointerRow.querySelector('.meeting-main').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1,button:0,clientX:x-20,clientY:y}));
+          document.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:1,clientX:x,clientY:y}));
+          document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1,clientX:x,clientY:y}));
+          await wait();
+          if(current().workspaceId!==created.id||sidebarPointerDrag||draggedMeetingId)throw new Error('Windows pointer move or cleanup failed');
+          const detachedRow=row();detachedRow.setPointerCapture=()=>{};detachedRow.hasPointerCapture=()=>false;
+          detachedRow.querySelector('.meeting-main').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1,button:0,clientX:x-20,clientY:y}));
+          document.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:x,clientY:y}));
+          detachedRow.remove();
+          document.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:x+10,clientY:y}));
+          if(sidebarPointerDrag||draggedMeetingId||document.querySelector('.is-drop-target'))throw new Error('Detached source did not cancel');
+          renderMeetingList();
+        }finally{window.__BREVIA_PLATFORM__=platform;delete pointerRow.setPointerCapture;delete pointerRow.hasPointerCapture;}
+        return true;
+      }finally{
+        window.brevia.workspace.assign=assign;
+        await assignMeetingToWorkspace(meeting.id,original);
+        await window.brevia.workspace.delete({workspace_id:created.id});
+        workspaces=workspaces.filter(item=>item.id!==created.id);
+        collapsedSidebarWorkspaces.delete(created.id);
+        await window.brevia.meeting.delete({meeting_id:meeting.id});
+        await window.brevia.meeting.purge({meeting_id:meeting.id});
+        await refreshBackendMeetings(false);
+      }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    workspaceDrag.result?.value === true,
+    `侧栏拖放：折叠目标、跨工作区持久化、公开工作区、失败保留和取消清理：${JSON.stringify(workspaceDrag.exceptionDetails || workspaceDrag.result)}`,
+  );
   await client.send('Runtime.evaluate', {
     expression: "document.querySelector('.new-workspace').click()",
   });
@@ -4683,6 +4805,14 @@ try {
       closeModal(); await new Promise(r=>setTimeout(r,180));
       await Promise.all([showView('prepare'),showView('settings'),showView('home')]);
       if(activeView!=='home'||document.querySelectorAll('.view.active').length!==1)errors.push('rapid navigation did not converge');
+      meetingActive=true;
+      await showView('live');
+      await showView('home');
+      if(miniMeeting.hidden)errors.push('programmatic navigation lost active recording controls');
+      await showView('live');
+      if(!miniMeeting.hidden)errors.push('return to live duplicated recording controls');
+      meetingActive=false;
+      await showView('home');
       if(!document.querySelector('link[href="./motion.css"]'))errors.push('shared motion styles missing');
       const element=document.createElement('div');document.body.append(element);
       let closed=0;BreviaMotion.leave(element,()=>closed++);BreviaMotion.enter(element);

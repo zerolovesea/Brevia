@@ -48,7 +48,12 @@ const markdown = new marked.Marked({
   },
 });
 // 旧分享未保存身份时只能按原有姓名区分；新快照始终使用身份 ID。
-const identity = (item) => (item.speaker_id ? 'id:' + item.speaker_id : 'name:' + item.speaker);
+const identity = (item) =>
+  item.speaker_id === '' && item.speaker === 'Unknown speaker'
+    ? 'unknown'
+    : item.speaker_id
+      ? 'id:' + item.speaker_id
+      : 'name:' + item.speaker;
 function hideQuotePreview() {
   quoteAnchor?.removeAttribute('aria-describedby');
   quoteAnchor = undefined;
@@ -158,12 +163,17 @@ function renderShare() {
   const people = new Map();
   for (const item of snapshot.transcript) {
     const id = identity(item);
-    if (!people.has(id)) people.set(id, { id, name: item.speaker });
-    if (id) speakerColor(id, palette);
+    if (!people.has(id))
+      people.set(id, {
+        id,
+        name: item.speaker,
+        unidentified: item.speaker_id === '' && item.speaker === 'Unknown speaker',
+      });
+    if (id && !people.get(id).unidentified) speakerColor(id, palette);
   }
   const nameCounts = new Map();
   for (const person of people.values()) {
-    person.label = formatSpeakerName(person.name) || t('说话人');
+    person.label = formatSpeakerName(person) || t('说话人');
     person.ordinal = (nameCounts.get(person.label) || 0) + 1;
     nameCounts.set(person.label, person.ordinal);
   }
@@ -184,9 +194,10 @@ function renderShare() {
       : '',
   ].join('');
   const participants = document.querySelector('#participants');
-  participants.hidden = !people.size;
-  participants.setAttribute('aria-label', `${t('参与者')} (${people.size})`);
-  participants.innerHTML = [...people.values()]
+  const identified = [...people.values()].filter((person) => !person.unidentified);
+  participants.hidden = !identified.length;
+  participants.setAttribute('aria-label', `${t('参与者')} (${identified.length})`);
+  participants.innerHTML = identified
     .map(
       (person) =>
         `<span>${renderSpeakerAvatar(person, palette)}${escapeHtml(personLabel(person))}</span>`,
@@ -226,7 +237,7 @@ function renderShare() {
           transcriptMode !== 'original' && item.translation?.trim()
             ? `<p class="${transcriptMode === 'comparison' ? 'shared-translation' : ''}">${escapeHtml(item.translation)}</p>`
             : '';
-        return `<article class="shared-segment" data-transcript-index="${index}" tabindex="-1">${renderSpeakerAvatar({ id: identity(item), name: item.speaker }, palette)}<div class="shared-speech"><div><b>${escapeHtml(personLabel(people.get(identity(item))))}</b><time>${formatMeetingTime(item.start_ms)}</time></div>${original}${translation}</div></article>`;
+        return `<article class="shared-segment" data-transcript-index="${index}" tabindex="-1">${renderSpeakerAvatar(people.get(identity(item)), palette)}<div class="shared-speech"><div><b>${escapeHtml(personLabel(people.get(identity(item))))}</b><time>${formatMeetingTime(item.start_ms)}</time></div>${original}${translation}</div></article>`;
       })
       .join('');
     content.innerHTML = `<div class="shared-transcript-toolbar">${filters}${modes}</div>${rows || `<p class="shared-empty">${escapeHtml(t(transcriptMode === 'translation' ? '暂无译文' : '暂无内容'))}</p>`}`;
@@ -256,6 +267,13 @@ function renderShare() {
       groups.get(claim.section).items.push({
         ...claim,
         kind: 'cause',
+        sources: claim.sources.map((source) => ({
+          ...source,
+          speaker:
+            source.speaker_id === '' && source.speaker === 'Unknown speaker'
+              ? t('未识别说话人')
+              : source.speaker,
+        })),
         source_chars: claim.sources.reduce((sum, source) => sum + source.text.length, 0),
       });
     }

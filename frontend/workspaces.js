@@ -146,52 +146,127 @@ async function switchWorkspace(workspaceId) {
   appActions.filterMeetings();
 }
 
+let draggedMeetingId = '';
 const clearWorkspaceDropTarget = () =>
   document
-    .querySelectorAll('.workspace-item.is-drop-target')
+    .querySelectorAll('.is-drop-target')
     .forEach((item) => item.classList.remove('is-drop-target'));
+function workspaceDropTarget(event) {
+  if (!draggedMeetingId) return null;
+  const target = event.target.closest('.workspace-item, [data-sidebar-workspace]');
+  const meeting = uiData.meetings.find(({ id }) => id === draggedMeetingId);
+  const workspaceId = target?.dataset.sidebarWorkspace ?? target?.dataset.workspaceId;
+  if (
+    !target ||
+    !meeting ||
+    meeting.deleted ||
+    workspaceId === undefined ||
+    (meeting.workspaceId || '') === workspaceId ||
+    (workspaceId && !workspaces.some(({ id }) => id === workspaceId))
+  )
+    return null;
+  return { target, meeting, workspaceId };
+}
 document.addEventListener('dragover', (event) => {
-  const target = event.target.closest('.workspace-item');
-  if (!target || !event.dataTransfer.types.includes('text/plain')) return;
-  event.preventDefault();
   clearWorkspaceDropTarget();
-  target.classList.add('is-drop-target');
-  if (target.id === 'workspace-selector' && !workspacePicker) toggleWorkspacePicker();
+  if (draggedMeetingId && event.target.closest('#workspace-selector') && !workspacePicker)
+    toggleWorkspacePicker();
+  const drop = workspaceDropTarget(event);
+  if (!drop) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  drop.target.classList.add('is-drop-target');
 });
 document.addEventListener('dragleave', (event) => {
-  const target = event.target.closest('.workspace-item');
+  const target = event.target.closest('.is-drop-target');
   if (target && !target.contains(event.relatedTarget)) target.classList.remove('is-drop-target');
 });
-document.addEventListener('dragend', clearWorkspaceDropTarget);
-document.addEventListener('drop', async (event) => {
-  const target = event.target.closest('.workspace-item');
-  if (!target) return;
-  event.preventDefault();
+document.addEventListener('dragend', () => {
+  draggedMeetingId = '';
   clearWorkspaceDropTarget();
-  const meeting = uiData.meetings.find(({ id }) => id === event.dataTransfer.getData('text/plain'));
-  if (!meeting || meeting.deleted) return;
-  const workspaceId = target.dataset.workspaceId || '';
-  if (meeting.workspaceId === workspaceId) return;
-  try {
-    await window.brevia.workspace.assign({
-      meeting_id: meeting.id,
-      workspace_id: workspaceId || null,
-    });
-    const previousWorkspace = workspaces.find(({ id }) => id === meeting.workspaceId);
-    const nextWorkspace = workspaces.find(({ id }) => id === workspaceId);
-    if (previousWorkspace)
-      previousWorkspace.meeting_count = Math.max(0, previousWorkspace.meeting_count - 1);
-    if (nextWorkspace) nextWorkspace.meeting_count += 1;
-    meeting.workspaceId = workspaceId;
-    meeting.workspace = workspaceId ? { name: getWorkspaceName(workspaceId) } : null;
-    document.querySelectorAll('.meeting-workspace-menu').forEach((menu) => menu.remove());
-    closeMeetingMenus();
-    renderWorkspaceNav();
-    appActions.renderMeetingList();
-  } catch (error) {
-    appActions.showToast(error.message, undefined, 'error');
-  }
 });
+document.addEventListener('drop', async (event) => {
+  const drop = workspaceDropTarget(event);
+  draggedMeetingId = '';
+  clearWorkspaceDropTarget();
+  if (!drop) return;
+  event.preventDefault();
+  closeWorkspacePicker();
+  await assignMeetingToWorkspace(drop.meeting.id, drop.workspaceId);
+});
+
+// WebView2 的宿主文件拖放会拦截 HTML drop；侧栏用指针事件保留原生文件导入。
+let sidebarPointerDrag = null;
+document.addEventListener('pointerdown', (event) => {
+  if (window.__BREVIA_PLATFORM__ !== 'win32' || event.button !== 0) return;
+  const row = event.target.closest('.meeting-row[draggable="true"]');
+  if (!row || event.target.closest('button, input, textarea, .meeting-actions')) return;
+  sidebarPointerDrag = {
+    row,
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    transfer: null,
+  };
+});
+document.addEventListener('pointermove', (event) => {
+  const drag = sidebarPointerDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (!drag.row.isConnected)
+    return finishSidebarPointerDrag({ type: 'pointercancel', pointerId: drag.pointerId });
+  if (!drag.transfer) {
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+    drag.transfer = new DataTransfer();
+    drag.row.dispatchEvent(
+      new DragEvent('dragstart', { bubbles: true, dataTransfer: drag.transfer }),
+    );
+    drag.row.setPointerCapture(event.pointerId);
+  }
+  event.preventDefault();
+  window.getSelection()?.removeAllRanges();
+  document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.dispatchEvent(
+      new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: drag.transfer }),
+    );
+});
+function finishSidebarPointerDrag(event) {
+  const drag = sidebarPointerDrag;
+  if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+  sidebarPointerDrag = null;
+  if (!drag.transfer) return;
+  if (event.type === 'pointerup')
+    document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.dispatchEvent(
+        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: drag.transfer }),
+      );
+  draggedMeetingId = '';
+  clearWorkspaceDropTarget();
+  if (drag.row.hasPointerCapture(drag.pointerId)) drag.row.releasePointerCapture(drag.pointerId);
+  const suppressClick = (click) => {
+    click.preventDefault();
+    click.stopImmediatePropagation();
+  };
+  document.addEventListener('click', suppressClick, true);
+  setTimeout(() => document.removeEventListener('click', suppressClick, true), 0);
+}
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
+  document.addEventListener(type, finishSidebarPointerDrag);
+window.addEventListener('blur', finishSidebarPointerDrag);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') finishSidebarPointerDrag(event);
+});
+document.addEventListener(
+  'dragstart',
+  (event) => {
+    if (window.__BREVIA_PLATFORM__ === 'win32' && event.isTrusted && sidebarPointerDrag) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  },
+  true,
+);
 
 /**
  * 更新主页标题显示当前工作区
@@ -499,6 +574,12 @@ async function assignMeetingToWorkspace(meetingId, workspaceId) {
         : null;
     }
 
+    if (currentMeetingDetail?.id === meetingId) {
+      currentMeetingDetail.workspace_id = workspaceId || null;
+      currentMeetingDetail.workspace = meeting?.workspace || null;
+    }
+    collapsedSidebarWorkspaces.delete(workspaceId);
+    document.querySelectorAll('.meeting-workspace-menu').forEach((menu) => menu.remove());
     closeMeetingMenus();
     renderWorkspaceNav();
     appActions.renderMeetingList();

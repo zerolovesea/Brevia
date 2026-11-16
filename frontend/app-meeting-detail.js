@@ -10,6 +10,10 @@ function renderSegmentData(segment, speakerNames) {
     endSeconds: segment.end_ms / 1000,
     speaker: {
       id: segment.speaker,
+      unidentified:
+        segment.speaker === 'spk-1' &&
+        segment.speaker_name === 'Unknown speaker' &&
+        !speakerNames.has(segment.speaker),
       name: speakerNames.get(segment.speaker) || segment.speaker_name || segment.speaker,
       overlapNames:
         overlapSpeakers.length > 1

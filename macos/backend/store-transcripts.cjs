@@ -1,4 +1,4 @@
-const { utcNow } = require('./store-base.cjs');
+const { utcNow, speakerNameSql } = require('./store-base.cjs');
 const {
   claimLineIndex,
   latestSegments,
@@ -40,7 +40,9 @@ module.exports = {
       this.query(
         'WITH base AS (SELECT id,version FROM segments WHERE meeting_id=? AND ' +
           base +
-          " AND TRIM(text)<>'') SELECT s.*,COALESCE(p.name,s.speaker) speaker_name FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker WHERE s.meeting_id=? AND s.id IN(SELECT id FROM base) AND(s.version='user' OR EXISTS(SELECT 1 FROM base b WHERE b.id=s.id AND b.version=s.version))",
+          " AND TRIM(text)<>'') SELECT s.*," +
+          speakerNameSql +
+          " speaker_name FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker WHERE s.meeting_id=? AND s.id IN(SELECT id FROM base) AND(s.version='user' OR EXISTS(SELECT 1 FROM base b WHERE b.id=s.id AND b.version=s.version))",
         ...params,
       ),
     );

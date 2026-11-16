@@ -5498,6 +5498,7 @@ const meetingNavigationContext = {
   activeView: 'detail',
   meetingActive: false,
   meetingListRequest: 0,
+  pageTransitionRevision: 0,
   breviaClient: { state: {} },
   t: (value) => value,
   showToast: (message) => meetingNavigationCalls.push(message),
@@ -5573,6 +5574,14 @@ assert.equal(navigationRows[1].attributes['aria-current'], 'page', '详情同页
     new Promise((resolve, reject) => pending.set(meeting_id, { resolve, reject }));
   const open = (id) =>
     meetingNavigationContext.openMeetingRow({ dataset: { meetingId: id }, style: {} });
+  const stale = open('stale-navigation');
+  await new Promise(setImmediate);
+  meetingNavigationContext.pageTransitionRevision++;
+  meetingNavigationContext.activeView = 'live';
+  pending.get('stale-navigation').resolve({ id: 'stale-navigation' });
+  await stale;
+  assert.equal(meetingNavigationContext.activeView, 'live');
+  assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'another');
   const failed = open('failed');
   await new Promise(setImmediate);
   assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'another');
@@ -6200,6 +6209,16 @@ const summaryContext = {
   replaceModalBody: (_kind, markup) => (summaryNodes['.modal-body'].innerHTML = markup),
 };
 runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
+assert.equal(
+  summaryContext.formatSpeakerName({ name: 'Unknown speaker', unidentified: true }),
+  '未识别说话人',
+);
+assert.equal(summaryContext.formatSpeakerName('spk-1'), '说话人 1');
+assert.equal(summaryContext.formatSpeakerName('Unknown speaker'), 'Unknown speaker');
+assert.match(
+  summaryContext.renderSpeakerAvatar({ id: 'spk-1', name: 'Unknown speaker', unidentified: true }),
+  /data-speaker-color="unknown"/,
+);
 // escapeHtml 是所有模型名/会议名/用户文本进 innerHTML 的唯一出口，它就是 XSS 边界。
 // 只断言「源码里调用了 escapeHtml」不说明它真的转义。
 assert.equal(
@@ -7193,17 +7212,15 @@ for (const [language, copy] of Object.entries(
   assert.equal(modes.length, 3, `${language}: three AI note modes`);
   assert.equal(new Set(modes.map(([, , description]) => description)).size, 3);
 }
-// AI 辅助笔记（阶段 4 建议 UI + 输入状态机）：三种 UI 形态与操作。
+// AI 建议共用卡片，打字时收为徽标。
 assert.match(text(html), /data-ai-suggestion/);
 assert.match(text(html), /data-ai-request/);
 assert.match(text(app), /function renderAiSuggestion/);
-assert.match(text(app), /function convertTopicToHeading/);
 assert.match(text(app), /data-ai-accept/);
 assert.match(text(app), /data-ai-ignore/);
 assert.match(text(app), /data-ai-suggestion-badge/);
-assert.match(text(app), /data-ai-topic/);
 assert.match(text(tailwind), /\.ai-suggestion-card/);
-assert.match(text(tailwind), /\.ai-topic-divider/);
+assert.doesNotMatch(text(app), /ai-topic-divider|data-ai-topic|convertTopicToHeading/);
 assert.match(text(tailwind), /\.ai-suggestion-badge/);
 for (const copy of Object.values(localeContext.window.BreviaLocaleData.appCopy.aiAssistCopy)) {
   assert.equal(
@@ -10413,7 +10430,7 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
     },
   };
   const start = source.indexOf('  function bind(');
-  const end = source.indexOf('  function render()', start);
+  const end = source.indexOf('  function render(', start);
   runInNewContext(source.slice(start, end), context);
   context.bind({ querySelector: () => form }, null, 'workspace');
   let confirmations = 0;
@@ -10664,4 +10681,36 @@ assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the t
   assert.equal(prevented, 0);
   keydown({ ...enter, target: { closest: () => false } });
   assert.equal(submitted, 1, '空白工作面仍支持回车确认术语');
+}
+
+// 未识别占位与恰好同名的人工身份分别进入桌面渲染。
+{
+  const source = text(meetingDetail);
+  const context = {
+    currentMeetingDetail: null,
+    formatMeetingTime: () => '00:00',
+    isSegmentTranslationPending: () => false,
+  };
+  runInNewContext(
+    source.slice(source.indexOf('function renderSegmentData('), source.indexOf('\n}\n') + 2),
+    context,
+  );
+  const segment = {
+    id: 'unknown',
+    speaker: 'spk-1',
+    speaker_name: 'Unknown speaker',
+    start_ms: 0,
+    end_ms: 1000,
+  };
+  assert.equal(context.renderSegmentData(segment, new Map()).speaker.unidentified, true);
+  assert.equal(
+    context.renderSegmentData(segment, new Map([['spk-1', 'Unknown speaker']])).speaker
+      .unidentified,
+    false,
+  );
+  assert.equal(
+    context.renderSegmentData({ ...segment, speaker: 'live-person' }, new Map()).speaker
+      .unidentified,
+    false,
+  );
 }

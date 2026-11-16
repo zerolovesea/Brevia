@@ -34,6 +34,12 @@ const response = await fetch(origin + '/api/shares', {
           start_ms: 1200,
         },
         { text: '另一个同名参与者。', speaker: '李明', speaker_id: 'b', start_ms: 2000 },
+        {
+          text: '身份未知的原话。',
+          speaker: 'Unknown speaker',
+          speaker_id: '',
+          start_ms: 5000,
+        },
       ],
       claims: [
         '测试覆盖不足，导致上线延迟。',
@@ -44,7 +50,17 @@ const response = await fetch(origin + '/api/shares', {
         id: 'cause-' + (index + 1),
         text,
         section: '上线安排',
-        sources: [{ text: '还缺少移动端回归，需要补齐。', speaker: '李明', start_ms: 2000 }],
+        sources:
+          index === 0
+            ? [
+                {
+                  text: '身份未知的原话。',
+                  speaker: 'Unknown speaker',
+                  speaker_id: '',
+                  start_ms: 5000,
+                },
+              ]
+            : [{ text: '还缺少移动端回归，需要补齐。', speaker: '李明', start_ms: 2000 }],
       })),
     },
   }),
@@ -133,7 +149,17 @@ try {
   await page.locator('[data-view="transcript"]').click();
   assert.match(await page.locator('#meeting-meta').textContent(), /45/);
   assert.match(await page.locator('#meeting-meta').textContent(), /2026\/11\/11/);
-  assert.equal(await page.locator('.shared-segment > .speaker-avatar').count(), 2);
+  assert.equal(await page.locator('.shared-segment > .speaker-avatar').count(), 3);
+  assert.doesNotMatch(await page.locator('#participants').textContent(), /未识别/);
+  assert.equal(await page.locator('#participants').getAttribute('aria-label'), '参与者 (2)');
+  await page.getByRole('button', { name: '未识别说话人', exact: true }).click();
+  assert.equal(await page.locator('.shared-segment').count(), 1);
+  assert.match(await page.locator('.shared-segment').textContent(), /身份未知的原话/);
+  assert.equal(
+    await page.locator('.shared-segment > .speaker-avatar').getAttribute('data-speaker-color'),
+    'unknown',
+  );
+  await page.locator('[data-speaker-filter="all"]').click();
   assert.equal(
     await page.locator('[data-transcript-mode="comparison"]').getAttribute('aria-pressed'),
     'true',
@@ -226,6 +252,10 @@ try {
           assert.ok(width > 760 ? boxes[1].x > boxes[0].x : boxes[1].y >= boxes[0].bottom);
 
           await page.locator('#content [data-evidence-id="cause-1"] > summary').click();
+          assert.match(
+            await page.locator('[data-evidence-id="cause-1"] blockquote').textContent(),
+            /未识别说话人/,
+          );
           assert.equal(await page.locator('[data-edit-evidence], [data-play-evidence]').count(), 0);
         }
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -254,6 +284,8 @@ try {
             speaker_id: 'Guest',
             start_ms: 4800,
           },
+          { text: '未知片段', speaker: 'Unknown speaker', speaker_id: '', start_ms: 7000 },
+          { text: '人工同名', speaker: 'Unknown speaker', speaker_id: 'custom', start_ms: 8000 },
         ],
         claims: [],
       },
@@ -282,6 +314,9 @@ try {
   await page.locator('[data-view="transcript"]').click();
   assert.equal(await page.locator('[data-transcript-mode]').count(), 0);
   await page.getByText('Legacy transcript', { exact: true }).waitFor();
+  assert.equal(await page.locator('#participants .speaker-avatar').count(), 4);
+  assert.match(await page.locator('#participants').textContent(), /Unknown speaker/);
+  assert.doesNotMatch(await page.locator('#participants').textContent(), /未识别/);
   await page.locator('[data-speaker-filter="1"]').click();
   assert.deepEqual(await page.locator('.shared-segment p').allTextContents(), [
     'First same-second segment',

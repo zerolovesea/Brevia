@@ -1785,6 +1785,14 @@ function registerIpc() {
     'glossary.update',
     z.discriminatedUnion('action', [
       glossaryEntry.extend({ action: z.literal('save') }),
+      glossaryEntry.extend({
+        action: z.literal('edit'),
+        original_name: termText,
+        meaning: z.string().trim().max(1000),
+      }),
+      glossaryEntry
+        .pick({ workspace_id: true, name: true })
+        .extend({ action: z.literal('delete') }),
       glossaryEntry
         .merge(mention)
         .extend({ action: z.literal('resolve'), meaning: z.string().trim().max(1000) }),

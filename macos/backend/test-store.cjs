@@ -18,6 +18,75 @@ function setup(t) {
   });
   return { root, store };
 }
+test('实时未知占位不与已识别的1号说话人撞名，精修和人工身份保留', (t) => {
+  const { store } = setup(t);
+  const mid = store.createMeeting({
+    title: 'Unknown identity',
+    language: 'zh',
+    refined_model_id: 'test',
+  }).id;
+  const save = (id, speaker, track = 'mix') =>
+    store.saveSegment({
+      meeting_id: mid,
+      segment_id: id,
+      version: 'live',
+      speaker,
+      track,
+      start_ms: 0,
+      end_ms: 2000,
+      text: id,
+    });
+  save('unknown', 'spk-1');
+  save('known', 'live-person');
+  store.renameSpeaker(mid, 'live-person', 'spk-1');
+  store.setStatus(mid, 'ready');
+  assert.equal(store.currentSegments(mid, 'unknown')[0].speaker_name, 'Unknown speaker');
+  for (const compact of [false, true]) {
+    const meeting = store.getMeeting(mid, compact);
+    assert.equal(meeting.speaker_count, 1);
+    assert.equal(meeting.segments.find((s) => s.id === 'unknown').speaker_name, 'Unknown speaker');
+    assert.equal(meeting.segments.find((s) => s.id === 'known').speaker_name, 'spk-1');
+    meeting.summary = {
+      data: {
+        claims: [
+          {
+            id: 'cause',
+            kind: 'cause',
+            text: '引用',
+            sources: [{ segment_id: 'unknown', text: 'unknown', speaker: 'spk-1', start_ms: 0 }],
+          },
+        ],
+      },
+    };
+    const shared = require('../../desktop/cloud-share.cjs').shareSnapshot(meeting, 'zh');
+    assert.equal(shared.claims[0].sources[0].speaker, 'Unknown speaker');
+    assert.equal(shared.transcript.find((s) => s.text === 'unknown').speaker, 'Unknown speaker');
+    assert.equal(shared.transcript.find((s) => s.text === 'known').speaker, 'spk-1');
+  }
+  store.renameSpeaker(mid, 'spk-1', 'Unknown speaker', true);
+  assert.equal(store.getMeeting(mid, true).speaker_count, 2);
+  assert.equal(
+    require('../../desktop/cloud-share.cjs')
+      .shareSnapshot(store.getMeeting(mid, true), 'zh')
+      .transcript.find((s) => s.text === 'unknown').speaker_id,
+    'spk-1',
+  );
+  store.renameSpeaker(mid, 'spk-1', '人工名字', true);
+  assert.equal(store.currentSegments(mid, 'unknown')[0].speaker_name, '人工名字');
+  store.run('DELETE FROM speakers WHERE meeting_id=? AND id=?', mid, 'spk-1');
+  store.replaceSegments(mid, [
+    {
+      segment_id: 'refined',
+      speaker: 'spk-1',
+      track: 'mix',
+      start_ms: 0,
+      end_ms: 2000,
+      text: '已聚类',
+    },
+  ]);
+  assert.equal(store.currentSegments(mid)[0].speaker_name, 'spk-1');
+});
+
 test('capsule edits preserve later meeting notes and reject a stale base', (t) => {
   const { store } = setup(t);
   const id = 'capsule-notes';
@@ -719,6 +788,65 @@ test('默认术语只补齐一次，保留自定义释义', (t) => {
     '自定义释义',
   );
   assert.equal(store.glossary().entries.length, 3);
+});
+
+test('术语编辑和删除保持作用域、别名及原文，重名修改回滚', (t) => {
+  const { store } = setup(t);
+  const ws = store.createWorkspace({ name: '词库编辑' });
+  const m = store.createMeeting({
+    title: '原文保留',
+    language: 'zh',
+    refined_model_id: 'test',
+    workspace_id: ws.id,
+  });
+  store.run('INSERT INTO glossary_mentions(meeting_id,original) VALUES(?,?)', m.id, 'RY');
+  store.updateGlossary({
+    action: 'resolve',
+    workspace_id: ws.id,
+    meeting_id: m.id,
+    original: 'RY',
+    name: 'ROI',
+    meaning: '旧定义',
+  });
+  store.updateGlossary({ action: 'save', workspace_id: '', name: 'ROI', meaning: '全局定义' });
+  store.updateGlossary({
+    action: 'edit',
+    workspace_id: ws.id,
+    original_name: 'ROI',
+    name: 'ROAS',
+    meaning: '新定义',
+  });
+  assert.equal(store.glossary().mentions[0].name, 'ROAS');
+  assert.equal(store.glossary().mentions[0].original, 'RY');
+  assert.equal(store.glossaryContext(m, 'RY')[0].name, 'ROAS');
+  assert.equal(store.glossaryContext(m, 'RY')[0].meaning, '新定义');
+  store.updateGlossary({
+    action: 'save',
+    workspace_id: ws.id,
+    name: '保留项',
+    meaning: '不能覆盖',
+  });
+  assert.throws(() =>
+    store.updateGlossary({
+      action: 'edit',
+      workspace_id: ws.id,
+      original_name: 'ROAS',
+      name: '保留项',
+      meaning: '覆盖',
+    }),
+  );
+  assert.equal(store.glossaryContext(m, 'RY')[0].name, 'ROAS');
+  assert.equal(store.glossary().entries.find((e) => e.name === '保留项').meaning, '不能覆盖');
+  store.updateGlossary({ action: 'delete', workspace_id: ws.id, name: 'ROAS' });
+  assert.equal(store.glossary().mentions.length, 0);
+  assert.equal(store.glossaryContext(m, 'RY').length, 0);
+  assert.equal(
+    store.one('SELECT original FROM glossary_mentions WHERE meeting_id=?', m.id).original,
+    'RY',
+  );
+  assert.equal(store.glossary().entries.find((e) => e.name === 'ROI').meaning, '全局定义');
+  store.updateGlossary({ action: 'delete', workspace_id: '', name: 'ASR' });
+  assert.ok(!store.glossary().entries.some((e) => e.name === 'ASR'));
 });
 
 test('术语匹配仅使用本工作区和全局定义，挂起词可确认、恢复及清空', async (t) => {
@@ -1514,4 +1642,52 @@ test('术语扫描期间移动工作区不写回旧词库建议或缓存', async
   );
   assert.equal(store.query('SELECT * FROM glossary_mentions').length, 0);
   assert.equal(store.query('SELECT * FROM glossary_scans').length, 0);
+});
+
+test('术语扫描不把推理期间已编辑或删除的词条重新确认', async (t) => {
+  const { store } = setup(t);
+  const meeting = store.createMeeting({
+    title: '词库竞争',
+    language: 'zh',
+    refined_model_id: 'test',
+  });
+  const text = 'RY是本次投放指标';
+  store.saveSegment({
+    meeting_id: meeting.id,
+    segment_id: 'source',
+    start_ms: 0,
+    end_ms: 1000,
+    text,
+  });
+  for (const action of ['edit', 'delete']) {
+    store.updateGlossary({
+      action: 'save',
+      workspace_id: 'public',
+      name: 'ROI',
+      meaning: '投资回报率',
+    });
+    store.run("INSERT OR REPLACE INTO glossary_aliases VALUES('public','RY','ROI')");
+    await require('./glossary-analysis.cjs').analyzeTerms(
+      { store, emit() {} },
+      { ...meeting, segments: [{ text }] },
+      text,
+      { context_size: 8192 },
+      async () => {
+        store.updateGlossary({
+          action,
+          workspace_id: 'public',
+          original_name: 'ROI',
+          name: action === 'edit' ? 'ROAS' : 'ROI',
+          meaning: '新定义',
+        });
+        return JSON.stringify({ terms: [{ original: 'RY', suggestion: 'ROI' }] });
+      },
+      new TaskControl(),
+    );
+    assert.equal(store.glossary().mentions.length, 0);
+    assert.equal(
+      store.query('SELECT * FROM glossary_scans WHERE meeting_id=?', meeting.id).length,
+      0,
+    );
+  }
 });

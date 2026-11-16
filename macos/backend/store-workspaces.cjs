@@ -183,6 +183,50 @@ module.exports = {
               p.meeting_id,
               mention.original,
             );
+      } else if (p.action === 'edit' || p.action === 'delete') {
+        const name = p.action === 'edit' ? p.original_name : p.name;
+        if (
+          !this.one(
+            'SELECT name FROM glossary_entries WHERE scope=? AND name=?',
+            p.workspace_id,
+            name,
+          )
+        )
+          throw new Error('Term unavailable');
+        this.run(
+          'INSERT INTO glossary_revisions SELECT DISTINCT meeting_id,1 FROM glossary_mentions WHERE scope=? AND name=? ON CONFLICT(meeting_id) DO UPDATE SET revision=revision+1',
+          p.workspace_id,
+          name,
+        );
+        if (p.action === 'edit') {
+          this.run(
+            'UPDATE glossary_entries SET name=?,meaning=? WHERE scope=? AND name=?',
+            p.name,
+            p.meaning,
+            p.workspace_id,
+            name,
+          );
+          this.run(
+            'UPDATE glossary_aliases SET name=? WHERE scope=? AND name=?',
+            p.name,
+            p.workspace_id,
+            name,
+          );
+          this.run(
+            'UPDATE glossary_mentions SET name=? WHERE scope=? AND name=?',
+            p.name,
+            p.workspace_id,
+            name,
+          );
+        } else {
+          this.run('DELETE FROM glossary_entries WHERE scope=? AND name=?', p.workspace_id, name);
+          this.run('DELETE FROM glossary_aliases WHERE scope=? AND name=?', p.workspace_id, name);
+          this.run(
+            'UPDATE glossary_mentions SET dismissed=1 WHERE scope=? AND name=?',
+            p.workspace_id,
+            name,
+          );
+        }
       } else {
         if (p.workspace_id && p.workspace_id !== 'public' && !this.getWorkspace(p.workspace_id))
           throw new Error('Workspace unavailable');

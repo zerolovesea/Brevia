@@ -332,6 +332,7 @@ if (typeof document !== 'undefined') {
 function formatSpeakerName(speaker) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name;
   if (!name) return '';
+  if (speaker?.unidentified) return t('未识别说话人');
   if (name === 'local-user' || name === 'Local user') return t('本机用户');
   const match = name.match(/^(?:(mic|system)-)?spk-(\d+)$/);
   if (match) {
@@ -361,7 +362,7 @@ function speakerColor(identity, palette) {
 function renderSpeakerAvatar(speaker, palette) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name || '';
   const identity = typeof speaker === 'object' ? speaker?.id || name : name;
-  const color = identity ? speakerColor(identity, palette) : 'unknown';
+  const color = identity && !speaker?.unidentified ? speakerColor(identity, palette) : 'unknown';
   const hue = color >= 6 ? ` style="--speaker-hue:${Math.round(color * 137.508) % 360}"` : '';
   return `<span class="speaker-avatar" data-speaker-color="${color}"${hue} aria-hidden="true">${interfaceIcon('person')}</span>`;
 }
@@ -2007,7 +2008,8 @@ function renderMeetingDetail() {
   const entries = detailTranscriptEntries(d);
   const participants = new Map();
   for (const { speaker } of entries) {
-    if (speaker?.id && !participants.has(speaker.id)) participants.set(speaker.id, speaker);
+    if (speaker?.id && !speaker.unidentified && !participants.has(speaker.id))
+      participants.set(speaker.id, speaker);
   }
   for (const id of participants.keys()) speakerColor(id, palette);
   if (!participants.has(d.transcriptSpeaker)) d.transcriptSpeaker = '';

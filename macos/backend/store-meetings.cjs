@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { utcNow } = require('./store-base.cjs');
+const { utcNow, speakerNameSql, unidentifiedSpeakerSql } = require('./store-base.cjs');
 const {
   TEMPLATES,
   confirmedDate,
@@ -11,7 +11,9 @@ const {
   normalizeSummaryMarkdown,
 } = require('./meeting-evidence.cjs');
 const counts =
-  "CASE WHEN EXISTS(SELECT 1 FROM speaker_turns st WHERE st.meeting_id=m.id AND st.version='postprocess') THEN (SELECT COUNT(DISTINCT speaker) FROM speaker_turns st WHERE st.meeting_id=m.id AND st.version='postprocess') ELSE (SELECT COUNT(DISTINCT speaker) FROM segments s WHERE s.meeting_id=m.id) END AS speaker_count,EXISTS(SELECT 1 FROM summaries s WHERE s.meeting_id=m.id AND s.data IS NOT NULL) AS has_summary";
+  "CASE WHEN EXISTS(SELECT 1 FROM speaker_turns st WHERE st.meeting_id=m.id AND st.version='postprocess') THEN (SELECT COUNT(DISTINCT speaker) FROM speaker_turns st WHERE st.meeting_id=m.id AND st.version='postprocess') ELSE (SELECT COUNT(DISTINCT speaker) FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker WHERE s.meeting_id=m.id AND NOT (" +
+  unidentifiedSpeakerSql +
+  ')) END AS speaker_count,EXISTS(SELECT 1 FROM summaries s WHERE s.meeting_id=m.id AND s.data IS NOT NULL) AS has_summary';
 const meetingRow = (row) => ({ ...row, tags: JSON.parse(row.tags) });
 const like = (value) => '%' + value.replace(/[\\%_]/g, '\\$&') + '%';
 module.exports = {
@@ -104,7 +106,9 @@ module.exports = {
     return rows.map((row) => ({
       ...meetingRow(row),
       snippets: this.query(
-        'SELECT s.start_ms,s.end_ms,COALESCE(p.name,s.speaker) speaker_name,s.text,k.value matched_term FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker JOIN json_each(?) k ON(instr(lower(s.text),lower(k.value)) OR instr(lower(p.name),lower(k.value))) WHERE s.meeting_id=? GROUP BY s.id,s.version ORDER BY s.start_ms LIMIT 3',
+        'SELECT s.start_ms,s.end_ms,' +
+          speakerNameSql +
+          ' speaker_name,s.text,k.value matched_term FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker JOIN json_each(?) k ON(instr(lower(s.text),lower(k.value)) OR instr(lower(p.name),lower(k.value))) WHERE s.meeting_id=? GROUP BY s.id,s.version ORDER BY s.start_ms LIMIT 3',
         JSON.stringify([q, ...[...(aliases.get(row.workspace_id || '') || [])].sort()]),
         row.id,
       ),
@@ -123,7 +127,9 @@ module.exports = {
         mid,
       ).n;
       const all = this.query(
-        'SELECT s.*,COALESCE(p.name,s.speaker) speaker_name FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker WHERE s.meeting_id=?' +
+        'SELECT s.*,' +
+          speakerNameSql +
+          ' speaker_name FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker WHERE s.meeting_id=?' +
           (compact
             ? " AND s.version='live' ORDER BY s.start_ms"
             : ' ORDER BY s.start_ms,s.version'),

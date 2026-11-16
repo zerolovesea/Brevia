@@ -16,6 +16,7 @@ const glossaryUI = (() => {
     configSaving = false;
   const promptedMeetings = new Set();
   let scope = '';
+  let libraryDraft;
   const prompt = document.querySelector('#glossary-prompt');
   const defaultMeanings = new Set([
     '自动语音识别（Automatic Speech Recognition），将语音转换为文字。',
@@ -285,10 +286,10 @@ const glossaryUI = (() => {
     if (sourceAudioUrl) URL.revokeObjectURL(sourceAudioUrl);
     sourceAudioUrl = null;
   }
-  function form(m, target) {
+  function form(m, target, entry) {
     return `<form class="glossary-form">
-      <label>${t('术语名称')}<input name="name" required maxlength="80" value="${escapeHtml(m?.suggestion || m?.original || '')}"></label>
-      <label>${t('释义')}<textarea name="meaning" ${m ? '' : 'required'} maxlength="1000" rows="2" placeholder="${t('这个词在会议中指什么？')}">${escapeHtml(m?.suggestion_meaning || '')}</textarea></label>
+      <label>${t('术语名称')}<input name="name" required maxlength="80" value="${escapeHtml(entry?.name || m?.suggestion || m?.original || '')}"></label>
+      <label>${t('释义')}<textarea name="meaning" ${m || entry ? '' : 'required'} maxlength="1000" rows="2" placeholder="${t('这个词在会议中指什么？')}">${escapeHtml(entry?.meaning || m?.suggestion_meaning || '')}</textarea></label>
       <footer>${
         m
           ? `<div class="glossary-scope" title="${t('保存到工作区')}">${interfaceIcon('folder')}${desktopSelect(
@@ -297,10 +298,19 @@ const glossaryUI = (() => {
               scopes().map((w) => [w.id, w.name]),
             )}</div><button type="button" class="secondary" data-dismiss>${t('不是术语')}</button>`
           : ''
-      }<button class="modal-action">${t(m ? '确认' : '保存')}</button></footer></form>`;
+      }${!m ? `<button type="button" class="secondary" data-cancel>${t('取消')}</button>` : ''}<button class="modal-action">${t(m ? '确认' : '保存')}</button></footer></form>`;
   }
-  function bind(container, m, target) {
+  function bind(container, m, target, entry) {
     const f = container.querySelector('form');
+    if (!m) libraryDraft = { scope: target, mode: entry ? 'edit' : 'add', form: f };
+    const cancel = f.querySelector('[data-cancel]');
+    if (cancel)
+      cancel.onclick = () => {
+        if (!f.dataset.saving) {
+          if (libraryDraft?.form === f) libraryDraft = null;
+          render(entry?.name ?? null);
+        }
+      };
     f.onkeydown = (event) => {
       if (
         event.key !== 'Enter' ||
@@ -323,13 +333,17 @@ const glossaryUI = (() => {
       const { name, meaning } = f.elements;
       try {
         await update({
-          action: m ? 'resolve' : 'save',
+          action: m ? 'resolve' : entry ? 'edit' : 'save',
+          ...(entry && { original_name: entry.name }),
           workspace_id: f.elements.scope?.value ?? target,
           name: name.value,
           meaning: meaning.value,
           ...(m && { meeting_id: m.meeting_id, original: m.original }),
         });
-        if (!m && f.isConnected && activeModal === 'glossary') render();
+        if (!m) {
+          if (libraryDraft?.form === f) libraryDraft = null;
+          if (f.isConnected && activeModal === 'glossary') render(entry ? name.value.trim() : null);
+        }
       } catch (error) {
         reportError(error);
       } finally {
@@ -338,7 +352,20 @@ const glossaryUI = (() => {
       }
     };
   }
-  function render() {
+  function preserveEditor(lib) {
+    const form = lib.querySelector('[data-editor] form');
+    if (!form) return false;
+    const saving = Boolean(form.dataset.saving);
+    const dirty = [...form.querySelectorAll('input, textarea')].some(
+      (input) => input.value !== input.defaultValue,
+    );
+    if (!saving && !dirty) return false;
+    showToast(t(saving ? '正在保存…' : '已修改 · 尚未保存'));
+    form.querySelector('input, textarea, button')?.focus();
+    return true;
+  }
+  function render(focusName) {
+    if (libraryDraft && !libraryDraft.form.isConnected) scope = libraryDraft.scope;
     const groups = [...scopes(), { id: 'pending', name: t('待处理') }];
     const selected = groups.find((g) => g.id === scope) || groups[0];
     scope = selected.id;
@@ -370,7 +397,7 @@ const glossaryUI = (() => {
           '',
         )}</div></div></div><header class="speaker-detail-header"><div><h2>${escapeHtml(selected.name)}</h2><small>${escapeHtml(t(queue ? '待确认名词：{n}' : '术语：{n}').replace('{n}', rows.length))}</small></div>${!queue || rows.length ? `<button type="button" class="secondary" data-action>${queue ? t('清空队列') : t('添加术语')}</button>` : ''}</header>
       ${queue ? `<div class="glossary-queue-status" role="status">${(state.scanning || []).map((s) => `<p>${escapeHtml(s.title)} · ${t('正在检查术语')} · ${s.completed}/${s.total}</p>`).join('')}${(state.regeneration || []).map((m) => `<div class="glossary-regenerate"><span><b>${escapeHtml(m.title)}</b><small>${t('重新生成可将已确认的术语用于整场纪要与鱼骨图')}</small></span><button type="button" class="secondary" data-regenerate="${escapeHtml(m.id)}"${summaryGeneratingMeetingId ? ' disabled' : ''}>${t('重新生成')}</button></div>`).join('')}</div>` : ''}
-      <section class="preferences-section glossary-list"><div data-editor hidden></div>${rows.length ? (queue ? rows.map((m, i) => `<button class="glossary-row" data-mention="${i}"><b>${escapeHtml(m.original)}</b><small>${escapeHtml(m.title)}</small>${interfaceIcon('chevron-right')}</button>`).join('') : `<dl>${rows.map((e) => `<div><dt title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</dt><dd>${escapeHtml(displayMeaning(e.meaning))}</dd></div>`).join('')}</dl>`) : `<p class="page-empty">${queue ? t('暂无待确认名词') : t('暂无术语')}</p>`}</section></section></div>`,
+      <section class="preferences-section glossary-list"><div data-editor hidden></div>${rows.length ? (queue ? rows.map((m, i) => `<button class="glossary-row" data-mention="${i}"><b>${escapeHtml(m.original)}</b><small>${escapeHtml(m.title)}</small>${interfaceIcon('chevron-right')}</button>`).join('') : `<dl>${rows.map((e, i) => `<div><dt title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</dt><dd>${escapeHtml(displayMeaning(e.meaning))}</dd><dd class="glossary-entry-actions"><button type="button" class="icon-button" data-edit="${i}" title="${t('编辑')}" aria-label="${escapeHtml(t('编辑') + ' · ' + e.name)}">${interfaceIcon('edit')}</button><button type="button" class="icon-button" data-delete="${i}" title="${t('删除')}" aria-label="${escapeHtml(t('删除') + ' · ' + e.name)}">${interfaceIcon('trash')}</button></dd></div>`).join('')}</dl>`) : `<p class="page-empty">${queue ? t('暂无待确认名词') : t('暂无术语')}</p>`}</section></section></div>`,
     );
     const lib = settingsModal.querySelector('#glossary-library');
     lib.querySelector('.glossary-sensitivity').onkeydown = (event) => {
@@ -412,6 +439,8 @@ const glossaryUI = (() => {
       };
     for (const b of lib.querySelectorAll('[data-scope]'))
       b.onclick = () => {
+        if (preserveEditor(lib)) return;
+        libraryDraft = null;
         scope = b.dataset.scope;
         render();
         settingsModal.querySelector('[data-scope][aria-pressed="true"]').focus();
@@ -425,19 +454,73 @@ const glossaryUI = (() => {
         await refresh();
         if (activeModal === 'glossary') render();
       };
+    for (const b of lib.querySelectorAll('[data-edit]'))
+      b.onclick = () => {
+        if (preserveEditor(lib)) return;
+        const entry = rows[Number(b.dataset.edit)];
+        const editor = lib.querySelector('[data-editor]');
+        editor.hidden = false;
+        editor.dataset.mode = 'edit';
+        editor.innerHTML = form(null, scope, entry);
+        bind(editor, null, scope, entry);
+        editor.querySelector('input').focus();
+      };
+    for (const b of lib.querySelectorAll('[data-delete]'))
+      b.onclick = () => {
+        if (preserveEditor(lib)) return;
+        libraryDraft = null;
+        const entry = rows[Number(b.dataset.delete)];
+        const editor = lib.querySelector('[data-editor]');
+        editor.hidden = false;
+        editor.dataset.mode = 'delete';
+        editor.innerHTML = `<form class="glossary-form"><b>${escapeHtml(entry.name)}</b><p>${t('删除此术语及其别名关联？会议原文将保留。')}</p><footer><button type="button" class="secondary" data-cancel>${t('取消')}</button><button class="modal-action modal-danger">${t('删除')}</button></footer></form>`;
+        const f = editor.querySelector('form');
+        f.querySelector('[data-cancel]').onclick = () => {
+          if (!f.dataset.saving) render(entry.name);
+        };
+        f.onsubmit = async (event) => {
+          event.preventDefault();
+          if (f.dataset.saving) return;
+          f.dataset.saving = 'true';
+          const submit = f.querySelector('.modal-action');
+          submit.disabled = true;
+          try {
+            await update({ action: 'delete', workspace_id: entry.scope, name: entry.name });
+            if (f.isConnected && activeModal === 'glossary') render(null);
+          } catch (error) {
+            reportError(error);
+          } finally {
+            delete f.dataset.saving;
+            submit.disabled = false;
+          }
+        };
+        f.querySelector('[data-cancel]').focus();
+      };
     const action = lib.querySelector('[data-action]');
     if (action)
       action.onclick = () => {
         if (queue) return update({ action: 'clear' }).catch(reportError);
+        if (preserveEditor(lib)) return;
         const editor = lib.querySelector('[data-editor]');
         editor.hidden = false;
-        if (!editor.firstChild) {
+        if (!editor.firstChild || editor.dataset.mode !== 'add') {
+          editor.dataset.mode = 'add';
           editor.innerHTML = form(null, scope);
           bind(editor, null, scope);
         }
         editor.querySelector('input').focus();
       };
+    if (libraryDraft?.scope === scope) {
+      const editor = lib.querySelector('[data-editor]');
+      editor.hidden = false;
+      editor.dataset.mode = libraryDraft.mode;
+      editor.replaceChildren(libraryDraft.form);
+    }
     updateIndicators();
+    if (focusName !== undefined) {
+      const index = rows.findIndex((entry) => entry.name === focusName);
+      (lib.querySelector(`[data-edit="${index}"]`) || action)?.focus();
+    }
   }
   function closePrompt(defer = true) {
     if (defer) queuePaused = true;

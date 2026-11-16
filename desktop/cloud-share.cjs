@@ -6,12 +6,28 @@ function shareSnapshot(meeting, language) {
   const speakerNames = new Map(
     (meeting.speakers || []).map((speaker) => [speaker.id, speaker.name]),
   );
-  const source = (item) => ({
-    text: String(item.text || ''),
-    speaker_id: item.speaker ? String(item.speaker) : undefined,
-    speaker: String(speakerNames.get(item.speaker) || item.speaker_name || item.speaker || ''),
-    start_ms: Math.max(0, Number(item.start_ms) || 0),
-  });
+  const segments = meeting.current_segments ?? meeting.segments ?? [];
+  const byId = new Map(segments.map((item) => [item.id, item]));
+  const source = (item) => {
+    const current = item.segment_id ? byId.get(item.segment_id) : null;
+    const speaker =
+      current && current.text === item.text && current.start_ms === item.start_ms ? current : item;
+    return {
+      text: String(item.text || ''),
+      speaker_id:
+        speaker.speaker === 'spk-1' &&
+        speaker.speaker_name === 'Unknown speaker' &&
+        !speakerNames.has(speaker.speaker)
+          ? ''
+          : speaker.speaker
+            ? String(speaker.speaker)
+            : undefined,
+      speaker: String(
+        speakerNames.get(speaker.speaker) || speaker.speaker_name || speaker.speaker || '',
+      ),
+      start_ms: Math.max(0, Number(item.start_ms) || 0),
+    };
+  };
   const staleTranslations = new Set(meeting.correction?.stale_translations || []);
   return {
     title: meeting.title || 'Brevia',
@@ -20,7 +36,7 @@ function shareSnapshot(meeting, language) {
     duration_ms: Math.max(0, Number(meeting.duration_ms) || 0),
     markdown: meeting.summary?.data?.markdown || '',
     // 完整详情另带当前稿；meeting.get 返回的 compact 详情已经完成选版。
-    transcript: (meeting.current_segments ?? meeting.segments ?? []).map((item) => ({
+    transcript: segments.map((item) => ({
       ...source(item),
       translation: staleTranslations.has(item.id)
         ? undefined

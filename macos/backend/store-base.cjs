@@ -242,4 +242,16 @@ class StoreBase {
     }
   }
 }
-module.exports = { StoreBase, safeChild, resolveExisting, atomicWrite, utcNow };
+// 系统／混合轨的实时 spk-1 是占位值；精修编号及人工登记的身份仍有效。
+const unidentifiedSpeakerSql =
+  "s.version='live' AND s.track IN('mix','system') AND s.speaker='spk-1' AND p.id IS NULL";
+const speakerNameSql = `CASE WHEN ${unidentifiedSpeakerSql} THEN 'Unknown speaker' ELSE COALESCE(p.name,s.speaker) END`;
+module.exports = {
+  StoreBase,
+  safeChild,
+  resolveExisting,
+  atomicWrite,
+  utcNow,
+  speakerNameSql,
+  unidentifiedSpeakerSql,
+};

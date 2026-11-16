@@ -3277,7 +3277,7 @@ html[data-theme="dark"] .glossary-count {
 }
 #glossary-library .glossary-list dl {
   display: grid;
-  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  grid-template-columns: fit-content(40%) minmax(0, 1fr) auto;
   gap: 14px 18px;
   margin: 0;
   padding: 6px 0 14px;
@@ -3547,4 +3547,15 @@ html[data-theme="dark"] .glossary-mark {
   .processing-card:is(.is-minimized, .is-task-card-back)
   > .task-target {
   display: none;
+}
+
+#glossary-library .glossary-entry-actions {
+  display: flex;
+  gap: 4px;
+  align-self: center;
+}
+#glossary-library .glossary-form footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

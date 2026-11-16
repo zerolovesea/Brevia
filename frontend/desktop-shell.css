@@ -1088,3 +1088,9 @@ body:has(.onboarding-page) #desktop-statusbar {
     translate: 0 0;
   }
 }
+
+#desktop-app .sidebar-workspace.is-drop-target {
+  outline: 1px dashed var(--color-text-muted);
+  outline-offset: -1px;
+  border-radius: 6px;
+}

@@ -752,6 +752,7 @@
           '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '连接同一局域网内的手机设备，查看连接状态与录音使用情况。',
+        '删除此术语及其别名关联？会议原文将保留。': '删除此术语及其别名关联？会议原文将保留。',
         '取消': '取消',
         '返回': '返回',
         '播放此段': '播放',
@@ -769,6 +770,7 @@
         '检查音频': '检查音频',
         '← 返回会议库': '← 返回会议库',
         '说话人分离': '说话人分离',
+        '未识别说话人': '未识别说话人',
         '说话人': '说话人',
         '转发': '转发',
         '会后精修': '会后精修',
@@ -1745,6 +1747,8 @@
           'The computer will save received audio and release the recording session. Unsent audio stays on your phone and can upload after reconnecting.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Connect phones on the same local network to view their connection status and recording usage.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          'Delete this term and its aliases? The original meeting text will be kept.',
         '取消': 'Cancel',
         '返回': 'Back',
         '开始录制': 'Start recording',
@@ -1784,6 +1788,7 @@
         '说话人分离': 'Speaker diarization',
         '自定义术语': 'Custom term',
         '暂无术语': 'No terms',
+        '未识别说话人': 'Unidentified speaker',
         '说话人': 'Speaker',
         '等待识别说话人': 'Waiting to identify speakers',
         '会议摘要': 'Meeting summary',
@@ -2889,6 +2894,8 @@
           'El ordenador guardará el audio recibido y liberará la sesión. El audio pendiente permanece en el teléfono y podrá enviarse al reconectar.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Conecta teléfonos en la misma red local para consultar su estado de conexión y uso de grabación.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          '¿Eliminar este término y sus alias? Se conservará el texto original de la reunión.',
         '取消': 'Cancelar',
         '返回': 'Atrás',
         '开始录制': 'Iniciar grabación',
@@ -2928,6 +2935,7 @@
         '说话人分离': 'Separación de hablantes',
         '自定义术语': 'Término personalizado',
         '暂无术语': 'No hay términos',
+        '未识别说话人': 'Hablante sin identificar',
         '说话人': 'Hablante',
         '等待识别说话人': 'Esperando identificar hablantes',
         '会议摘要': 'Resumen de la reunión',
@@ -4036,6 +4044,8 @@
           '受信済みの音声を保存し、録音セッションを解放します。未送信の音声はスマートフォンに残り、再接続後に送信できます。',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '同じローカルネットワーク内のスマートフォンに接続し、接続状態と録音の利用状況を確認します。',
+        '删除此术语及其别名关联？会议原文将保留。':
+          'この用語と別名の関連付けを削除しますか？会議の原文は保持されます。',
         '取消': 'キャンセル',
         '返回': '戻る',
         '开始录制': '録音を開始',
@@ -4075,6 +4085,7 @@
         '说话人分离': '話者分離',
         '自定义术语': 'カスタム用語',
         '暂无术语': '用語はありません',
+        '未识别说话人': '未識別の話者',
         '说话人': '話者',
         '等待识别说话人': '話者の識別を待機中',
         '会议摘要': '会議の要約',
@@ -5163,6 +5174,8 @@
           '수신한 오디오를 저장하고 녹음 세션을 해제합니다. 미전송 오디오는 휴대폰에 남아 재연결 후 전송할 수 있습니다.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '같은 로컬 네트워크의 휴대폰을 연결하고 연결 상태와 녹음 사용 현황을 확인하세요.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          '이 용어와 별칭 연결을 삭제할까요? 회의 원문은 유지됩니다.',
         '取消': '취소',
         '返回': '뒤로',
         '开始录制': '녹음 시작',
@@ -5202,6 +5215,7 @@
         '说话人分离': '화자 분리',
         '自定义术语': '사용자 지정 용어',
         '暂无术语': '용어 없음',
+        '未识别说话人': '미식별 화자',
         '说话人': '화자',
         '等待识别说话人': '화자 인식 대기 중',
         '会议摘要': '회의 요약',
@@ -6313,6 +6327,8 @@
           'L’ordinateur enregistrera l’audio reçu et libérera la session. L’audio non envoyé reste sur le téléphone et pourra être transmis après reconnexion.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Connectez les téléphones du même réseau local pour consulter leur état de connexion et leur utilisation des enregistrements.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          'Supprimer ce terme et ses alias ? Le texte original de la réunion sera conservé.',
         '取消': 'Annuler',
         '返回': 'Retour',
         '开始录制': 'Démarrer l’enregistrement',
@@ -6352,6 +6368,7 @@
         '说话人分离': 'Séparation des intervenants',
         '自定义术语': 'Terme personnalisé',
         '暂无术语': 'Aucun terme',
+        '未识别说话人': 'Locuteur non identifié',
         '说话人': 'Intervenant',
         '等待识别说话人': 'Identification de l’intervenant en attente',
         '会议摘要': 'Résumé de la réunion',
@@ -7476,6 +7493,8 @@
           'Der Computer speichert das empfangene Audio und gibt die Aufnahmesitzung frei. Nicht gesendetes Audio bleibt auf dem Smartphone und kann nach dem Wiederverbinden übertragen werden.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Verbinden Sie Smartphones im selben lokalen Netzwerk, um Verbindungsstatus und Aufnahmenutzung anzuzeigen.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          'Diesen Begriff und seine Aliase löschen? Der ursprüngliche Besprechungstext bleibt erhalten.',
         '取消': 'Abbrechen',
         '返回': 'Zurück',
         '开始录制': 'Aufnahme starten',
@@ -7516,6 +7535,7 @@
         '说话人分离': 'Sprechertrennung',
         '自定义术语': 'Eigener Begriff',
         '暂无术语': 'Keine Begriffe',
+        '未识别说话人': 'Nicht identifizierter Sprecher',
         '说话人': 'Sprecher',
         '等待识别说话人': 'Warten auf Sprechererkennung',
         '会议摘要': 'Besprechungszusammenfassung',
@@ -8626,6 +8646,8 @@
           'Компьютер сохранит полученное аудио и освободит сеанс записи. Неотправленное аудио останется на телефоне и сможет загрузиться после подключения.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Подключайте телефоны в одной локальной сети, чтобы просматривать состояние подключения и использование записи.',
+        '删除此术语及其别名关联？会议原文将保留。':
+          'Удалить этот термин и его псевдонимы? Исходный текст встречи будет сохранён.',
         '取消': 'Отмена',
         '返回': 'Назад',
         '开始录制': 'Начать запись',
@@ -8665,6 +8687,7 @@
         '说话人分离': 'Разделение говорящих',
         '自定义术语': 'Пользовательский термин',
         '暂无术语': 'Нет терминов',
+        '未识别说话人': 'Неопознанный говорящий',
         '说话人': 'Говорящий',
         '等待识别说话人': 'Ожидание определения говорящего',
         '会议摘要': 'Сводка встречи',

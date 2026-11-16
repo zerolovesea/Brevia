@@ -6956,6 +6956,10 @@ async function transitionPage(current, next, swap = () => {}) {
     const forward = child.includes(next.id.slice(0, -5)) && !child.includes(previousView);
     const back = child.includes(previousView) && !child.includes(next.id.slice(0, -5));
     if (forward) viewReturnFocus.set(current.id, document.activeElement);
+    if (meetingActive) {
+      if (next.id === 'live-view') miniMeeting.hidden = true;
+      else minimizeMeeting();
+    }
     activeView = next.id.slice(0, -'-view'.length);
     syncPhonePreview();
     try {
@@ -8142,7 +8146,7 @@ function aiSuggestionTypeKey(type) {
     }[type] || '可能是一个结论'
   );
 }
-/** 渲染建议：topic → 分割线；打字中 → 徽标；否则 → 建议卡。@returns {void} */
+/** 渲染建议：打字中收为徽标，其余类型共用建议卡。@returns {void} */
 function renderAiSuggestion() {
   const root = aiSuggestionRoot();
   if (!root) return;
@@ -8157,12 +8161,6 @@ function renderAiSuggestion() {
   const evidenceLabel = count
     ? `<button class="ai-suggestion-evidence text-button" type="button" data-live-suggestion-sources aria-haspopup="dialog">${escapeHtml(t('依据 {count} 段字幕').replace('{count}', count))}</button>`
     : `<small class="ai-suggestion-evidence">${escapeHtml(t('缺少原文依据'))}</small>`;
-  if (suggestion.type === 'topic') {
-    root.innerHTML = `<button type="button" class="ai-topic-divider" data-ai-topic="${escapeHtml(suggestion.id)}">${t('AI 检测到新话题：')}${escapeHtml(suggestion.text)}</button>${evidenceLabel}`;
-    root.hidden = false;
-    scheduleAiSuggestionAutoFade();
-    return;
-  }
   if (aiNoteUserTyping) {
     root.innerHTML = `<button type="button" class="ai-suggestion-badge" data-ai-suggestion-badge>${interfaceIcon('ai')} ${t('1 条建议')}</button>`;
     root.hidden = false;
@@ -8239,12 +8237,6 @@ async function acceptAiSuggestion(text) {
   }
 }
 
-/** 把 topic 建议转换为笔记正式标题。@returns {void} */
-function convertTopicToHeading() {
-  const suggestion = latestAiSuggestion;
-  if (!suggestion || suggestion.type !== 'topic') return;
-  void acceptAiSuggestion(suggestion.text);
-}
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-live-accepted]')) {
     openLiveNoteEvidence(liveAcceptedClaims, t('已采纳的 AI 笔记'));
@@ -8273,10 +8265,6 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-ai-suggestion-badge]')) {
     aiNoteUserTyping = false;
     renderAiSuggestion();
-    return;
-  }
-  if (event.target.closest('[data-ai-topic]')) {
-    convertTopicToHeading();
     return;
   }
 });
@@ -8678,8 +8666,9 @@ meetingSelectionSurface.addEventListener('dragstart', (event) => {
 meetingList.addEventListener('dragstart', (event) => {
   const row = event.target.closest('.meeting-row[draggable]');
   if (!row || event.target.closest('.meeting-actions')) return event.preventDefault();
+  draggedMeetingId = row.dataset.meetingId;
   event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', row.dataset.meetingId);
+  event.dataTransfer.setData('text/plain', draggedMeetingId);
 });
 meetingSelectionSurface.addEventListener('pointermove', (event) => {
   if (!dragSelection || event.pointerId !== dragSelection.pointerId) return;
@@ -9056,13 +9045,14 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId, documentTa
     return;
   }
   const request = ++meetingListRequest;
+  const navigationRevision = pageTransitionRevision;
   row.style.opacity = '0.6';
 
   try {
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
 
     row.style.opacity = '';
-    if (request !== meetingListRequest) return;
+    if (request !== meetingListRequest || navigationRevision !== pageTransitionRevision) return;
     breviaClient.state.selectedMeetingId = meeting.id;
     applyBackendDetail(meeting);
     if (documentTab || activeView === 'detail') switchDetailDocument(documentTab || 'summary');
@@ -10322,7 +10312,10 @@ async function openSegmentSpeakerPicker(meetingId, segmentId, anchor, speakerId 
     segmentSpeakerPicker.setAttribute('aria-label', title);
     draft.people = new Map(meeting.speakers.map((person) => [person.id, person.name]));
     for (const item of meeting.current_segments || meeting.segments)
-      if (!draft.people.has(item.speaker))
+      if (
+        !draft.people.has(item.speaker) &&
+        !(item.speaker === 'spk-1' && item.speaker_name === 'Unknown speaker')
+      )
         draft.people.set(item.speaker, item.speaker_name || item.speaker);
     const people = [...draft.people].map(([id, name]) => ({
       id,
