@@ -18,13 +18,16 @@
 | 设备    | 下载                                                                                                 | 系统要求                     |
 | ------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac     | [macOS 版][download-mac]                                                                             | Apple Silicon · macOS 14+    |
-| Windows | [Windows 版][download-windows] · [CUDA](https://brevia.work)                                         | Windows 10 / 11 · x64 · AVX2 |
-| Linux   | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
+| Windows | [Windows 版][download-windows] · [CUDA][download-windows-cuda]                                       | Windows 10 / 11 · x64 · AVX2 |
+| Linux   | [CPU][download-linux-cpu] · [CUDA][download-linux-cuda]                                              | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [download-mac]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-WebKit-2.1.2-arm64.dmg
 [download-windows]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.1.2-x64-setup.exe
+[download-windows-cuda]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.1.2-x64-cuda-setup.exe
+[download-linux-cpu]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.1.2-amd64-cpu.deb
+[download-linux-cuda]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-2.1.2-amd64-cuda.deb
 
 Ubuntu 24.04 x86-64 桌面版提供 CPU 和 NVIDIA CUDA 两种 deb 构建，见 [Linux 安装与打包说明](DEVELOPMENT.md#linux-桌面开发与打包)。
 

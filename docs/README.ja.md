@@ -18,13 +18,16 @@
 | プラットフォーム | ダウンロード                                                                                         | 動作環境                     |
 | ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Mac              | [macOS][download-mac]                                                                                | Apple Silicon · macOS 14+    |
-| Windows          | [Windows][download-windows] · [CUDA](https://brevia.work)                                            | Windows 10 / 11 · x64 · AVX2 |
-| Linux            | [CPU · CUDA](https://brevia.work)                                                                    | Ubuntu 24.04 · x86-64 · AVX2 |
+| Windows          | [Windows][download-windows] · [CUDA][download-windows-cuda]                                          | Windows 10 / 11 · x64 · AVX2 |
+| Linux            | [CPU][download-linux-cpu] · [CUDA][download-linux-cuda]                                              | Ubuntu 24.04 · x86-64 · AVX2 |
 | iPhone           | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
 | Android          | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
 
 [download-mac]: https://github.com/zerolovesea/Brevia/releases/download/v2.1.2/Brevia-WebKit-2.1.2-arm64.dmg
 [download-windows]: https://github.com/zerolovesea/Brevia/releases/download/v2.1.2/Brevia-2.1.2-x64-setup.exe
+[download-windows-cuda]: https://github.com/zerolovesea/Brevia/releases/download/v2.1.2/Brevia-2.1.2-x64-cuda-setup.exe
+[download-linux-cpu]: https://github.com/zerolovesea/Brevia/releases/download/v2.1.2/Brevia-2.1.2-amd64-cpu.deb
+[download-linux-cuda]: https://github.com/zerolovesea/Brevia/releases/download/v2.1.2/Brevia-2.1.2-amd64-cuda.deb
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [brevia.work](https://brevia.work)
 
