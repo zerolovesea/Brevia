@@ -462,14 +462,25 @@ function createLLMHandlers(worker) {
             let next = 0,
               failure;
             const run = async () => {
+              let index;
               try {
                 while (!failure && next < chunks.length) {
                   await control.wait();
                   if (failure || next >= chunks.length) return;
-                  const index = next++;
+                  index = next++;
                   results[index] = await summarize(chunks[index], index);
                 }
               } catch (error) {
+                if (
+                  index != null &&
+                  chunks.length > 1 &&
+                  error instanceof Error &&
+                  !error.code &&
+                  !error.models &&
+                  !control.signal.aborted
+                ) {
+                  error.summaryPart = [index + 1, chunks.length];
+                }
                 failure ||= error;
               }
             };
@@ -493,6 +504,10 @@ function createLLMHandlers(worker) {
                     Math.min(16384, context) - Math.min(3072, options.max_tokens) - 768,
                   )
                 : budget,
+              remoteOutputBudget: local(options) ? undefined : options.max_tokens,
+              reviewBudget: local(options)
+                ? undefined
+                : context - options.max_tokens - estimatedTokens(terminology) - 128,
               store: worker.store,
               meetingId: meeting.id,
               modelKey: [
@@ -598,7 +613,7 @@ function createLLMHandlers(worker) {
                 fingerprint,
               )?.facts;
               if (!summary) {
-                async function extract(part, previousLine, depth) {
+                async function extract(part, previousLine) {
                   await control.wait();
                   const visible = new Set([...part.matchAll(/^(S[1-9]\d*) \[/gm)].map((m) => m[1]));
                   try {
@@ -615,18 +630,19 @@ function createLLMHandlers(worker) {
                       visible,
                     );
                   } catch (error) {
-                    if (control.signal.aborted || depth >= 3 || !summaryLimit(error)) throw error;
+                    if (control.signal.aborted || !summaryLimit(error)) throw error;
+                    // 信息密集的长会可能需要多轮拆分，直到达到最小分块预算。
                     const smaller = splitByBudget(
                       part,
                       Math.max(128, Math.ceil(estimatedTokens(part) / 2)),
                     );
                     if (smaller.length < 2) throw error;
                     const facts = [];
-                    for (const piece of smaller) facts.push(await extract(piece, '', depth + 1));
+                    for (const piece of smaller) facts.push(await extract(piece, ''));
                     return facts.join('\n');
                   }
                 }
-                summary = await extract(chunk, contextLine, 0);
+                summary = await extract(chunk, contextLine);
                 await control.wait();
                 if (/\[\[(?:action|decision|cause|conclusion):S\d+/.test(summary))
                   worker.store.run?.(
@@ -730,7 +746,16 @@ function createLLMHandlers(worker) {
             )
           )
             throw failure('error.summary.authentication', 'Summary authentication failed');
-          throw failure('error.summary.failed', 'Summary generation failed: ' + error.message);
+          const part = error.summaryPart?.join('/');
+          const location = part
+            ? language === 'zh'
+              ? '（分块 ' + part + '）'
+              : ' (part ' + part + ')'
+            : '';
+          throw failure(
+            'error.summary.failed',
+            'Summary generation failed: ' + error.message + location,
+          );
         }
         const model = worker.models.catalog.get(meeting.transcript_model_id);
         const timed =

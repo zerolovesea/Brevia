@@ -631,6 +631,86 @@ test('归并膨胀、拒绝压缩或成稿截断时保留每组来源并只保�
   }
 });
 
+test('长会反复触及输出上限时继续按来源拆分，保留末段并拒绝半截回复', async (t) => {
+  const quote = '本周已完成现场验收';
+  const segments = Array.from({ length: 48 }, (_, i) => ({
+    id: `seg${i + 1}`,
+    text: `第${i + 1}项${quote}。` + '交付记录已归档。'.repeat(10),
+    start_ms: i * 1000,
+    speaker_name: '甲',
+  }));
+  const meeting = { id: 'long-output', language: 'zh', title: '交付会议', segments };
+  let alwaysTruncate = false;
+  const endpoint = await server(t, (_req, res, body) => {
+    const prompt = body.messages[0].content;
+    const ids = [...prompt.matchAll(/^S(\d+) \[/gm)].map((m) => Number(m[1]));
+    const fact = (id) => `第${id}项${quote}。`;
+    let content;
+    if (!alwaysTruncate && prompt.includes('"edits"')) {
+      const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1)).items;
+      content = JSON.stringify({
+        edits: input.map((r) => ({ n: r.n, text: r.text, sources: [+r.text.match(/\d+/)[0]] })),
+      });
+    } else if (!alwaysTruncate && ids.length && ids.length <= 2 && !prompt.includes('## ')) {
+      content = prompt.includes('"notes"')
+        ? JSON.stringify({
+            notes: ids.map((id) => ({ kind: 'finding', text: fact(id), refs: [{ id, quote }] })),
+          })
+        : ids.map((id) => `- ${fact(id)} [[conclusion:S${id}]]`).join('\n');
+    }
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: content ? 'stop' : 'length',
+            message: { content: content || '半截回复 [[conclusion:S1]]' },
+          },
+        ],
+      }),
+    );
+  });
+  const worker = {
+    tasks: new TaskRegistry(),
+    settings: { llm: { timeout_seconds: 3 } },
+    models: { catalog: new Map() },
+    emit() {},
+    store: {
+      getMeeting: () => meeting,
+      meetingExists: () => true,
+      saveSummary(_id, data) {
+        meeting.summary = { data };
+        return true;
+      },
+    },
+  };
+  const handler = createLLMHandlers(worker)['summary.generate'];
+  for (const model of ['test', 'deepseek-v4-flash']) {
+    await t.test(model, async () => {
+      alwaysTruncate = false;
+      const run = () =>
+        handler({
+          meeting_id: meeting.id,
+          endpoint,
+          provider: 'openai',
+          model,
+          language: 'zh',
+          consent: true,
+        });
+      const result = await run();
+      assert.equal(result.markdown.match(/^## /gm)?.length, 7);
+      assert.doesNotMatch(result.markdown, /半截回复/);
+      assert.deepEqual(
+        new Set(result.claims.flatMap((c) => c.sources.map((s) => s.segment_id))),
+        new Set(segments.map((s) => s.id)),
+      );
+      alwaysTruncate = true;
+      const previous = meeting.summary;
+      await assert.rejects(run(), /Model response reached the output limit/);
+      assert.equal(meeting.summary, previous);
+    });
+  }
+});
+
 test('纪要在线最多三路并行，本地串行，乱序完成仍按原文合并', { timeout: 5000 }, async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-summary-concurrency-'));
   fs.writeFileSync(path.join(directory, 'test.gguf'), '');
@@ -746,7 +826,7 @@ test('并行纪要失败或取消后不启动下一批、不保存部分结果',
       consent: true,
     });
     if (cancel) assert.deepEqual(await pending, { cancelled: true });
-    else await assert.rejects(pending, /500/);
+    else await assert.rejects(pending, /500.*part 1\/7/);
     assert.equal(calls, 3);
     assert.equal(saved, false);
   }
@@ -1048,7 +1128,7 @@ test('校对缺项或重复项会拆批重试，未支持的数字和纯问句�
     refs: [{ id: i + 1, quote: s.text }],
   }));
   for (const duplicate of [false, true]) {
-    let retried = false;
+    let reviews = 0;
     const result = await topicMinutes({
       transcript: segments.map((s, i) => `S${i + 1} [00:00] 甲: ${s.text}`).join('\n'),
       segments,
@@ -1063,23 +1143,209 @@ test('校对缺项或重复项会拆批重试，未支持的数字和纯问句�
       limit: () => false,
       generate: async (prompt) => {
         if (!prompt.includes('"edits"')) return JSON.stringify({ notes });
-        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1)).items;
         const edits = input.map((r) => ({
           n: r.n,
-          text: r.text === segments[2].text ? '增加到2000台。' : r.text.replace('，是吗？', ''),
+          text: r.text === segments[2].text ? '增加到2000台。' : r.text?.replace('，是吗？', ''),
           sources: [segments.findIndex((s) => s.text === r.text) + 1],
         }));
+        reviews++;
+        if (prompt.includes('只写原话明确支持的定性关系')) {
+          assert.deepEqual(
+            input.map(({ sources, context }) => [sources, context]),
+            [[[3], []]],
+          );
+          return JSON.stringify({
+            edits: [
+              { n: 1, text: duplicate ? '预计数量会上升。' : '预计增加到2000台。', sources: [3] },
+            ],
+          });
+        }
         if (input.length === notes.length) {
           if (duplicate) edits.push(edits[0]);
           else edits.pop();
-        } else retried = true;
-        return JSON.stringify({ edits });
+          return JSON.stringify({ edits });
+        }
+        return JSON.stringify(duplicate ? [{ edits }] : edits);
       },
     });
-    assert.equal(retried, true);
+    assert.equal(reviews, 4);
+    assert.equal(result.includes('预计数量会上升'), duplicate);
     assert.match(result, /甲项目计划下周启动/);
     assert.match(result, /乙项目计划下周测试/);
     assert.doesNotMatch(result, /2000|每天五十单/);
+  }
+});
+
+test('本地小数被冠以另一指标时单独核对，仍失配只引用原发言', async () => {
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const source = '这次得到0.79，指标名称听不清。意向点击率是2.58。';
+  const wrong = '过审率为0.79。';
+  let reviews = 0;
+  const result = await topicMinutes({
+    transcript: 'S1 [00:00] 甲: ' + source,
+    segments: [{ text: source }],
+    language: 'zh',
+    local: true,
+    budget: 2000,
+    store: {},
+    headings: require('./meeting-evidence.cjs').SUMMARY_HEADINGS.zh,
+    wait: async () => {},
+    limit: () => false,
+    mapChunks: (xs, fn) => Promise.all(xs.map(fn)),
+    generate: async (prompt) => {
+      if (!prompt.includes('"edits"'))
+        return JSON.stringify({
+          notes: [wrong, '意向点击率是2.58。'].map((text) => ({
+            kind: 'finding',
+            text,
+            refs: [{ id: 1, quote: '意向点击率' }],
+          })),
+        });
+      const { items } = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+      if (++reviews === 2) {
+        assert.equal(items.length, 1);
+        assert.ok(!Object.hasOwn(items[0], 'text'));
+        assert.deepEqual(items[0].sources, [1]);
+      }
+      return JSON.stringify({
+        edits: items.map(({ n, text }) => ({ n, text: text || wrong, sources: [1] })),
+      });
+    },
+  });
+  assert.equal(reviews, 2);
+  assert.ok(result.includes('原话：“' + source + '” [[conclusion:S1]]'));
+  assert.ok(result.includes('意向点击率是2.58。 [[conclusion:S1]]'));
+  assert.ok(!result.includes(wrong));
+});
+
+test('主题纪要逐块核证并落盘，重开后只重试未完成或原话已变的块', async (t) => {
+  const { Store } = require('./store.cjs');
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-topic-resume-'));
+  let store = new Store(directory);
+  t.after(() => {
+    store.db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const meetingId = store.createMeeting({
+    title: 'Review',
+    language: 'zh',
+    refined_model_id: 'test',
+  }).id;
+  const segments = [1, 2, 3, 4].map((id) => ({
+    text: '议题' + id + '已验收。' + '等待门店确认。'.repeat(23),
+  }));
+  const calls = [];
+  let fail = true;
+  const run = () =>
+    topicMinutes({
+      transcript: segments.map((s, i) => `S${i + 1} [00:00] 甲: ${s.text}`).join('\n'),
+      segments,
+      store,
+      meetingId,
+      language: 'zh',
+      local: true,
+      budget: 250,
+      headings: require('./meeting-evidence.cjs').SUMMARY_HEADINGS.zh,
+      wait: async () => {},
+      limit: () => false,
+      mapChunks: async (chunks, fn) => {
+        const output = [];
+        for (const [i, chunk] of chunks.entries()) output.push(await fn(chunk, i));
+        return output;
+      },
+      generate: async (prompt) => {
+        if (prompt.includes('"edits"')) {
+          const { items } = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+          return JSON.stringify({
+            edits: items.map(({ n, text, sources }) => ({ n, text, sources })),
+          });
+        }
+        const id = +prompt.match(/^S(\d+) /m)[1];
+        calls.push(id);
+        if (id === 3 && fail) throw new Error('service unavailable');
+        if (id === 2) return '{"notes":[]}';
+        const text = segments[id - 1].text.split('。')[0];
+        return JSON.stringify({ notes: [{ kind: 'finding', text, refs: [{ id, quote: text }] }] });
+      },
+    });
+  await assert.rejects(run(), /service unavailable/);
+  assert.deepEqual(calls, [1, 2, 3]);
+  store.db.close();
+  store = new Store(directory);
+  calls.length = 0;
+  fail = false;
+  assert.match(await run(), /议题4已验收/);
+  assert.deepEqual(calls, [3, 4]);
+  calls.length = 0;
+  segments[0].text = segments[0].text.replace('已验收', '待验收');
+  assert.match(await run(), /议题1待验收/);
+  assert.ok(calls.includes(1));
+  assert.ok(!calls.includes(4));
+});
+
+test('共用原话仍逐项限制引文，暂定日期可改类，综述带上最后决定', async () => {
+  const { topicMinutes } = require('./topic-minutes.cjs');
+  const segments = [
+    '范围仅限北桥。',
+    '提出周五上线。',
+    '清点设备库存。',
+    '确定周一上线。',
+    '交付计划待审。',
+    '是否需要备机？',
+  ].map((text) => ({ text }));
+  const notes = segments.map(({ text }, i) => ({
+    kind: ['overview', 'decision', 'overview', 'decision', 'finding', 'decision'][i],
+    text,
+    refs: [{ id: i + 1, quote: text }],
+  }));
+  const run = (overview) =>
+    topicMinutes({
+      transcript: segments.map((s, i) => `S${i + 1} [00:00] 甲: ${s.text}`).join('\n'),
+      segments,
+      language: 'zh',
+      headings: require('./meeting-evidence.cjs').SUMMARY_HEADINGS.zh,
+      budget: 4000,
+      store: {},
+      wait: async () => {},
+      limit: () => false,
+      mapChunks: (xs, fn) => Promise.all(xs.map(fn)),
+      generate: async (prompt) => {
+        if (prompt.includes('"edits"')) {
+          const { speech, items } = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+          assert.deepEqual(
+            Object.values(speech),
+            segments.map((s) => s.text),
+          );
+          assert.equal(items[4].context.includes(1), false);
+          return JSON.stringify({
+            edits: items.map(({ n, text, sources }) => ({
+              n,
+              text,
+              kind: n === 2 ? 'open' : undefined,
+              sources: n === 5 ? [1] : sources,
+            })),
+          });
+        }
+        if (prompt.startsWith('Compose')) {
+          assert.match(prompt, /3\. \[decision\] 确定周一上线/);
+          assert.doesNotMatch(prompt, /\[decision\] 提出周五/);
+          return overview;
+        }
+        return JSON.stringify({ notes });
+      },
+    });
+  for (const overview of [
+    '{"overview":[{"text":"确定周一上线。","notes":[3]}]}',
+    '{"overview":[{"text":"范围仅限北桥。","notes":[1]}]}',
+    'null',
+  ]) {
+    const result = await run(overview);
+    assert.match(result, /## 会议摘要\n- 确定周一上线。 \[\[conclusion:S4/);
+    assert.match(result, /## 待确认事项\n- 提出周五上线/);
+    assert.doesNotMatch(result, /交付计划待审/);
+    assert.match(result, /## 待确认事项[^#]*是否需要备机？/);
   }
 });
 
@@ -1107,9 +1373,9 @@ test('跨块摘要合并不能引入原话中没有的数字', async () => {
         return '{"overview":[{"text":"预算2000元。","notes":[1]}]}';
       }
       if (prompt.includes('"edits"')) {
-        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+        const input = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1)).items;
         return JSON.stringify({
-          edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.speech[0].id] })),
+          edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.sources[0]] })),
         });
       }
       return JSON.stringify({
@@ -1161,10 +1427,10 @@ test('内置长会议的逐项核证遵循实际16K窗口而不是整场32K预�
           throw new Error('maximum context length exceeded');
         if (payload.prompt.includes('"edits"')) {
           reviews++;
-          const input = JSON.parse(payload.prompt.slice(payload.prompt.indexOf('\n') + 1));
+          const input = JSON.parse(payload.prompt.slice(payload.prompt.indexOf('\n') + 1)).items;
           return {
             text: JSON.stringify({
-              edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.speech[0].id] })),
+              edits: input.map((r) => ({ n: r.n, text: r.text, sources: [r.sources[0]] })),
             }),
           };
         }
